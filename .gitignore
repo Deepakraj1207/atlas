@@ -1,0 +1,15 @@
+# Build output
+/atlas
+/atlas.exe
+/dist/
+/bin/
+
+# Editor and OS noise
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Local test artefacts
+coverage.out

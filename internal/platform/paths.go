@@ -1,0 +1,45 @@
+// Package platform isolates operating-system specific behaviour. Everything
+// else in ATLAS should go through this package rather than checking
+// runtime.GOOS directly.
+package platform
+
+import (
+	"os"
+	"path/filepath"
+)
+
+const appDirName = "atlas"
+
+// EnvHome is an environment variable that, when set, overrides both the
+// configuration and log directories. Useful for portable installs and tests.
+const EnvHome = "ATLAS_HOME"
+
+// ConfigDir returns the directory that holds config.yaml.
+//
+//	Windows: %AppData%\atlas
+//	Linux:   $XDG_CONFIG_HOME/atlas or ~/.config/atlas
+func ConfigDir() (string, error) {
+	if home := os.Getenv(EnvHome); home != "" {
+		return home, nil
+	}
+	base, err := os.UserConfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(base, appDirName), nil
+}
+
+// LogDir returns the directory for log files.
+//
+//	Windows: %LocalAppData%\atlas\logs
+//	Linux:   $XDG_STATE_HOME/atlas/logs or ~/.local/state/atlas/logs
+func LogDir() (string, error) {
+	if home := os.Getenv(EnvHome); home != "" {
+		return filepath.Join(home, "logs"), nil
+	}
+	base, err := stateBaseDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(base, appDirName, "logs"), nil
+}
