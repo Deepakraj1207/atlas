@@ -18,14 +18,19 @@ What works today:
   opened in a year (Windows). It also lists what it checked and what it couldn't.
 - **Dependencies** shows which runtimes (Python, Node.js, Java, .NET, Visual C++) other
   software needs, from your package managers' own records.
+- **Cleanup** removes software you don't need, from My Software or from Smart Analysis
+  suggestions, and clears package caches and old versions. Before every removal ATLAS
+  checks again what depends on it, and it refuses to remove anything other software
+  or your system needs.
 - **Activity History** records every scan and change, so nothing happens silently.
 - Simple and Advanced modes, dark and light themes, and help on every screen.
 
-Installing updates is the only change ATLAS makes, and only after you confirm a
-preview listing every change. ATLAS then hands the terminal to the package
+ATLAS only changes your system by installing updates, removing software, or clearing
+caches, and only after you confirm a preview listing every change. Removals need the
+`r` key; Enter alone never deletes anything. ATLAS then hands the terminal to the package
 manager, so you see its real output and answer its own prompts, such as your sudo
-password or a Windows permission dialog. ATLAS never answers for you, and it
-never removes software.
+password or a Windows permission dialog. ATLAS never answers for you, and never
+uses flags that skip questions or delete your settings.
 
 ## Build and run
 
@@ -57,6 +62,9 @@ version. Setting `ATLAS_HOME` keeps settings and logs in one folder (portable us
 | `/`, `f`, `s` | In My Software: search, show system components, scan |
 | `c`, `u`, `space`, `enter` | In Updates: check, update all, select, update selected |
 | `a` | In Smart Analysis and Dependencies: analyze (again) |
+| `r` | In My Software: remove the selected item (with a preview) |
+| `c`, `space`, `enter` | In Cleanup: look for things to tidy, select, review |
+| `r` | In a removal or clean-up preview: go ahead |
 | `x` | Stop a running scan or update check |
 | `Ctrl+C` | While updates run: stop; nothing further starts |
 | `q` | Quit |

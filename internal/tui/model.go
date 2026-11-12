@@ -36,6 +36,7 @@ type Options struct {
 	Inventory core.InventoryService
 	Updates   core.UpdateService
 	Analysis  core.AnalysisService
+	Cleanup   core.CleanupService
 	StoreErr  string
 	DBPath    string
 	// Elevated is true when ATLAS runs as administrator or root.
@@ -62,6 +63,8 @@ type Model struct {
 	check    *scanRun
 	ana      core.AnalysisService
 	analysis *scanRun
+	cln      core.CleanupService
+	tidy     *scanRun
 	// exec hands the terminal to a job; replaced in tests.
 	exec     func(core.TerminalJob, tea.ExecCallback) tea.Cmd
 	storeErr string
@@ -106,6 +109,7 @@ func New(opts Options) Model {
 		inv:      opts.Inventory,
 		upd:      opts.Updates,
 		ana:      opts.Analysis,
+		cln:      opts.Cleanup,
 		elevated: opts.Elevated,
 		exec:     func(j core.TerminalJob, cb tea.ExecCallback) tea.Cmd { return tea.Exec(j, cb) },
 		storeErr: opts.StoreErr,
@@ -116,6 +120,7 @@ func New(opts Options) Model {
 	m.data.Available = m.inv != nil
 	m.data.UpdatesAvailable = m.upd != nil
 	m.data.AnalysisAvailable = m.ana != nil
+	m.data.CleanupAvailable = m.cln != nil
 	m.data.StoreErr = m.storeErr
 	if m.inv == nil && m.storeErr == "" {
 		m.data.StoreErr = "no database was configured"
@@ -133,6 +138,8 @@ func New(opts Options) Model {
 			m.screens[s] = screens.NewDependencies()
 		case nav.Updates:
 			m.screens[s] = screens.NewUpdates()
+		case nav.Cleanup:
+			m.screens[s] = screens.NewCleanup()
 		case nav.ActivityHistory:
 			m.screens[s] = screens.NewActivityHistory()
 		case nav.Settings:
@@ -239,6 +246,17 @@ func (m Model) dataView() screens.DataView {
 		p.Spinner = m.spinner.View()
 		d.Analyze = &p
 	}
+	if m.tidy != nil {
+		p := m.tidy.progress
+		p.Spinner = m.spinner.View()
+		d.Tidying = &p
+	}
+	for _, a := range d.Activity {
+		if a.Kind == "cleanup.run" && (a.Outcome == core.OutcomeSuccess || a.Outcome == core.OutcomePartial) {
+			d.LastRemoved = a.At
+			break
+		}
+	}
 	for _, a := range d.Activity {
 		if a.Kind == "updates.apply" {
 			d.LastApplied = a.At
@@ -256,9 +274,12 @@ func (m Model) ctx() screens.Context {
 	if m.upd != nil {
 		managers = m.upd.Managers()
 	}
-	var anaSources []core.SourceInfo
+	var anaSources, tidiers []core.SourceInfo
 	if m.ana != nil {
 		anaSources = m.ana.Sources()
+	}
+	if m.cln != nil {
+		tidiers = m.cln.Tidiers()
 	}
 	return screens.Context{
 		Theme:           m.theme,
@@ -275,6 +296,7 @@ func (m Model) ctx() screens.Context {
 		Sources:         sources,
 		Managers:        managers,
 		AnalysisSources: anaSources,
+		Tidiers:         tidiers,
 		Elevated:        m.elevated,
 		Data:            m.dataView(),
 	}
@@ -422,6 +444,67 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case screens.StartAnalysisMsg:
 		return m, m.startAnalysis()
 
+	case screens.StartTidyFindMsg:
+		return m, m.startTidy()
+
+	case tidyEventMsg:
+		applyEvent(m.tidy, msg.ev)
+		if m.tidy == nil {
+			return m, nil
+		}
+		return m, listen(m.tidy.events)
+
+	case tidyDoneMsg:
+		m.tidy = nil
+		if msg.report.Status != core.ScanCancelled {
+			r := msg.report
+			m.data.Tidy = &r
+		}
+		return m, tea.Batch(m.setStatus(tidyResultStatus(msg.report)), loadData(m.inv))
+
+	case screens.RequestCleanupMsg:
+		if m.cln == nil {
+			return m, m.setStatus(components.Status{Text: "Cleanup is unavailable because ATLAS can't open its saved data.", Kind: components.StatusError})
+		}
+		if len(msg.Items) == 0 {
+			return m.Update(cleanupPlannedMsg{steps: msg.Tidy})
+		}
+		return m, tea.Batch(m.setStatus(components.Status{Text: "Checking what depends on it…"}), planCleanup(m.cln, msg))
+
+	case cleanupPlannedMsg:
+		if msg.err != nil {
+			return m, m.setStatus(components.Status{Text: "ATLAS couldn't check dependencies, so nothing will be removed: " + msg.err.Error(), Kind: components.StatusError})
+		}
+		plan := screens.CleanupPlan(m.ctx(), msg.steps)
+		m.status = components.Status{Text: "Review the preview. Nothing has been changed."}
+		return m.Update(screens.ShowActionPreviewMsg{Plan: plan, Confirm: screens.ApplyCleanupMsg{Steps: msg.steps}})
+
+	case screens.ApplyCleanupMsg:
+		if m.cln == nil || m.busy() {
+			return m, m.setStatus(components.Status{Text: "Cleanup can't start right now. Nothing was changed.", Kind: components.StatusWarning})
+		}
+		job := m.cln.NewJob(msg.Steps)
+		m.log.Info("handing terminal to cleanup job", "steps", len(msg.Steps))
+		return m, m.exec(job, func(err error) tea.Msg {
+			return cleanupFinishedMsg{results: job.Results(), err: err}
+		})
+
+	case cleanupFinishedMsg:
+		if msg.err != nil {
+			m.log.Error("cleanup job", "error", msg.err)
+		}
+		if len(msg.results) == 0 {
+			return m, tea.Batch(m.setStatus(components.Status{Text: "Cleanup couldn't start. Nothing was changed.", Kind: components.StatusError}), tea.ClearScreen)
+		}
+		return m, tea.Batch(recordCleanup(m.cln, msg.results), tea.ClearScreen)
+
+	case cleanupRecordedMsg:
+		if msg.err != nil {
+			m.log.Error("record cleanup", "error", msg.err)
+		}
+		m.pruneTidy(msg.results)
+		return m, tea.Batch(m.setStatus(cleanupResultStatus(msg.results, msg.err)), loadData(m.inv), loadAnalysis(m.ana))
+
 	case analysisEventMsg:
 		applyEvent(m.analysis, msg.ev)
 		if m.analysis == nil {
@@ -520,11 +603,18 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	if m.preview != nil {
 		switch k {
-		case "enter":
+		case "enter", "r", "R":
 			plan, confirm := *m.preview, m.confirm
+			if plan.Available && plan.Destructive && k == "enter" {
+				// Deletions need a deliberate key, so Enter alone can't confirm them.
+				return m, m.setStatus(components.Status{Text: "To go ahead, press r. To cancel, press Esc. Nothing has been changed.", Kind: components.StatusWarning})
+			}
+			if k != "enter" && !(plan.Available && plan.Destructive) {
+				return m, nil
+			}
 			m.preview, m.confirm = nil, nil
 			if plan.Available && confirm != nil {
-				m.log.Info("action confirmed", "action", plan.Title)
+				m.log.Info("action confirmed", "action", plan.Title, "destructive", plan.Destructive)
 				return m.Update(confirm)
 			}
 			return m, m.setStatus(components.Status{Text: "Preview closed. Nothing was changed."})
@@ -737,6 +827,9 @@ func (m Model) content() string {
 
 func (m Model) hints() []components.KeyHint {
 	if m.preview != nil {
+		if m.preview.Available && m.preview.Destructive && m.confirm != nil {
+			return []components.KeyHint{{Key: "r", Desc: "go ahead"}, {Key: "esc", Desc: "cancel"}, {Key: "↑/↓", Desc: "scroll"}, {Key: "m", Desc: "mode"}}
+		}
 		if m.preview.Available && m.confirm != nil {
 			return []components.KeyHint{{Key: "enter", Desc: "continue"}, {Key: "esc", Desc: "cancel"}, {Key: "↑/↓", Desc: "scroll"}, {Key: "m", Desc: "mode"}}
 		}
@@ -756,6 +849,8 @@ func (m Model) hints() []components.KeyHint {
 		out = append(out, components.KeyHint{Key: "x", Desc: "stop scan"})
 	case m.analysis != nil:
 		out = append(out, components.KeyHint{Key: "x", Desc: "stop analysis"})
+	case m.tidy != nil:
+		out = append(out, components.KeyHint{Key: "x", Desc: "stop looking"})
 	case m.check != nil:
 		out = append(out, components.KeyHint{Key: "x", Desc: "stop check"})
 	}

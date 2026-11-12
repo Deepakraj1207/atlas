@@ -388,7 +388,7 @@ func (dp *Dependencies) View(ctx Context) string {
 			if rt.Indirect > 0 {
 				body(fmt.Sprintf("%d more packages need it through those.", rt.Indirect), t.Muted.Render)
 			}
-			body("Removing it would break these. Cleanup (Phase 5) will always check this first.", t.Muted.Render)
+			body("Removing it would break these. Cleanup (6) checks this again and won't remove it while anything needs it.", t.Muted.Render)
 		}
 		if rt.Support.Note != "" {
 			body(rt.Support.Note, t.Subtle.Render)

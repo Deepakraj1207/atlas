@@ -222,7 +222,7 @@ func supportFindings(runtimes []core.Runtime, now time.Time) (ended, ending, vc 
 				Title:      fmt.Sprintf("%s no longer gets security fixes", label),
 				Summary:    fmt.Sprintf("Support for %s ended on %s.", label, when),
 				Why:        "Software that no longer gets fixes can have known security problems that will never be patched.",
-				Suggestion: "Install a supported version (the newest is usually best). Before removing this one, check Dependencies (5) for anything that still needs it. Removing software arrives with Cleanup in Phase 5.",
+				Suggestion: "Install a supported version (the newest is usually best). Before removing this one, check Dependencies (5) for anything that still needs it; Cleanup (6) checks again before removing anything.",
 				Items:      g.items, Details: details, Reference: g.support.Reference,
 			})
 		}
@@ -309,7 +309,7 @@ func duplicateFindings(items []core.SoftwareItem) (dups, versions []core.Finding
 				Title:      fmt.Sprintf("%s is installed more than once", name),
 				Summary:    fmt.Sprintf("%d copies were installed by different tools.", len(g)),
 				Why:        "Separate copies are updated separately and can disagree about which one runs when you type its name or open it.",
-				Suggestion: "Keeping one copy is usually simpler. Removing software arrives with Cleanup in Phase 5.",
+				Suggestion: "Keeping one copy is usually simpler. You can remove the one you don't use from Cleanup (6).",
 				Items:      refs, Details: details,
 			})
 		} else {
@@ -318,7 +318,7 @@ func duplicateFindings(items []core.SoftwareItem) (dups, versions []core.Finding
 				Title:      fmt.Sprintf("Several versions of %s are installed", name),
 				Summary:    fmt.Sprintf("%d versions are installed side by side.", len(g)),
 				Why:        "Sometimes this is deliberate, for example to test with an older version. Often the old one is left over from an upgrade.",
-				Suggestion: "If you don't need the older version, it can go. Removing software arrives with Cleanup in Phase 5.",
+				Suggestion: "If you don't need the older version, you can remove it from Cleanup (6).",
 				Items:      refs, Details: details,
 			})
 		}
@@ -357,7 +357,7 @@ func unusedFinding(in Inputs) (*core.Finding, int) {
 		Title:      fmt.Sprintf("%d apps haven't been opened in over a year", len(refs)),
 		Summary:    "Windows recorded when you last opened these, and it was more than a year ago.",
 		Why:        "Unused software still takes space and may still need updates.",
-		Suggestion: "If you don't need them any more, they can go. Removing software arrives with Cleanup in Phase 5.",
+		Suggestion: "If you don't need them any more, you can remove them from Cleanup (6).",
 		Items:      capItems(refs), Details: details,
 		Reference: "Windows UserAssist records (stay on this computer)",
 	}, matched
@@ -379,7 +379,7 @@ func unneededFindings(runtimes []core.Runtime, items []core.SoftwareItem) []core
 			Title:      fmt.Sprintf("%s (%s) may no longer be needed", label, r.Name),
 			Summary:    "Nothing else installed lists it as a requirement, and it was installed automatically rather than by you.",
 			Why:        "Runtimes left behind after the software that needed them was removed only take up space.",
-			Suggestion: "If you don't use it directly, Cleanup (Phase 5) will be able to remove it after checking again.",
+			Suggestion: "If you don't use it directly, you can remove it from Cleanup (6), which checks again first.",
 			Items:      []core.ItemRef{{Name: r.Name, Version: r.Version, Source: r.Source, PackageID: r.PackageID}},
 			Details:    []string{"Dependency data: " + r.DepsSource + ". Only hard requirements (Depends/Requires) are counted; packages that merely recommend it aren't."},
 		})

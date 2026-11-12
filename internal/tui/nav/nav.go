@@ -75,13 +75,6 @@ var infos = [sectionCount]Info{
 		Title:   "Cleanup",
 		Short:   "Cleanup",
 		Summary: "Reclaim space from leftovers, caches and unused software.",
-		Plan: []string{
-			"Find leftover files from uninstalled programs",
-			"Show exactly what would be removed and how much space it frees",
-			"Always preview first; nothing is deleted without your confirmation",
-		},
-		Phase:        5,
-		Availability: ComingSoon,
 	},
 	DiscoverApps: {
 		Title:   "Discover Apps",

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/deepakraj1207/atlas/internal/core"
+	"github.com/deepakraj1207/atlas/internal/handover"
 	"github.com/deepakraj1207/atlas/internal/inventory"
 )
 
@@ -25,7 +26,7 @@ type Service struct {
 	now      func() time.Time
 
 	// Hooks for the terminal job; replaced in tests.
-	start  ProcessStarter
+	start  handover.ProcessStarter
 	notify func() (<-chan os.Signal, func())
 }
 
@@ -36,11 +37,11 @@ func NewService(managers []core.PackageManager, store core.Store, log *slog.Logg
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	return &Service{managers: managers, store: store, log: log, timeouts: timeouts, now: time.Now, start: ExecStarter, notify: notifyInterrupt}
+	return &Service{managers: managers, store: store, log: log, timeouts: timeouts, now: time.Now, start: handover.ExecStarter, notify: handover.NotifyInterrupt}
 }
 
 // WithProcessStarter replaces how commands are started (tests).
-func (s *Service) WithProcessStarter(p ProcessStarter) *Service { s.start = p; return s }
+func (s *Service) WithProcessStarter(p handover.ProcessStarter) *Service { s.start = p; return s }
 
 // Managers lists the package managers in priority order.
 func (s *Service) Managers() []core.SourceInfo {
@@ -159,7 +160,7 @@ func (s *Service) Plan(ups []core.Update) []core.UpdateStep {
 
 // NewJob prepares a terminal job. Nothing runs until the TUI calls Run.
 func (s *Service) NewJob(steps []core.UpdateStep) core.TerminalJob {
-	return &Job{steps: steps, start: s.start, notify: s.notify, log: s.log}
+	return handover.New(steps, s.start, s.notify)
 }
 
 // RecordResults writes the activity entry and removes applied updates.

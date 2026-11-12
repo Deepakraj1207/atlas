@@ -1,25 +1,24 @@
 # ATLAS — Test Status
 
-Last run: 2026-11-12, end of Phase 4, Go 1.24.7 (`GOTOOLCHAIN=local`) on linux/amd64.
+Last run: 2026-11-12, end of Phase 5, Go 1.24.7 (`GOTOOLCHAIN=local`) on linux/amd64.
 
-## Unit tests (`go test ./...`) — all passing, 131 tests in 13 packages
+## Unit tests (`go test ./...`) — all passing, 149 tests in 15 packages
 
 | Package | Tests | Covers |
 |---------|-------|--------|
-| internal/analysis | 13 | support dates incl. month-precision ends and the 6-month window; runtime detection for 18 real name formats and 8 look-alikes that must not match; dpkg graph with Provides and alternatives, direct and indirect dependents; RPM requires-to-provides; Chocolatey nested `<dependency>`; Scoop string or list `depends`; UserAssist ROT13, value decoding, zero timestamps, known-folder paths, folder-boundary matching; support rules (attention vs distro info, ending soon, old VC++ grouped); duplicates vs versions incl. transitional snap stub, distro names and components; unused needs positive evidence; dependents and "may no longer be needed"; freshness; service refuses without a scan, saves, records, partial when a source fails; cancel before start is "cancelled", not an error |
-| internal/config | 10 | defaults, missing/malformed/partial files, enum warnings, save round-trip, backup |
-| internal/core | 3 | command rendering, exit codes, status helpers |
-| internal/database | 11 | migrations incl. upgrading a v1 database; scans; activity; update checks; analysis round-trip, latest only, cleared with the software list |
-| internal/inventory | 21 | Phase 2 parsers and rules; plain-language source errors |
-| internal/updates | 12 | Phase 3 managers, planning, terminal job, recording |
-| internal/logging, platform | 5 | file logging; directories |
-| internal/tui/nav, layout, theme, components | 18 | navigation, responsive layout, themes, shared components |
-| internal/tui | 38 | earlier phases plus: analysis needs a scan (screens and preview); full flow from Home to Smart Analysis, What ATLAS checked, Dependencies and Activity History; real dependency graph with direct and indirect dependents and the Advanced data-source line; stale analysis note and clearing with the list; analysis can be stopped and excludes scans; group heading stays visible on a 60×18 terminal |
+| internal/cleanup | 12 | gate blocks what other software needs, naming it; allows when dependents are removed in the same plan; blocks Essential, required, protected names, kernels, unknown-dependency runtimes and components; DNF protected.d; remover choice on Windows (winget by ID or exact name, Scoop, Chocolatey needs admin, ambiguous ownership blocked); no forbidden flags in any remover and every removal has a rollback; APT cache and autoremove (simulation only); DNF cache and unneeded; snap disabled revisions only; Scoop old versions and cache; find, run, record and drop removed software; sizes |
+| internal/handover | 3 | multi-command steps, blocked, failed, missing program, restart codes, wording; Ctrl+C stops remaining steps; verbs and summaries follow the step action |
+| internal/analysis | 13 | Phase 4 coverage, plus Essential/required marking in the dpkg graph |
+| internal/database | 12 | earlier coverage, plus exact-match deletion of removed software |
+| internal/updates | 10 | Phase 3 managers, planning, recording (job tests moved to handover) |
+| internal/inventory, core, config, logging, platform | 39 | earlier phases |
+| internal/tui/nav, layout, theme, components | 18 | navigation, layout, themes, components |
+| internal/tui | 42 | earlier phases plus: removal from My Software opens a preview with dependency, rollback and never-purge text; Enter refuses, Esc runs nothing, `r` runs exactly the planned command, the item leaves My Software and the run is recorded; a blocked removal names what needs it and can't be forced with `r` or Enter; Cleanup shows analysis suggestions and, after a previewed read-only search, things to tidy with sizes; tidying runs only the listed command, reports space freed and leaves the list; Enter still confirms read-only previews and `r` doesn't |
 
 ### Race detector
 
-`go test -race -count=5` over the tui, inventory, updates and analysis packages (all
-that use goroutines) reports no data races and no failures. An earlier race-detector run
+`go test -race` over every package that uses goroutines (tui, inventory, updates,
+analysis, cleanup, handover) reports no data races and no failures. An earlier race-detector run
 found a real timing bug (D46), which is now fixed and has a regression test.
 
 ## Checks
@@ -30,11 +29,25 @@ found a real timing bug (D46), which is now fixed and has a regression test.
 | `go vet ./...` (linux) | clean |
 | `GOOS=windows GOARCH=amd64 go vet ./...` | clean |
 | `go test -count=1 ./...` | pass |
-| `GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build ./cmd/atlas` | pass (~14.2 MB) |
-| `GOOS=windows GOARCH=arm64 CGO_ENABLED=0 go build ./cmd/atlas` | pass (~13.6 MB) |
+| `GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build ./cmd/atlas` | pass (~14.6 MB) |
+| `GOOS=windows GOARCH=arm64 CGO_ENABLED=0 go build ./cmd/atlas` | pass (~13.9 MB) |
 | Linux build | pass |
 
 ## End-to-end runs in a pseudo-terminal
+
+**Phase 5, real binary, real data, nothing removed.**
+1. Scan, then My Software, a search for `bc`, and `r`. The real dpkg dependency check
+   ran and the preview read "Remove bc" with "Press r to go ahead".
+2. Enter was refused with "To go ahead, press r", and Esc cancelled.
+3. `python3.12` was blocked, naming the packages that need it.
+4. `dpkg -s bc` still reported "install ok installed" afterwards, and the log shows two
+   plans and no run. The run itself is covered by the TUI tests and the Phase 3
+   handover verification.
+
+Live, read-only planning on this container: `bc` was removable, `bash` was blocked as
+something the system relies on, and `python3.12` was blocked as needed by `python3`,
+`python3-uno`, `python3.12-dev` and `python3.12-venv`. The APT cache was empty, and APT
+reported nothing autoremovable.
 
 **Phase 4, real binary, real data.** Scan, then Analyze My Software (previewed), on this
 Ubuntu container. 837 packages were analyzed in about 14 ms. The 7 runtimes found were
@@ -73,6 +86,11 @@ checkbox column, a doubled period in rollback text, and Home counting apps while
 the recommendation counted everything.
 
 ## Not verified in this environment
+
+- A real removal or clean-up run on this machine. It was deliberately not done, because
+  removed packages couldn't be reinstalled here (no APT lists). The command path is the
+  same handover verified in Phase 3.
+- Windows removers (winget by name, Chocolatey, Scoop) on a real Windows machine.
 
 - Windows-only analysis sources on a real Windows machine: the UserAssist registry read,
   and Chocolatey and Scoop dependency folders. Decoding and matching are unit-tested.

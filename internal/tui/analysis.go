@@ -27,7 +27,9 @@ type analysisLoadedMsg struct {
 }
 
 // busy reports whether any background task is running.
-func (m Model) busy() bool { return m.scan != nil || m.check != nil || m.analysis != nil }
+func (m Model) busy() bool {
+	return m.scan != nil || m.check != nil || m.analysis != nil || m.tidy != nil
+}
 
 func loadAnalysis(ana core.AnalysisService) tea.Cmd {
 	if ana == nil {

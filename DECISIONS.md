@@ -155,3 +155,36 @@ Short, dated records of choices that shape the code.
 - **D46. Database reads inside a cancellable task use an uninterruptible context.**
   Stopping applies to the slow external sources; a cancel at the very start must read
   as "stopped", never as a save error. This was found by the race detector's timing.
+
+## 2026-11-12 — Phase 5
+
+- **D47. Shared terminal handover.** The update job moved to `internal/handover`
+  and serves updates and cleanup. Steps carry an action (update, remove, clean), so
+  terminal output and summaries use the right verb.
+- **D48. Destructive previews need `r`.** For removals and clean-ups, Enter only
+  explains how to go ahead. A deliberate, different key stops muscle memory from
+  confirming a deletion. Read-only previews still use Enter, and `r` doesn't confirm them.
+- **D49. Fresh dependency check for every removal plan.** dpkg, RPM, Chocolatey and
+  Scoop records are re-read at plan time, never taken from the saved analysis.
+  Dependents that are part of the same plan don't block it.
+- **D50. What ATLAS will never remove:**
+  - packages the system marks Essential or required, or that DNF protects;
+  - tools ATLAS or the OS rely on (sudo, package managers, winget/App Installer,
+    kernels, bootloaders, Edge and WebView2, ssh server);
+  - runtimes and system components with no dependency records;
+  - software known to more than one Windows package manager, since ATLAS can't
+    know which one owns it.
+  Each block names its reason. Safety reasons are reported before "which tool" reasons.
+- **D51. Program-only entries on Windows are removed with `winget uninstall --name
+  <exact> --exact`.** That runs the program's own uninstaller, as Windows Settings
+  would. Entries with a winget ID use `--id`.
+- **D52. No flags that skip questions or delete data.** No `-y`, `--purge`, `--force`,
+  `--delete-data` or silent switches. APT, DNF, Flatpak and Chocolatey ask for themselves.
+  Settings and app data are kept: Scoop persist, ~/.var/app, APT config files, and
+  Snap's 31-day snapshots.
+- **D53. Clean-ups list their exact targets first.** APT autoremove targets come from
+  `apt-get -s autoremove` (simulation, no root) and DNF's from `repoquery --unneeded`.
+  At run time the package manager recomputes and shows its list before asking. That
+  is stated in the preview.
+- **D54. After removals, the saved list drops removed items, and Smart Analysis is
+  marked stale** (latest removal is newer than the analysis).

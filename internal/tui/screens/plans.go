@@ -241,3 +241,149 @@ func quickActions(ctx Context) []QuickAction {
 		},
 	}
 }
+
+// TidyFindPlan describes looking for things to tidy.
+func TidyFindPlan(ctx Context) core.ActionPlan {
+	p := core.ActionPlan{
+		Title:       "Look for things to tidy",
+		WhatHappens: "ATLAS will look for package caches, old versions kept after updates, and packages your package manager says nothing needs any more. It lists exactly what it finds.",
+		Why:         "These take up space and aren't needed by the software you use.",
+		Safety:      "Safe. Looking only reads information; nothing is deleted. Removing anything is a separate step you confirm.",
+		Reversible:  "There is nothing to undo.",
+		Available:   true,
+	}
+	for _, s := range ctx.Tidiers {
+		p.Technical = append(p.Technical, s.Label+": "+s.Detail)
+	}
+	switch {
+	case !ctx.Data.CleanupAvailable:
+		p.Available, p.Unavailability = false, "ATLAS can't open its saved data. See Settings for details."
+	case len(ctx.Tidiers) == 0:
+		p.Available, p.Unavailability = false, "ATLAS doesn't know any caches or leftovers to check on this computer."
+	case ctx.Data.Busy():
+		p.Available, p.Unavailability = false, "another task is running. Wait for it to finish, or stop it with x."
+	}
+	return p
+}
+
+// CleanupPlan describes removing software and tidying up. It is
+// destructive, so it needs r (not Enter) to confirm.
+func CleanupPlan(ctx Context, steps []core.UpdateStep) core.ActionPlan {
+	var changes, blocked, technical, rollbacks []string
+	seen := map[string]bool{}
+	elevations := map[core.Elevation]bool{}
+	removed, cleaned := 0, 0
+	var bytes int64
+	firstName := ""
+	autoremove := false
+	for _, st := range steps {
+		if st.Blocked != "" {
+			for _, u := range st.Updates {
+				blocked = append(blocked, "Not removed: "+u.Name+". "+st.Blocked)
+			}
+			continue
+		}
+		elevations[st.Elevation] = true
+		bytes += st.Bytes
+		for _, u := range st.Updates {
+			name := strings.TrimSpace(u.Name + " " + u.CurrentVersion)
+			if firstName == "" {
+				firstName = u.Name
+			}
+			if st.Action == core.ActionClean {
+				cleaned++
+				changes = append(changes, "Deleted: "+name+" · "+st.Label)
+			} else {
+				removed++
+				changes = append(changes, "Removed: "+name+" · "+st.Label)
+			}
+		}
+		if st.Action == core.ActionRemove && st.Commands != nil && len(st.Commands[0].Args) > 0 && strings.Contains(st.Commands[0].String(), "autoremove") {
+			autoremove = true
+		}
+		for _, c := range st.Commands {
+			technical = append(technical, c.String())
+		}
+		if st.Rollback != "" && !seen[st.Rollback] {
+			seen[st.Rollback] = true
+			rollbacks = append(rollbacks, st.Label+": "+strings.TrimSuffix(st.Rollback, ".")+".")
+		}
+	}
+	const maxLines = 14
+	if len(changes) > maxLines {
+		more := len(changes) - maxLines
+		changes = append(changes[:maxLines], fmt.Sprintf("…and %d more", more))
+	}
+	if bytes > 0 {
+		changes = append(changes, "Space freed: about "+humanBytes(bytes)+" (removed software may free more)")
+	}
+
+	var title string
+	switch {
+	case removed == 1 && cleaned == 0:
+		title = "Remove " + firstName
+	case removed > 0 && cleaned == 0:
+		title = fmt.Sprintf("Remove %d items", removed)
+	case removed == 0 && cleaned > 0:
+		title = "Tidy up"
+	case removed > 0:
+		title = fmt.Sprintf("Remove %d items and tidy up", removed)
+	default:
+		title = "Remove software"
+	}
+	safety := []string{}
+	if removed > 0 {
+		safety = append(safety, "ATLAS checked dependencies just now: nothing listed here is needed by other installed software, as far as your package managers record. Each package manager shows what it will remove, and most ask you to confirm. Your documents aren't touched and settings are kept: ATLAS never purges.")
+	}
+	if cleaned > 0 {
+		safety = append(safety, "Clean-ups only delete the caches and old versions listed above; the software you use isn't affected.")
+	}
+	if autoremove {
+		safety = append(safety, "For packages no longer needed, the package manager works out the list again and shows it before asking.")
+	}
+	if elevations[core.ElevationSudo] {
+		safety = append(safety, "Some steps run through sudo, which will ask for your password in the terminal. ATLAS never sees or stores it.")
+	}
+	if elevations[core.ElevationInstaller] {
+		safety = append(safety, "A program's own uninstaller runs, and Windows may ask for permission. Approve only what you expect.")
+	}
+	if elevations[core.ElevationPolkit] {
+		safety = append(safety, "Flatpak may ask for your password for apps installed for everyone.")
+	}
+	safety = append(safety, "Press Ctrl+C to stop; nothing further starts after that.")
+
+	p := core.ActionPlan{
+		Title:       title,
+		WhatHappens: "ATLAS will hand this terminal to each package manager in turn, so you see exactly what it does and can answer its questions. When it's finished, you'll come back here and the result is recorded in Activity History.",
+		Why:         "Software and files you don't use take space and still need updates.",
+		WhatChanges: append(changes, blocked...),
+		Safety:      strings.Join(safety, " "),
+		Reversible:  "Removed software can be reinstalled. " + strings.Join(rollbacks, " "),
+		Technical:   technical,
+		Available:   removed+cleaned > 0,
+		Destructive: true,
+	}
+	switch {
+	case removed+cleaned == 0 && len(blocked) > 0:
+		p.Unavailability = "nothing selected can be removed safely (see below)."
+	case removed+cleaned == 0:
+		p.Unavailability = "there is nothing to remove."
+	case ctx.Data.Busy():
+		p.Available = false
+		p.Unavailability = "another task is running. Wait for it to finish, or stop it with x."
+	}
+	return p
+}
+
+func humanBytes(n int64) string {
+	const unit = 1000
+	if n < unit {
+		return fmt.Sprintf("%d B", n)
+	}
+	div, exp := int64(unit), 0
+	for m := n / unit; m >= unit; m /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(n)/float64(div), "kMGTPE"[exp])
+}

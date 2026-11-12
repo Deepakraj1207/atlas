@@ -181,9 +181,9 @@ func TestTabAndDigitsNavigate(t *testing.T) {
 	if m.Section() != nav.Settings {
 		t.Errorf("shift+tab twice from My Software = %v, want Settings", m.Section())
 	}
-	m = press(t, m, "6")
-	if m.Section() != nav.Cleanup {
-		t.Errorf("digit 6 = %v, want Cleanup", m.Section())
+	m = press(t, m, "7")
+	if m.Section() != nav.DiscoverApps {
+		t.Errorf("digit 7 = %v, want Discover Apps", m.Section())
 	}
 	if !strings.Contains(m.View(), "Not available in this version") {
 		t.Error("coming-soon section should render its empty state")

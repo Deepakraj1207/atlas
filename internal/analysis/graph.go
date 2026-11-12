@@ -10,9 +10,20 @@ import (
 type Graph struct {
 	Deps  map[string][]string
 	Nodes map[string]bool
+	// Protected maps packages the system itself marks as indispensable
+	// (dpkg Essential or Priority: required) to the reason.
+	Protected map[string]string
 }
 
-func newGraph() Graph { return Graph{Deps: map[string][]string{}, Nodes: map[string]bool{}} }
+func newGraph() Graph {
+	return Graph{Deps: map[string][]string{}, Nodes: map[string]bool{}, Protected: map[string]string{}}
+}
+
+// ProtectedReason returns why the system marks pkg as indispensable, if it does.
+func (g Graph) ProtectedReason(pkg string) (string, bool) {
+	r, ok := g.Protected[key(pkg)]
+	return r, ok
+}
 
 func key(s string) string { return strings.ToLower(strings.TrimSpace(s)) }
 

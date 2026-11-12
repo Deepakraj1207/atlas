@@ -317,3 +317,25 @@ func TestAnalysisRoundTripAndClearedWithInventory(t *testing.T) {
 		t.Error("clearing the software list must clear the analysis based on it")
 	}
 }
+
+func TestDeleteSoftware(t *testing.T) {
+	db, _ := openTemp(t)
+	ctx := context.Background()
+	if _, err := db.SaveScan(ctx, testReport(time.Now(), "keep", "gone")); err != nil {
+		t.Fatal(err)
+	}
+	items, _ := db.Software(ctx)
+	var gone core.SoftwareItem
+	for _, it := range items {
+		if it.Name == "gone" {
+			gone = it
+		}
+	}
+	if err := db.DeleteSoftware(ctx, []core.ItemRef{{Name: gone.Name, Version: gone.Version, Source: gone.Source}, {Name: "keep", Version: "wrong", Source: gone.Source}}); err != nil {
+		t.Fatal(err)
+	}
+	items, _ = db.Software(ctx)
+	if len(items) != 1 || items[0].Name != "keep" {
+		t.Errorf("only the exact match should go: %+v", items)
+	}
+}

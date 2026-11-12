@@ -40,7 +40,9 @@ type Context struct {
 	Elevated bool
 	// AnalysisSources are the extra data sources Smart Analysis reads.
 	AnalysisSources []core.SourceInfo
-	Data            DataView
+	// Tidiers are the places "look for things to tidy" examines.
+	Tidiers []core.SourceInfo
+	Data    DataView
 }
 
 // DataView is the root model's read-only snapshot of saved data.
@@ -80,15 +82,32 @@ type DataView struct {
 	Analysis *core.AnalysisResult
 	// Analyze is non-nil while an analysis is running.
 	Analyze *ScanProgress
+
+	// CleanupAvailable is false when cleanup is unavailable.
+	CleanupAvailable bool
+	// Tidy is this session's latest search for things to tidy (nil if none).
+	Tidy *core.TidyReport
+	// Tidying is non-nil while that search runs.
+	Tidying *ScanProgress
+	// LastRemoved is when software was last removed (zero if never).
+	LastRemoved time.Time
 }
 
-// Busy reports whether a scan, update check or analysis is running.
-func (d DataView) Busy() bool { return d.Scan != nil || d.Check != nil || d.Analyze != nil }
+// Busy reports whether a background task is running.
+func (d DataView) Busy() bool {
+	return d.Scan != nil || d.Check != nil || d.Analyze != nil || d.Tidying != nil
+}
 
 // AnalysisStale reports whether the software list changed after the
-// saved analysis was made.
+// saved analysis was made (a newer scan, or software removed since).
 func (d DataView) AnalysisStale() bool {
-	return d.Analysis != nil && d.Summary != nil && d.Summary.FinishedAt.After(d.Analysis.BasedOnScan)
+	if d.Analysis == nil {
+		return false
+	}
+	if d.Summary != nil && d.Summary.FinishedAt.After(d.Analysis.BasedOnScan) {
+		return true
+	}
+	return d.LastRemoved.After(d.Analysis.FinishedAt)
 }
 
 // PendingUpdates counts updates that "update all" would include.

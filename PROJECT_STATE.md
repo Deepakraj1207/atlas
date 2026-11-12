@@ -6,7 +6,7 @@ Windows 11. Linux stays compatible.
 
 ## Current phase
 
-**Phase 4 — Smart Analysis and Dependencies: complete.** Awaiting approval to start Phase 5.
+**Phase 5 — Cleanup: complete.** Awaiting approval to start Phase 6.
 
 | Phase | Status |
 |-------|--------|
@@ -14,7 +14,8 @@ Windows 11. Linux stays compatible.
 | 2. Inventory: read-only scanning, SQLite, My Software, Activity History | done |
 | 3. Updates: check, review, install through the package managers | done |
 | 4. Smart Analysis and Dependencies | done |
-| 5. Cleanup | not started |
+| 5. Cleanup: remove software and tidy caches, with a fresh dependency gate | done |
+| 6. Discover Apps | not started |
 
 ## What exists now
 
@@ -44,16 +45,23 @@ Windows 11. Linux stays compatible.
 | **What ATLAS checked** | done | Every check listed with its result, including "none found" and "not checked" with the reason |
 | **Dependencies** | done | Runtimes grouped by version with support status; direct and indirect dependents from dpkg, RPM, Chocolatey and Scoop records; "not recorded" where Windows keeps none |
 | **Analysis storage** | done | Schema v3; latest analysis kept as one document; cleared with the software list; marked stale after a newer scan |
-| Cleanup, Discover Apps | empty states | Honest "arrives in Phase N" screens |
+| **Removing software** | done | From My Software (`r`) or Cleanup suggestions. Every plan re-reads dependency records; blocked items say why |
+| **Safety gate** | done | Blocks: anything other installed software needs; dpkg Essential/required; DNF protected list; tools ATLAS or the OS rely on; runtimes and components whose users can't be determined; software owned by more than one package manager |
+| **Things to tidy** | done | Exact, read-only discovery: APT and DNF caches, packages APT or DNF marks unneeded, old snap revisions, old Scoop versions and downloads; sizes shown |
+| **Destructive confirmation** | done | Removal and clean-up previews need `r`; Enter alone never confirms a deletion |
+| **Run and record** | done | Same terminal handover as updates; removed software leaves My Software; Smart Analysis marked stale; Activity History records everything |
+| Discover Apps | empty state | Honest "arrives in Phase 6" screen |
 | Removals, cleanup actions | not started | Phase 5 |
 
 ## Guarantees still held
 
-- Updates are the only system change ATLAS can make, and only after a preview the user confirms.
+- ATLAS changes the system only by installing updates, removing software, or clearing caches,
+  and only after a preview the user confirms. Removals and clean-ups need `r`, not Enter.
 - ATLAS never answers a package manager's prompt, accepts an agreement, or handles a password.
   The package manager asks the user directly in the terminal.
 - ATLAS never asks for elevation for itself. It explains when sudo, UAC or PolicyKit may ask.
-- No removals. No sample data in shipped code; test fixtures live only in `_test.go` files.
+- No `-y`, purge, force or delete-data flags are ever passed. Users' settings and data are kept.
+- No sample data in shipped code; test fixtures live only in `_test.go` files.
 - Every scan, check, analysis, clear and update run is recorded in Activity History.
 - Analysis never infers from missing data: no usage record means no claim about usage,
   and no dependency record means "treat it as needed".

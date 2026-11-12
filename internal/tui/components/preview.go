@@ -55,9 +55,12 @@ func ActionPreview(t theme.Theme, width int, p core.ActionPlan, advanced bool) s
 		b.WriteString("\n\n")
 	}
 
-	if p.Available {
+	switch {
+	case p.Available && p.Destructive:
+		b.WriteString(t.Warning.Render("Press r to go ahead · Esc to cancel"))
+	case p.Available:
 		b.WriteString(t.Subtle.Render("Enter to continue · Esc to cancel"))
-	} else {
+	default:
 		b.WriteString(t.Subtle.Render("Press Esc or Enter to close."))
 	}
 	return b.String()

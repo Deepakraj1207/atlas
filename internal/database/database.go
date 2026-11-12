@@ -535,3 +535,21 @@ func (d *DB) LatestAnalysis(ctx context.Context) (core.AnalysisResult, bool, err
 	}
 	return r, true, nil
 }
+
+// DeleteSoftware drops removed items from the saved list.
+func (d *DB) DeleteSoftware(ctx context.Context, items []core.ItemRef) error {
+	if len(items) == 0 {
+		return nil
+	}
+	tx, err := d.sql.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for _, it := range items {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM software WHERE source = ? AND name = ? AND version = ?`, it.Source, it.Name, it.Version); err != nil {
+			return fmt.Errorf("update saved list: %w", err)
+		}
+	}
+	return tx.Commit()
+}

@@ -123,6 +123,10 @@ Package: python3.11
 Status: install ok installed
 Version: 3.11.9-1
 
+Package: bash
+Status: install ok installed
+Essential: yes
+
 Package: removed
 Status: deinstall ok config-files
 Depends: python3.12
@@ -147,6 +151,12 @@ func TestDpkgDependencies(t *testing.T) {
 	}
 	if d, i := g.Dependents("python3.11"); len(d) != 0 || i != 0 {
 		t.Error("python3.11 has no dependents")
+	}
+	if r, ok := g.ProtectedReason("bash"); !ok || !strings.Contains(r, "essential") {
+		t.Errorf("Essential packages must be marked protected, got %q %v", r, ok)
+	}
+	if _, ok := g.ProtectedReason("python3.11"); ok {
+		t.Error("ordinary packages aren't protected")
 	}
 }
 

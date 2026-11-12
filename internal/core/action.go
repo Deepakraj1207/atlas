@@ -25,6 +25,9 @@ type ActionPlan struct {
 	Available bool
 	// Unavailability explains when the action arrives, if Available is false.
 	Unavailability string
+	// Destructive plans delete something. They need a deliberate key (r)
+	// rather than Enter to confirm, so muscle memory can't confirm them.
+	Destructive bool
 }
 
 // ChangesSystem reports whether the plan modifies anything on the machine.

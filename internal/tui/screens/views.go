@@ -22,6 +22,11 @@ func analyzeProgressView(ctx Context, p ScanProgress) string {
 	return progressView(ctx, p, "Analyzing your software", "Stopping the analysis…")
 }
 
+// tidyProgressView renders the live state of a search for things to tidy.
+func tidyProgressView(ctx Context, p ScanProgress) string {
+	return progressView(ctx, p, "Looking for things to tidy", "Stopping…")
+}
+
 // windowLines returns the slice of lines to show so the selected block
 // [selStart, selEnd) is visible within avail lines.
 func windowLines(lines []string, selStart, selEnd, avail int) []string {

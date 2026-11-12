@@ -13,6 +13,8 @@ internal/database      SQLite adapter for core.Store (modernc.org/sqlite, CGO-fr
 internal/inventory     scanners (core.Scanner), merge, RunAll, Service (core.InventoryService)
 internal/updates       package managers (core.PackageManager), Service (core.UpdateService), terminal Job
 internal/analysis      support table, runtime detection, dependency readers, usage records, rules, Service
+internal/cleanup       removers, safety gate, tidiers (exact clean-ups), Service (core.CleanupService)
+internal/handover      terminal Job shared by updates and cleanup
   registry*.go         Windows Uninstall keys (pure mapping + windows-only enumeration)
   winget, scoop, chocolatey, dpkg, rpm, snap, flatpak
   defaults_{windows,other}.go   which scanners run on which OS
@@ -21,7 +23,7 @@ internal/tui           root model: keys, overlays, scan lifecycle, data loading
 ```
 
 Dependency rule: `tui` depends only on `core` interfaces. `app` is the only
-package that knows about `database`, `inventory`, `updates` and `analysis`.
+package that knows about `database`, `inventory`, `updates`, `analysis` and `cleanup`.
 
 ## Phase 1 — Go bootstrap and TUI foundation — DONE
 
@@ -83,15 +85,32 @@ Changes from the plan:
 - Runtime detection deliberately ignores Debian's `python3` meta-package and
   versioned helper packages such as `python3.12-venv`.
 
-## Phase 5 — Cleanup (planned, not started)
+## Phase 5 — Cleanup — DONE
 
-- Removal through each package manager, with the same terminal handover as updates.
-- Before every removal, a fresh dependency check. Anything needed by other installed
-  software is blocked or clearly warned about, using the Dependencies data.
-- Candidates from Smart Analysis: duplicates, old versions, unneeded runtimes, unused
-  apps. Each removal is listed in the preview with how to reinstall.
-- Leftover files and caches only where the location is certain, always previewed.
+| Step | Result |
+|------|--------|
+| Shared handover package; step actions (update, remove, clean) and sizes | done |
+| Store: drop removed software from the saved list | done |
+| Removers: winget (by ID or exact name), Chocolatey, Scoop, APT, DNF, Snap, Flatpak | done |
+| Safety gate with fresh dependency data, protected lists, Essential/required, DNF protected.d | done |
+| Tidiers: APT cache and autoremove (simulated), DNF cache and unneeded, old snap revisions, Scoop old versions and cache | done |
+| TUI: Cleanup screen, `r` in My Software, previews with `r` confirmation, run and record | done |
 
-## Phase 6+ (outline)
+Changes from the plan:
+- "Leftover files from uninstalled programs" isn't offered. Their locations aren't
+  certain enough to delete safely. Only package-manager caches and old versions are.
+- Flatpak "unused runtimes" isn't offered, because ATLAS can't list them exactly beforehand.
+- Clean-up results are kept for the session only. They go stale quickly and finding
+  them again takes seconds.
 
-Discover Apps, optional AI explanations (off by default).
+## Phase 6 — Discover Apps (planned, not started)
+
+- A small curated catalogue, shipped with ATLAS, of well-regarded tools by category,
+  each with a plain explanation and its winget, Scoop, APT, Snap or Flatpak ID.
+- Suggestions based on what is installed. Nothing is suggested twice and nothing is
+  already installed. No network calls or telemetry to build suggestions.
+- Install through the same preview and terminal handover. Each install is recorded.
+
+## Phase 7+ (outline)
+
+Optional AI explanations (off by default), packaging and release.

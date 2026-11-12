@@ -1,11 +1,13 @@
-package updates
+// Package handover runs steps in the user's own terminal. ATLAS hands the
+// terminal to each package manager in turn, so its real output and prompts
+// (passwords, permission dialogs, confirmations) reach the user directly.
+package handover
 
 import (
 	"bufio"
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -41,19 +43,30 @@ func ExecStarter(c core.Command, stdin io.Reader, stdout, stderr io.Writer) (int
 	}
 }
 
-func notifyInterrupt() (<-chan os.Signal, func()) {
+// NotifyInterrupt delivers Ctrl+C to the job while it runs.
+func NotifyInterrupt() (<-chan os.Signal, func()) {
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, os.Interrupt)
 	return ch, func() { signal.Stop(ch) }
 }
 
-// Job runs update steps in the user's terminal. It implements
-// core.TerminalJob (and so Bubble Tea's ExecCommand).
+// New prepares a job. start and notify may be nil for the defaults.
+func New(steps []core.UpdateStep, start ProcessStarter, notify func() (<-chan os.Signal, func())) *Job {
+	if start == nil {
+		start = ExecStarter
+	}
+	if notify == nil {
+		notify = NotifyInterrupt
+	}
+	return &Job{steps: steps, start: start, notify: notify}
+}
+
+// Job runs steps in the user's terminal. It implements core.TerminalJob
+// (and so Bubble Tea's ExecCommand).
 type Job struct {
 	steps  []core.UpdateStep
 	start  ProcessStarter
 	notify func() (<-chan os.Signal, func())
-	log    *slog.Logger
 
 	stdin          io.Reader
 	stdout, stderr io.Writer
@@ -127,7 +140,7 @@ func (j *Job) Run() error {
 			continue
 		}
 		n++
-		j.printf("\n[%d/%d] %s: updating %s\n", n, runnable, st.Label, describe(st))
+		j.printf("\n[%d/%d] %s: %s %s\n", n, runnable, st.Label, verb(st.Action), describe(st))
 		switch st.Elevation {
 		case core.ElevationSudo:
 			j.printf("      sudo may ask for your password. ATLAS never sees or stores it.\n")
@@ -165,7 +178,7 @@ func (j *Job) Run() error {
 		j.results = append(j.results, res)
 	}
 
-	j.printf("\n%s\n", summary(j.results))
+	j.printf("\n%s\n", Summary(j.results))
 	j.printf("Press Enter to return to ATLAS.")
 	_, _ = bufio.NewReader(j.stdin).ReadString('\n')
 	return nil
@@ -203,16 +216,47 @@ func resultLine(r core.StepResult) string {
 	}
 }
 
-func summary(results []core.StepResult) string {
+func verb(action string) string {
+	switch action {
+	case core.ActionRemove:
+		return "removing"
+	case core.ActionClean:
+		return "cleaning up"
+	default:
+		return "updating"
+	}
+}
+
+func doneWord(results []core.StepResult) string {
+	action := ""
+	for i, r := range results {
+		if i == 0 {
+			action = r.Step.Action
+		} else if r.Step.Action != action {
+			return "done"
+		}
+	}
+	switch action {
+	case core.ActionRemove:
+		return "removed"
+	case core.ActionClean:
+		return "cleaned up"
+	default:
+		return "updated"
+	}
+}
+
+// Summary is the one-line result printed at the end of a run.
+func Summary(results []core.StepResult) string {
 	count := map[core.StepStatus]int{}
 	for _, r := range results {
-		count[r.Status] += len(r.Step.Updates)
+		count[r.Status] += max(len(r.Step.Updates), 1)
 	}
 	var parts []string
 	for _, p := range []struct {
 		s     core.StepStatus
 		label string
-	}{{core.StepDone, "updated"}, {core.StepFailed, "didn't work"}, {core.StepStopped, "stopped"}, {core.StepSkipped, "skipped"}} {
+	}{{core.StepDone, doneWord(results)}, {core.StepFailed, "didn't work"}, {core.StepStopped, "stopped"}, {core.StepSkipped, "skipped"}} {
 		if count[p.s] > 0 {
 			parts = append(parts, fmt.Sprintf("%d %s", count[p.s], p.label))
 		}

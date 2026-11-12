@@ -85,6 +85,12 @@ func parseDpkgDeps(ctx context.Context, r io.Reader) (Input, error) {
 		}
 		name := f["Package"]
 		g.addNode(name)
+		switch {
+		case f["Essential"] == "yes":
+			g.Protected[key(name)] = "the package system marks it as essential"
+		case f["Priority"] == "required":
+			g.Protected[key(name)] = "the package system marks it as required"
+		}
 		for _, p := range strings.Split(f["Provides"], ",") {
 			if v := depName(p); v != "" {
 				providers[key(v)] = append(providers[key(v)], name)

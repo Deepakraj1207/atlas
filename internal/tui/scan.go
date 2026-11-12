@@ -268,7 +268,7 @@ func applyEvent(run *scanRun, ev core.SourceEvent) {
 
 // cancelTasks stops a running scan or update check.
 func (m *Model) cancelTasks() {
-	for _, run := range []*scanRun{m.scan, m.check, m.analysis} {
+	for _, run := range []*scanRun{m.scan, m.check, m.analysis, m.tidy} {
 		if run == nil || run.progress.Cancelling {
 			continue
 		}
@@ -286,6 +286,13 @@ func (m Model) busyStatus() components.Status {
 			return components.Status{Text: "Stopping the scan… nothing has been changed."}
 		}
 		return components.Status{Text: fmt.Sprintf("Scanning… %d of %d sources finished. Press x to stop.", p.Finished(), len(p.Sources))}
+	}
+	if m.tidy != nil {
+		p := m.tidy.progress
+		if p.Cancelling {
+			return components.Status{Text: "Stopping… nothing has been changed."}
+		}
+		return components.Status{Text: fmt.Sprintf("Looking for things to tidy… %d of %d checked. Press x to stop.", p.Finished(), len(p.Sources))}
 	}
 	if m.analysis != nil {
 		p := m.analysis.progress

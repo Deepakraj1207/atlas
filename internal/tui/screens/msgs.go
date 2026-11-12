@@ -28,6 +28,21 @@ type StartCheckMsg struct{}
 // sent after a preview.
 type StartAnalysisMsg struct{}
 
+// StartTidyFindMsg asks the root to look for things to tidy. Only sent
+// after a preview.
+type StartTidyFindMsg struct{}
+
+// RequestCleanupMsg asks the root to plan removing these items (with a
+// fresh dependency check) plus these clean-up steps, and show the preview.
+type RequestCleanupMsg struct {
+	Items []core.SoftwareItem
+	Tidy  []core.UpdateStep
+}
+
+// ApplyCleanupMsg asks the root to run removal and clean-up steps in the
+// terminal. Only sent after the user confirms the preview with r.
+type ApplyCleanupMsg struct{ Steps []core.UpdateStep }
+
 // RequestApplyMsg asks the root to plan these updates and show the preview.
 type RequestApplyMsg struct{ Updates []core.Update }
 
@@ -74,4 +89,9 @@ func requestCheck(ctx Context) tea.Cmd {
 // requestAnalysis builds the analysis preview request.
 func requestAnalysis(ctx Context) tea.Cmd {
 	return send(ShowActionPreviewMsg{Plan: AnalyzePlan(ctx), Confirm: StartAnalysisMsg{}})
+}
+
+// requestTidyFind builds the "look for things to tidy" preview request.
+func requestTidyFind(ctx Context) tea.Cmd {
+	return send(ShowActionPreviewMsg{Plan: TidyFindPlan(ctx), Confirm: StartTidyFindMsg{}})
 }

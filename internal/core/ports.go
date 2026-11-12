@@ -199,6 +199,9 @@ type Store interface {
 	LatestScan(ctx context.Context) (ScanSummary, bool, error)
 	Software(ctx context.Context) ([]SoftwareItem, error)
 	ClearInventory(ctx context.Context) error
+	// DeleteSoftware drops removed items from the saved list, matched by
+	// source, name and version.
+	DeleteSoftware(ctx context.Context, items []ItemRef) error
 
 	SaveUpdateCheck(ctx context.Context, c UpdateCheck) (int64, error)
 	// LatestUpdateCheck returns the latest check and its remaining updates.
@@ -322,14 +325,27 @@ func (c Command) Interpret(code int) (ok, restart bool) {
 	return slices.Contains(c.OKCodes, code), false
 }
 
-// UpdateStep is one unit of work in an update run: the commands one package
-// manager needs to update some packages. Nothing in a step runs until the
-// user confirms the preview that lists it.
+// Step actions.
+const (
+	ActionUpdate = ""       // install newer versions (the default)
+	ActionRemove = "remove" // uninstall software
+	ActionClean  = "clean"  // delete caches or leftovers
+)
+
+// UpdateStep is one unit of work run in the user's terminal: the commands
+// one package manager needs to update, remove or clean up something.
+// Nothing in a step runs until the user confirms the preview that lists it.
+// For removals and clean-ups, Updates holds the targets (CurrentVersion is
+// the installed version; AvailableVersion is empty).
 type UpdateStep struct {
-	Manager  string
-	Label    string
+	Manager string
+	Label   string
+	// Action is ActionUpdate, ActionRemove or ActionClean.
+	Action   string
 	Updates  []Update
 	Commands []Command
+	// Bytes is the space a clean-up frees, when known (0 = unknown).
+	Bytes int64
 	Elevation
 	// Blocked explains why this step can't run from here. Blocked steps are
 	// shown in the preview and skipped.
@@ -533,4 +549,41 @@ type AnalysisService interface {
 	// there is no saved software list or saving failed.
 	Analyze(ctx context.Context, progress func(SourceEvent)) (AnalysisResult, error)
 	Latest(ctx context.Context) (AnalysisResult, bool, error)
+}
+
+// TidyReport is the result of looking for caches and leftovers to clean.
+type TidyReport struct {
+	StartedAt  time.Time
+	FinishedAt time.Time
+	Status     ScanStatus
+	Sources    []SourceResult
+	// Steps are clean-up steps with exact targets. Nothing has run.
+	Steps []UpdateStep
+}
+
+// Bytes is the total known space the report's steps would free.
+func (r TidyReport) Bytes() int64 {
+	var n int64
+	for _, s := range r.Steps {
+		n += s.Bytes
+	}
+	return n
+}
+
+// CleanupService is the port the TUI uses for Cleanup. Implemented by
+// internal/cleanup.Service.
+type CleanupService interface {
+	// Tidiers lists what "look for things to tidy" examines.
+	Tidiers() []SourceInfo
+	// FindTidyUps looks for caches and leftovers. Read-only.
+	FindTidyUps(ctx context.Context, progress func(SourceEvent)) (TidyReport, error)
+	// PlanRemoval re-reads dependency records and returns removal steps.
+	// Items that other installed software needs, that the system relies on,
+	// or whose users can't be determined come back as blocked steps with
+	// the reason. It runs nothing.
+	PlanRemoval(ctx context.Context, items []SoftwareItem) ([]UpdateStep, error)
+	NewJob(steps []UpdateStep) TerminalJob
+	// RecordResults records the outcome and drops removed software from
+	// the saved list.
+	RecordResults(ctx context.Context, results []StepResult) error
 }

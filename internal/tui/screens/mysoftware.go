@@ -125,6 +125,10 @@ func (s *MySoftware) Update(msg tea.Msg, ctx Context) (Screen, tea.Cmd) {
 		switch key.String() {
 		case "esc", "enter", "backspace", "q", "left", "h":
 			s.detail = false
+		case "r":
+			if s.cursor < len(visible) {
+				return s, send(RequestCleanupMsg{Items: []core.SoftwareItem{visible[s.cursor]}})
+			}
 		}
 		return s, nil
 	}
@@ -160,6 +164,10 @@ func (s *MySoftware) Update(msg tea.Msg, ctx Context) (Screen, tea.Cmd) {
 		s.cursor, s.offset = 0, 0
 	case "s":
 		return s, requestScan(ctx)
+	case "r":
+		if s.cursor < len(visible) {
+			return s, send(RequestCleanupMsg{Items: []core.SoftwareItem{visible[s.cursor]}})
+		}
 	}
 	s.clamp(len(s.Visible(ctx.Data.Items)), h)
 	return s, nil
@@ -171,7 +179,7 @@ func (s *MySoftware) Hints(ctx Context) []components.KeyHint {
 	case s.searching:
 		return []components.KeyHint{{Key: "enter", Desc: "done"}, {Key: "esc", Desc: "clear search"}}
 	case s.detail:
-		return []components.KeyHint{{Key: "esc", Desc: "back to list"}}
+		return []components.KeyHint{{Key: "esc", Desc: "back to list"}, {Key: "r", Desc: "remove…"}}
 	case ctx.Data.Summary == nil:
 		return []components.KeyHint{{Key: "s", Desc: "scan"}}
 	}
@@ -184,6 +192,7 @@ func (s *MySoftware) Hints(ctx Context) []components.KeyHint {
 		{Key: "enter", Desc: "details"},
 		{Key: "/", Desc: "search"},
 		{Key: "f", Desc: filter},
+		{Key: "r", Desc: "remove…"},
 		{Key: "s", Desc: "scan again"},
 	}
 }
@@ -467,7 +476,7 @@ func (s *MySoftware) detailView(ctx Context, it core.SoftwareItem) string {
 	if it.Kind == core.KindComponent {
 		b.WriteString(t.Muted.Render(components.Wrap("System components support other software. Removing them can break things, so ATLAS will warn you before any change in later phases.", w)) + "\n")
 	}
-	b.WriteString(t.Subtle.Render(components.Wrap("ATLAS only lists this software for now. Updating and removing arrive in later phases. Press Esc to go back.", w)))
+	b.WriteString(t.Subtle.Render(components.Wrap("Press r to remove it (ATLAS checks what depends on it first and shows a preview), or Esc to go back. Updates are in Updates (3).", w)))
 	return lipgloss.NewStyle().MaxWidth(w).Render(b.String())
 }
 
