@@ -31,7 +31,9 @@ func NewApt(run inventory.Runner, elevated bool, listsDir string) core.PackageMa
 	return apt{run: run, elevated: elevated, listsDir: listsDir}
 }
 
-// hasAptLists reports whether any package index has been downloaded.
+// HasAptLists reports whether any package index has been downloaded.
+func HasAptLists(dir string) bool { return hasAptLists(dir) }
+
 func hasAptLists(dir string) bool {
 	entries, err := os.ReadDir(dir)
 	if err != nil {

@@ -7,11 +7,13 @@ import (
 	"github.com/deepakraj1207/atlas/internal/core"
 )
 
-// QuickAction is one of the Home screen buttons.
+// QuickAction is one of the Home screen buttons. Navigate buttons just open
+// a section; they change nothing, so they need no preview.
 type QuickAction struct {
-	Label   string
-	Plan    core.ActionPlan
-	Confirm any
+	Label    string
+	Plan     core.ActionPlan
+	Confirm  any
+	Navigate bool
 }
 
 // ScanPlan describes "Scan My System" for the current state.
@@ -220,25 +222,13 @@ func ClearPlan(ctx Context) core.ActionPlan {
 	return p
 }
 
-// quickActions are the Home buttons. Scanning, checking for updates and
-// analysis work; Find New Tools explains what it will do and when.
+// quickActions are the Home buttons. Find New Tools opens Discover Apps.
 func quickActions(ctx Context) []QuickAction {
 	return []QuickAction{
 		{Label: "Scan My System", Plan: ScanPlan(ctx), Confirm: StartScanMsg{}},
 		{Label: "Check for Updates", Plan: CheckPlan(ctx), Confirm: StartCheckMsg{}},
 		{Label: "Analyze My Software", Plan: AnalyzePlan(ctx), Confirm: StartAnalysisMsg{}},
-		{
-			Label: "Find New Tools",
-			Plan: core.ActionPlan{
-				Title:          "Find New Tools",
-				WhatHappens:    "ATLAS will suggest well-regarded tools related to the kinds of software you already use.",
-				Why:            "Discovering useful tools is hard when you don't know their names.",
-				Safety:         "Safe. Suggestions are only shown; nothing is downloaded or installed unless you choose to, and that will always ask first.",
-				Reversible:     "There is nothing to undo.",
-				Technical:      []string{"Curated catalogue matched against installed categories; no telemetry"},
-				Unavailability: "discovery arrives in Phase 6.",
-			},
-		},
+		{Label: "Find New Tools", Navigate: true},
 	}
 }
 
@@ -386,4 +376,74 @@ func humanBytes(n int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %cB", float64(n)/float64(div), "kMGTPE"[exp])
+}
+
+// InstallPlan describes installing tools from Discover Apps.
+func InstallPlan(ctx Context, steps []core.UpdateStep) core.ActionPlan {
+	var changes, blocked, technical, notes []string
+	elevations := map[core.Elevation]bool{}
+	first := ""
+	n := 0
+	for _, st := range steps {
+		name := ""
+		if len(st.Updates) > 0 {
+			name = st.Updates[0].Name
+		}
+		if st.Blocked != "" {
+			blocked = append(blocked, "Not included: "+name+". "+st.Blocked)
+			continue
+		}
+		n++
+		if first == "" {
+			first = name
+		}
+		elevations[st.Elevation] = true
+		changes = append(changes, "Installed: "+name+" · "+st.Label)
+		for _, c := range st.Commands {
+			technical = append(technical, c.String())
+		}
+		if st.Rollback != "" {
+			notes = append(notes, name+": "+st.Rollback)
+		}
+	}
+	title := fmt.Sprintf("Install %d apps", n)
+	if n == 1 {
+		title = "Install " + first
+	}
+	safety := []string{"Everything comes from the package manager's official source. The package manager shows what it will install (including anything it needs) and may ask you to confirm or to accept a licence; ATLAS never answers for you."}
+	if elevations[core.ElevationSudo] {
+		safety = append(safety, "sudo will ask for your password in the terminal. ATLAS never sees or stores it.")
+	}
+	if elevations[core.ElevationInstaller] {
+		safety = append(safety, "Windows may ask for permission if the installer needs it. Approve only what you expect.")
+	}
+	if elevations[core.ElevationPolkit] {
+		safety = append(safety, "Flatpak may ask for your password.")
+	}
+	if elevations[core.ElevationAdmin] {
+		safety = append(safety, "ATLAS is running with administrator rights, so installers run with full rights.")
+	}
+	safety = append(safety, "Press Ctrl+C to stop; nothing further starts after that.")
+	p := core.ActionPlan{
+		Title:       title,
+		WhatHappens: "ATLAS will hand this terminal to the package manager, so you see exactly what it does and can answer its questions. When it's finished, you'll come back here and the result is recorded in Activity History.",
+		Why:         "You picked these in Discover Apps.",
+		WhatChanges: append(changes, blocked...),
+		Safety:      strings.Join(safety, " "),
+		Reversible:  strings.Join(notes, " "),
+		Technical:   technical,
+		Available:   n > 0,
+	}
+	switch {
+	case n == 0 && len(blocked) > 0:
+		p.Unavailability = "none of these can be installed from here (see below)."
+	case n == 0:
+		p.Unavailability = "there is nothing to install."
+	case ctx.Data.Busy():
+		p.Available, p.Unavailability = false, "another task is running. Wait for it to finish, or stop it with x."
+	}
+	if p.Reversible == "" {
+		p.Reversible = "Nothing is installed."
+	}
+	return p
 }

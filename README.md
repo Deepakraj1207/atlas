@@ -22,11 +22,14 @@ What works today:
   suggestions, and clears package caches and old versions. Before every removal ATLAS
   checks again what depends on it, and it refuses to remove anything other software
   or your system needs.
+- **Discover Apps** suggests free, well-known tools based on what you already have,
+  explains why, and installs them through your package manager after a preview. No
+  internet lookups are made to build suggestions.
 - **Activity History** records every scan and change, so nothing happens silently.
 - Simple and Advanced modes, dark and light themes, and help on every screen.
 
-ATLAS only changes your system by installing updates, removing software, or clearing
-caches, and only after you confirm a preview listing every change. Removals need the
+ATLAS only changes your system by installing updates or tools you picked, removing
+software, or clearing caches, and only after you confirm a preview listing every change. Removals need the
 `r` key; Enter alone never deletes anything. ATLAS then hands the terminal to the package
 manager, so you see its real output and answer its own prompts, such as your sudo
 password or a Windows permission dialog. ATLAS never answers for you, and never
@@ -65,6 +68,7 @@ version. Setting `ATLAS_HOME` keeps settings and logs in one folder (portable us
 | `r` | In My Software: remove the selected item (with a preview) |
 | `c`, `space`, `enter` | In Cleanup: look for things to tidy, select, review |
 | `r` | In a removal or clean-up preview: go ahead |
+| `←/→`, `space`, `enter` | In Discover Apps: category, select, install (with a preview) |
 | `x` | Stop a running scan or update check |
 | `Ctrl+C` | While updates run: stop; nothing further starts |
 | `q` | Quit |

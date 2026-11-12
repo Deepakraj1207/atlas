@@ -222,6 +222,8 @@ func verb(action string) string {
 		return "removing"
 	case core.ActionClean:
 		return "cleaning up"
+	case core.ActionInstall:
+		return "installing"
 	default:
 		return "updating"
 	}
@@ -241,6 +243,8 @@ func doneWord(results []core.StepResult) string {
 		return "removed"
 	case core.ActionClean:
 		return "cleaned up"
+	case core.ActionInstall:
+		return "installed"
 	default:
 		return "updated"
 	}

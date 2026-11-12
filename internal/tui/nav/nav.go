@@ -80,12 +80,6 @@ var infos = [sectionCount]Info{
 		Title:   "Discover Apps",
 		Short:   "Discover",
 		Summary: "Find useful tools based on what you already use.",
-		Plan: []string{
-			"Suggest well-regarded tools for the kinds of work you do",
-			"Explain what each suggestion is for before you install anything",
-		},
-		Phase:        6,
-		Availability: ComingSoon,
 	},
 	ActivityHistory: {
 		Title:   "Activity History",

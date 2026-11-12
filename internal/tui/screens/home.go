@@ -10,6 +10,7 @@ import (
 
 	"github.com/deepakraj1207/atlas/internal/core"
 	"github.com/deepakraj1207/atlas/internal/tui/components"
+	"github.com/deepakraj1207/atlas/internal/tui/nav"
 )
 
 // staleAfter is when Home suggests scanning again.
@@ -40,6 +41,9 @@ func (h *Home) Update(msg tea.Msg, ctx Context) (Screen, tea.Cmd) {
 		h.focus = (h.focus + 1) % len(actions)
 	case "enter", " ":
 		a := actions[h.focus]
+		if a.Navigate {
+			return h, send(NavigateMsg{Section: nav.DiscoverApps})
+		}
 		return h, send(ShowActionPreviewMsg{Plan: a.Plan, Confirm: a.Confirm})
 	}
 	return h, nil
@@ -68,7 +72,7 @@ func (h *Home) View(ctx Context) string {
 	b.WriteString("\n")
 	b.WriteString(h.buttons(ctx))
 	b.WriteString("\n")
-	b.WriteString(t.Subtle.Render(components.Wrap("Press Enter on an action to see exactly what it will do before anything happens.", w)))
+	b.WriteString(t.Subtle.Render(components.Wrap("Press Enter on an action to see exactly what it will do before anything happens. Find New Tools just opens Discover Apps.", w)))
 	b.WriteString("\n\n")
 
 	if p := ctx.Data.Scan; p != nil {

@@ -1,24 +1,22 @@
 # ATLAS — Test Status
 
-Last run: 2026-11-12, end of Phase 5, Go 1.24.7 (`GOTOOLCHAIN=local`) on linux/amd64.
+Last run: 2026-11-12, end of Phase 6, Go 1.24.7 (`GOTOOLCHAIN=local`) on linux/amd64.
 
-## Unit tests (`go test ./...`) — all passing, 149 tests in 15 packages
+## Unit tests (`go test ./...`) — all passing, 163 tests in 16 packages
 
 | Package | Tests | Covers |
 |---------|-------|--------|
-| internal/cleanup | 12 | gate blocks what other software needs, naming it; allows when dependents are removed in the same plan; blocks Essential, required, protected names, kernels, unknown-dependency runtimes and components; DNF protected.d; remover choice on Windows (winget by ID or exact name, Scoop, Chocolatey needs admin, ambiguous ownership blocked); no forbidden flags in any remover and every removal has a rollback; APT cache and autoremove (simulation only); DNF cache and unneeded; snap disabled revisions only; Scoop old versions and cache; find, run, record and drop removed software; sizes |
-| internal/handover | 3 | multi-command steps, blocked, failed, missing program, restart codes, wording; Ctrl+C stops remaining steps; verbs and summaries follow the step action |
-| internal/analysis | 13 | Phase 4 coverage, plus Essential/required marking in the dpkg graph |
-| internal/database | 12 | earlier coverage, plus exact-match deletion of removed software |
-| internal/updates | 10 | Phase 3 managers, planning, recording (job tests moved to handover) |
-| internal/inventory, core, config, logging, platform | 39 | earlier phases |
-| internal/tui/nav, layout, theme, components | 18 | navigation, layout, themes, components |
-| internal/tui | 42 | earlier phases plus: removal from My Software opens a preview with dependency, rollback and never-purge text; Enter refuses, Esc runs nothing, `r` runs exactly the planned command, the item leaves My Software and the run is recorded; a blocked removal names what needs it and can't be forced with `r` or Enter; Cleanup shows analysis suggestions and, after a previewed read-only search, things to tidy with sizes; tidying runs only the listed command, reports space freed and leaves the list; Enter still confirms read-only previews and `r` doesn't |
+| internal/discover | 9 | built-in catalogue validates and every Windows tool has winget; 7 kinds of bad entry rejected; product keys (Notepad++ vs Notepad, 7-Zip); assessment on Windows (installed by name and by package ID, Linux-only hidden, suggestions because of Git and Python, everyone-tools, installed never suggested); on Linux (Windows-only hidden, native first, Flatpak fallback) and before a scan; install plans (exact winget command without agreement flags, already installed blocked, Scoop bucket added visibly, sudo APT without -y, classic snap explained, no Flathub blocked, package notes, APT without lists not used, Chocolatey only as admin); recording |
+| internal/tui | 47 | earlier phases plus: Find New Tools opens Discover with no preview; suggestions with reasons, no Linux-only tools on Windows; install previews first, runs exactly the winget command on Enter, records, leaves suggestions; installed tools can't be selected or installed again; multi-select preview, Esc runs nothing; before a scan nothing is installable and `s` offers a scan; Discover fits 6 terminal sizes |
+| internal/cleanup | 12 | Phase 5 coverage |
+| internal/analysis | 13 | earlier coverage, plus leading digits kept in product keys |
+| internal/handover, updates, database, inventory, core, config, logging, platform | 64 | earlier phases, plus install verbs |
+| internal/tui/nav, layout, theme, components | 18 | all nine sections available; layout, themes, components |
 
 ### Race detector
 
 `go test -race` over every package that uses goroutines (tui, inventory, updates,
-analysis, cleanup, handover) reports no data races and no failures. An earlier race-detector run
+analysis, cleanup, handover, discover) reports no data races and no failures. An earlier race-detector run
 found a real timing bug (D46), which is now fixed and has a regression test.
 
 ## Checks
@@ -29,11 +27,17 @@ found a real timing bug (D46), which is now fixed and has a regression test.
 | `go vet ./...` (linux) | clean |
 | `GOOS=windows GOARCH=amd64 go vet ./...` | clean |
 | `go test -count=1 ./...` | pass |
-| `GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build ./cmd/atlas` | pass (~14.6 MB) |
-| `GOOS=windows GOARCH=arm64 CGO_ENABLED=0 go build ./cmd/atlas` | pass (~13.9 MB) |
+| `GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build ./cmd/atlas` | pass (~14.7 MB) |
+| `GOOS=windows GOARCH=arm64 CGO_ENABLED=0 go build ./cmd/atlas` | pass (~14.0 MB) |
 | Linux build | pass |
 
 ## End-to-end runs in a pseudo-terminal
+
+**Phase 6, real binary.** Scan, then Home's "Find New Tools", which opened Discover Apps
+directly. Windows-only tools were hidden. This container has APT with no package lists
+and no Flatpak or Snap. Enter on Firefox (not offered through APT) named the managers
+that offer it. Enter on btop (offered through APT) said APT has no package information
+yet and to run `sudo apt update` first. Nothing ran, and the log has no install entries.
 
 **Phase 5, real binary, real data, nothing removed.**
 1. Scan, then My Software, a search for `bc`, and `r`. The real dpkg dependency check
@@ -86,6 +90,11 @@ checkbox column, a doubled period in rollback text, and Home counting apps while
 the recommendation counted everything.
 
 ## Not verified in this environment
+
+- That every catalogue package ID resolves today. That needs network access to each
+  package source. IDs are believed correct as of 2026-11, and a wrong one fails with
+  the package manager's own message.
+- A real install. The handover path is the one verified in Phase 3.
 
 - A real removal or clean-up run on this machine. It was deliberately not done, because
   removed packages couldn't be reinstalled here (no APT lists). The command path is the

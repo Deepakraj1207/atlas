@@ -330,6 +330,9 @@ func TestDuplicateAndVersionRules(t *testing.T) {
 	if findKey(fs, "duplicate:libfoo") != nil || findKey(fs, "versions:libfoo") != nil {
 		t.Error("system components are not reported as duplicates")
 	}
+	if familyKey("7-Zip 23.01 (x64)") != "7zip" || familyKey("Krita 5 Beta") != "kritabeta" {
+		t.Errorf("familyKey keeps leading digits and drops standalone numbers: %q %q", familyKey("7-Zip 23.01 (x64)"), familyKey("Krita 5 Beta"))
+	}
 	if familyKey("Mozilla Firefox (x64 en-US) 125.0.1") != "mozillafirefox" {
 		t.Errorf("familyKey = %s", familyKey("Mozilla Firefox (x64 en-US) 125.0.1"))
 	}

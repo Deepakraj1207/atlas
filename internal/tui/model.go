@@ -37,6 +37,7 @@ type Options struct {
 	Updates   core.UpdateService
 	Analysis  core.AnalysisService
 	Cleanup   core.CleanupService
+	Discover  core.DiscoverService
 	StoreErr  string
 	DBPath    string
 	// Elevated is true when ATLAS runs as administrator or root.
@@ -65,6 +66,7 @@ type Model struct {
 	analysis *scanRun
 	cln      core.CleanupService
 	tidy     *scanRun
+	dsc      core.DiscoverService
 	// exec hands the terminal to a job; replaced in tests.
 	exec     func(core.TerminalJob, tea.ExecCallback) tea.Cmd
 	storeErr string
@@ -110,6 +112,7 @@ func New(opts Options) Model {
 		upd:      opts.Updates,
 		ana:      opts.Analysis,
 		cln:      opts.Cleanup,
+		dsc:      opts.Discover,
 		elevated: opts.Elevated,
 		exec:     func(j core.TerminalJob, cb tea.ExecCallback) tea.Cmd { return tea.Exec(j, cb) },
 		storeErr: opts.StoreErr,
@@ -121,6 +124,8 @@ func New(opts Options) Model {
 	m.data.UpdatesAvailable = m.upd != nil
 	m.data.AnalysisAvailable = m.ana != nil
 	m.data.CleanupAvailable = m.cln != nil
+	m.data.DiscoverAvailable = m.dsc != nil
+	m.data.InstalledNow = map[string]bool{}
 	m.data.StoreErr = m.storeErr
 	if m.inv == nil && m.storeErr == "" {
 		m.data.StoreErr = "no database was configured"
@@ -140,6 +145,8 @@ func New(opts Options) Model {
 			m.screens[s] = screens.NewUpdates()
 		case nav.Cleanup:
 			m.screens[s] = screens.NewCleanup()
+		case nav.DiscoverApps:
+			m.screens[s] = screens.NewDiscover()
 		case nav.ActivityHistory:
 			m.screens[s] = screens.NewActivityHistory()
 		case nav.Settings:
@@ -185,7 +192,7 @@ type configSavedMsg struct {
 
 // Init starts the status-clear timer and loads saved data.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(m.scheduleStatusClear(), loadData(m.inv), loadUpdates(m.upd), loadAnalysis(m.ana))
+	return tea.Batch(m.scheduleStatusClear(), loadData(m.inv), loadUpdates(m.upd), loadAnalysis(m.ana), loadDiscovery(m.dsc))
 }
 
 // Accessors used by tests.
@@ -524,6 +531,53 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.data.Analysis = msg.result
 		return m, nil
 
+	case discoveryLoadedMsg:
+		if msg.err != nil {
+			m.log.Error("load discovery", "error", msg.err)
+		} else {
+			m.data.Discovery = &msg.d
+		}
+		return m, nil
+
+	case screens.RequestInstallMsg:
+		if m.dsc == nil {
+			return m, nil
+		}
+		return m, planInstall(m.dsc, msg.IDs)
+
+	case installPlannedMsg:
+		if msg.err != nil {
+			return m, m.setStatus(components.Status{Text: "ATLAS couldn't prepare the install: " + msg.err.Error(), Kind: components.StatusError})
+		}
+		plan := screens.InstallPlan(m.ctx(), msg.steps)
+		return m.Update(screens.ShowActionPreviewMsg{Plan: plan, Confirm: screens.ApplyInstallMsg{Steps: msg.steps}})
+
+	case screens.ApplyInstallMsg:
+		if m.dsc == nil || m.busy() {
+			return m, m.setStatus(components.Status{Text: "Installing can't start right now. Nothing was changed.", Kind: components.StatusWarning})
+		}
+		job := m.dsc.NewJob(msg.Steps)
+		m.log.Info("handing terminal to install job", "steps", len(msg.Steps))
+		return m, m.exec(job, func(err error) tea.Msg {
+			return installFinishedMsg{results: job.Results(), err: err}
+		})
+
+	case installFinishedMsg:
+		if msg.err != nil {
+			m.log.Error("install job", "error", msg.err)
+		}
+		if len(msg.results) == 0 {
+			return m, tea.Batch(m.setStatus(components.Status{Text: "Installing couldn't start. Nothing was changed.", Kind: components.StatusError}), tea.ClearScreen)
+		}
+		return m, tea.Batch(recordInstall(m.dsc, msg.results), tea.ClearScreen)
+
+	case installRecordedMsg:
+		if msg.err != nil {
+			m.log.Error("record install", "error", msg.err)
+		}
+		m.markInstalled(msg.results)
+		return m, tea.Batch(m.setStatus(installResultStatus(msg.results, msg.err)), loadData(m.inv))
+
 	case dataLoadedMsg:
 		m.data.Loaded = true
 		m.data.LoadErr = ""
@@ -532,7 +586,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.log.Error("load saved data", "error", msg.err)
 		}
 		m.data.Summary, m.data.Items, m.data.Activity = msg.summary, msg.items, msg.activity
-		return m, nil
+		return m, loadDiscovery(m.dsc)
 
 	case spinner.TickMsg:
 		if !m.busy() {

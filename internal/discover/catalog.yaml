@@ -1,0 +1,430 @@
+# ATLAS Discover Apps catalogue.
+#
+# Every entry is free, widely used and installed from its package manager's
+# official source. Package IDs were checked as of the date below and must be
+# reviewed with each release. Keep entries short and plain.
+#
+# provides: product keys that mean "already installed" (lowercase letters and
+#           digits only, versions and architecture removed, e.g. "7zip").
+# related:  product keys of installed software that make this a suggestion.
+as_of: "2026-11"
+entries:
+  - id: 7zip
+    name: 7-Zip
+    category: Files
+    summary: Opens and creates compressed files such as .zip, .7z and .rar.
+    why: Useful whenever you download or send archives; faster and more capable than the built-in tools.
+    homepage: https://www.7-zip.org
+    everyone: true
+    provides: [7zip, p7zipfull]
+    packages:
+      - {manager: winget, id: 7zip.7zip}
+      - {manager: scoop, id: main/7zip}
+      - {manager: chocolatey, id: 7zip}
+      - {manager: apt, id: 7zip}
+
+  - id: vlc
+    name: VLC media player
+    category: Media
+    summary: Plays almost any video or audio file without extra codecs.
+    why: One player for everything, including files other players refuse to open.
+    homepage: https://www.videolan.org/vlc/
+    everyone: true
+    provides: [vlc, vlcmediaplayer]
+    packages:
+      - {manager: winget, id: VideoLAN.VLC}
+      - {manager: scoop, id: extras/vlc}
+      - {manager: chocolatey, id: vlc}
+      - {manager: apt, id: vlc}
+      - {manager: flatpak, id: org.videolan.VLC}
+      - {manager: snap, id: vlc}
+
+  - id: firefox
+    name: Firefox
+    category: Internet
+    summary: A fast, private web browser from the non-profit Mozilla.
+    why: A good second browser, or a privacy-focused main one.
+    homepage: https://www.mozilla.org/firefox/
+    provides: [firefox, mozillafirefox]
+    packages:
+      - {manager: winget, id: Mozilla.Firefox}
+      - {manager: scoop, id: extras/firefox}
+      - {manager: chocolatey, id: firefox}
+      - {manager: dnf, id: firefox}
+      - {manager: flatpak, id: org.mozilla.firefox}
+      - {manager: snap, id: firefox}
+
+  - id: thunderbird
+    name: Thunderbird
+    category: Internet
+    summary: An email and calendar app that works with most email accounts.
+    why: Keeps several email accounts in one place, offline too.
+    homepage: https://www.thunderbird.net
+    provides: [thunderbird, mozillathunderbird]
+    packages:
+      - {manager: winget, id: Mozilla.Thunderbird}
+      - {manager: scoop, id: extras/thunderbird}
+      - {manager: chocolatey, id: thunderbird}
+      - {manager: apt, id: thunderbird}
+      - {manager: dnf, id: thunderbird}
+      - {manager: flatpak, id: org.mozilla.Thunderbird}
+      - {manager: snap, id: thunderbird}
+
+  - id: libreoffice
+    name: LibreOffice
+    category: Office
+    summary: A free office suite for documents, spreadsheets and presentations.
+    why: Opens and saves Word, Excel and PowerPoint files without a subscription.
+    homepage: https://www.libreoffice.org
+    provides: [libreoffice]
+    packages:
+      - {manager: winget, id: TheDocumentFoundation.LibreOffice}
+      - {manager: scoop, id: extras/libreoffice}
+      - {manager: chocolatey, id: libreoffice-fresh}
+      - {manager: apt, id: libreoffice}
+      - {manager: dnf, id: libreoffice}
+      - {manager: flatpak, id: org.libreoffice.LibreOffice}
+      - {manager: snap, id: libreoffice}
+
+  - id: obsidian
+    name: Obsidian
+    category: Office
+    summary: A note-taking app that keeps your notes as plain text files on your computer.
+    why: Good for linking ideas and keeping notes you fully own.
+    homepage: https://obsidian.md
+    provides: [obsidian]
+    packages:
+      - {manager: winget, id: Obsidian.Obsidian}
+      - {manager: scoop, id: extras/obsidian}
+      - {manager: chocolatey, id: obsidian}
+      - {manager: flatpak, id: md.obsidian.Obsidian}
+
+  - id: notepadplusplus
+    name: Notepad++
+    category: Office
+    summary: A lightweight text and code editor for Windows.
+    why: Much more capable than Notepad for editing text, logs and settings files.
+    homepage: https://notepad-plus-plus.org
+    provides: [notepadplusplus]
+    packages:
+      - {manager: winget, id: Notepad++.Notepad++}
+      - {manager: scoop, id: extras/notepadplusplus}
+      - {manager: chocolatey, id: notepadplusplus}
+
+  - id: keepassxc
+    name: KeePassXC
+    category: Security
+    summary: A password manager that keeps your passwords in an encrypted file you control.
+    why: Lets you use a different strong password everywhere without remembering them.
+    homepage: https://keepassxc.org
+    everyone: true
+    provides: [keepassxc]
+    packages:
+      - {manager: winget, id: KeePassXCTeam.KeePassXC}
+      - {manager: scoop, id: extras/keepassxc}
+      - {manager: chocolatey, id: keepassxc}
+      - {manager: apt, id: keepassxc}
+      - {manager: dnf, id: keepassxc}
+      - {manager: flatpak, id: org.keepassxc.KeePassXC}
+      - {manager: snap, id: keepassxc}
+
+  - id: bitwarden
+    name: Bitwarden
+    category: Security
+    summary: A password manager that syncs between your computer and phone.
+    why: Strong, unique passwords on every device, with a free plan.
+    homepage: https://bitwarden.com
+    provides: [bitwarden]
+    packages:
+      - {manager: winget, id: Bitwarden.Bitwarden}
+      - {manager: scoop, id: extras/bitwarden}
+      - {manager: chocolatey, id: bitwarden}
+      - {manager: flatpak, id: com.bitwarden.desktop}
+      - {manager: snap, id: bitwarden}
+
+  - id: obs
+    name: OBS Studio
+    category: Media
+    summary: Records and live-streams your screen, camera and audio.
+    why: The standard free tool for screen recordings, tutorials and streaming.
+    homepage: https://obsproject.com
+    provides: [obsstudio]
+    packages:
+      - {manager: winget, id: OBSProject.OBSStudio}
+      - {manager: scoop, id: extras/obs-studio}
+      - {manager: chocolatey, id: obs-studio}
+      - {manager: apt, id: obs-studio}
+      - {manager: flatpak, id: com.obsproject.Studio}
+
+  - id: powertoys
+    name: PowerToys
+    category: Utilities
+    summary: Microsoft's collection of extra Windows features, such as window layouts and a quick launcher.
+    why: Adds handy tools Windows doesn't have built in.
+    homepage: https://learn.microsoft.com/windows/powertoys/
+    provides: [powertoys, microsoftpowertoys]
+    packages:
+      - {manager: winget, id: Microsoft.PowerToys}
+      - {manager: scoop, id: extras/powertoys}
+      - {manager: chocolatey, id: powertoys}
+
+  - id: windows-terminal
+    name: Windows Terminal
+    category: Utilities
+    summary: A modern terminal with tabs for PowerShell, Command Prompt and WSL.
+    why: A much nicer place to run command-line tools, including ATLAS.
+    homepage: https://aka.ms/terminal
+    provides: [windowsterminal]
+    related: [git, powershell]
+    packages:
+      - {manager: winget, id: Microsoft.WindowsTerminal}
+      - {manager: scoop, id: extras/windows-terminal}
+      - {manager: chocolatey, id: microsoft-windows-terminal}
+
+  - id: sharex
+    name: ShareX
+    category: Utilities
+    summary: Takes screenshots and screen recordings, with annotation and upload options.
+    why: Faster and more flexible than the built-in screenshot tool.
+    homepage: https://getsharex.com
+    provides: [sharex]
+    packages:
+      - {manager: winget, id: ShareX.ShareX}
+      - {manager: scoop, id: extras/sharex}
+      - {manager: chocolatey, id: sharex}
+
+  - id: flameshot
+    name: Flameshot
+    category: Utilities
+    summary: Takes screenshots you can annotate before saving or sharing.
+    why: Quick screenshots with arrows, boxes and blur built in.
+    homepage: https://flameshot.org
+    provides: [flameshot]
+    packages:
+      - {manager: winget, id: Flameshot.Flameshot}
+      - {manager: scoop, id: extras/flameshot}
+      - {manager: chocolatey, id: flameshot}
+      - {manager: apt, id: flameshot}
+      - {manager: dnf, id: flameshot}
+      - {manager: flatpak, id: org.flameshot.Flameshot}
+
+  - id: everything
+    name: Everything
+    category: Files
+    summary: Finds files on Windows by name instantly as you type.
+    why: Much faster than the built-in search for locating files.
+    homepage: https://www.voidtools.com
+    provides: [everything]
+    packages:
+      - {manager: winget, id: voidtools.Everything}
+      - {manager: scoop, id: extras/everything}
+      - {manager: chocolatey, id: everything}
+
+  - id: windirstat
+    name: WinDirStat
+    category: Files
+    summary: Shows what is using your disk space as a map of files and folders.
+    why: Helps you find what is filling up your drive.
+    homepage: https://windirstat.net
+    provides: [windirstat]
+    packages:
+      - {manager: winget, id: WinDirStat.WinDirStat}
+      - {manager: scoop, id: extras/windirstat}
+      - {manager: chocolatey, id: windirstat}
+
+  - id: baobab
+    name: Disk Usage Analyzer
+    category: Files
+    summary: Shows what is using your disk space, folder by folder.
+    why: Helps you find what is filling up your drive.
+    homepage: https://apps.gnome.org/Baobab/
+    provides: [baobab, diskusageanalyzer]
+    packages:
+      - {manager: apt, id: baobab}
+      - {manager: dnf, id: baobab}
+      - {manager: flatpak, id: org.gnome.baobab}
+
+  - id: btop
+    name: btop
+    category: Utilities
+    summary: Shows what is using your processor, memory, disk and network, in the terminal.
+    why: A clear, live view of what is slowing your computer down.
+    homepage: https://github.com/aristocratos/btop
+    provides: [btop]
+    packages:
+      - {manager: apt, id: btop}
+      - {manager: dnf, id: btop}
+      - {manager: snap, id: btop}
+
+  - id: vscode
+    name: Visual Studio Code
+    category: Development
+    summary: A free code editor with extensions for almost every language.
+    why: The most widely used editor for programming and editing configuration files.
+    homepage: https://code.visualstudio.com
+    provides: [visualstudiocode, microsoftvisualstudiocode, code, vscode]
+    related: [git, python, nodejs]
+    packages:
+      - {manager: winget, id: Microsoft.VisualStudioCode}
+      - {manager: scoop, id: extras/vscode}
+      - {manager: chocolatey, id: vscode}
+      - {manager: flatpak, id: com.visualstudio.code}
+      - {manager: snap, id: code, classic: true}
+
+  - id: git
+    name: Git
+    category: Development
+    summary: Tracks changes to files and projects, and is used to get code from GitHub and similar sites.
+    why: The standard version control tool; many developer tools expect it.
+    homepage: https://git-scm.com
+    provides: [git]
+    related: [visualstudiocode, microsoftvisualstudiocode, python, nodejs]
+    packages:
+      - {manager: winget, id: Git.Git}
+      - {manager: scoop, id: main/git}
+      - {manager: chocolatey, id: git}
+      - {manager: apt, id: git}
+      - {manager: dnf, id: git}
+
+  - id: gh
+    name: GitHub CLI
+    category: Development
+    summary: Works with GitHub pull requests, issues and repositories from the terminal.
+    why: Saves trips to the browser if you use Git with GitHub.
+    homepage: https://cli.github.com
+    provides: [gh, githubcli]
+    related: [git]
+    packages:
+      - {manager: winget, id: GitHub.cli}
+      - {manager: scoop, id: main/gh}
+      - {manager: chocolatey, id: gh}
+      - {manager: apt, id: gh}
+      - {manager: dnf, id: gh}
+
+  - id: lazygit
+    name: lazygit
+    category: Development
+    summary: A simple visual interface for Git in the terminal.
+    why: Makes staging, committing and browsing history much easier than typing Git commands.
+    homepage: https://github.com/jesseduffield/lazygit
+    provides: [lazygit]
+    related: [git]
+    packages:
+      - {manager: winget, id: JesseDuffield.lazygit}
+      - {manager: scoop, id: extras/lazygit}
+      - {manager: chocolatey, id: lazygit}
+
+  - id: python
+    name: Python
+    category: Development
+    summary: A popular, beginner-friendly programming language.
+    why: Needed by many scripts and tools, and a good first language to learn.
+    homepage: https://www.python.org
+    provides: [python]
+    related: [visualstudiocode, microsoftvisualstudiocode]
+    packages:
+      - {manager: winget, id: Python.Python.3.13}
+      - {manager: scoop, id: main/python}
+      - {manager: chocolatey, id: python}
+      - {manager: apt, id: python3}
+      - {manager: dnf, id: python3}
+
+  - id: uv
+    name: uv
+    category: Development
+    summary: A very fast tool for installing Python packages and managing Python projects.
+    why: Replaces pip, virtualenv and pipx with one quick tool.
+    homepage: https://docs.astral.sh/uv/
+    provides: [uv]
+    related: [python]
+    packages:
+      - {manager: winget, id: astral-sh.uv}
+      - {manager: scoop, id: main/uv}
+
+  - id: nodejs
+    name: Node.js (LTS)
+    category: Development
+    summary: Runs JavaScript outside the browser; needed by many web development tools.
+    why: The long-term-support version is the stable choice for most people.
+    homepage: https://nodejs.org
+    provides: [nodejs, node]
+    related: [visualstudiocode, microsoftvisualstudiocode]
+    packages:
+      - {manager: winget, id: OpenJS.NodeJS.LTS}
+      - {manager: scoop, id: main/nodejs-lts}
+      - {manager: chocolatey, id: nodejs-lts}
+      - {manager: apt, id: nodejs}
+      - {manager: dnf, id: nodejs}
+
+  - id: docker
+    name: Docker
+    category: Development
+    summary: Runs apps in isolated containers so they work the same everywhere.
+    why: Useful for developers who need databases or services without installing them directly.
+    homepage: https://www.docker.com
+    provides: [docker, dockerdesktop, dockerio]
+    related: [visualstudiocode, microsoftvisualstudiocode]
+    packages:
+      - {manager: winget, id: Docker.DockerDesktop}
+      - {manager: chocolatey, id: docker-desktop}
+      - {manager: apt, id: docker.io}
+
+  - id: ripgrep
+    name: ripgrep
+    category: Development
+    summary: Searches inside files for text, very quickly, from the terminal.
+    why: Finds where something is mentioned across thousands of files in moments.
+    homepage: https://github.com/BurntSushi/ripgrep
+    provides: [ripgrep]
+    related: [git, visualstudiocode, microsoftvisualstudiocode]
+    packages:
+      - {manager: winget, id: BurntSushi.ripgrep.MSVC}
+      - {manager: scoop, id: main/ripgrep}
+      - {manager: chocolatey, id: ripgrep}
+      - {manager: apt, id: ripgrep}
+      - {manager: dnf, id: ripgrep}
+
+  - id: fzf
+    name: fzf
+    category: Development
+    summary: Lets you search and pick from any list in the terminal by typing a few letters.
+    why: Speeds up finding files and past commands in the terminal.
+    homepage: https://github.com/junegunn/fzf
+    provides: [fzf]
+    related: [git]
+    packages:
+      - {manager: winget, id: junegunn.fzf}
+      - {manager: scoop, id: main/fzf}
+      - {manager: chocolatey, id: fzf}
+      - {manager: apt, id: fzf}
+      - {manager: dnf, id: fzf}
+
+  - id: bat
+    name: bat
+    category: Development
+    summary: Shows files in the terminal with colours and line numbers.
+    why: Easier to read code and logs than plain cat or type.
+    homepage: https://github.com/sharkdp/bat
+    provides: [bat, batcat]
+    related: [git]
+    packages:
+      - {manager: winget, id: sharkdp.bat}
+      - {manager: scoop, id: main/bat}
+      - {manager: chocolatey, id: bat}
+      - {manager: apt, id: bat, note: "On Debian and Ubuntu the command is called batcat."}
+      - {manager: dnf, id: bat}
+
+  - id: jq
+    name: jq
+    category: Development
+    summary: Reads, filters and reshapes JSON data from the terminal.
+    why: Handy whenever you work with APIs or configuration files in JSON.
+    homepage: https://jqlang.org
+    provides: [jq]
+    related: [nodejs, python, docker, dockerdesktop]
+    packages:
+      - {manager: winget, id: jqlang.jq}
+      - {manager: scoop, id: main/jq}
+      - {manager: chocolatey, id: jq}
+      - {manager: apt, id: jq}
+      - {manager: dnf, id: jq}

@@ -14,7 +14,8 @@ internal/inventory     scanners (core.Scanner), merge, RunAll, Service (core.Inv
 internal/updates       package managers (core.PackageManager), Service (core.UpdateService), terminal Job
 internal/analysis      support table, runtime detection, dependency readers, usage records, rules, Service
 internal/cleanup       removers, safety gate, tidiers (exact clean-ups), Service (core.CleanupService)
-internal/handover      terminal Job shared by updates and cleanup
+internal/handover      terminal Job shared by updates, cleanup and discover
+internal/discover      embedded catalogue (catalog.yaml), assessment, install planning, Service
   registry*.go         Windows Uninstall keys (pure mapping + windows-only enumeration)
   winget, scoop, chocolatey, dpkg, rpm, snap, flatpak
   defaults_{windows,other}.go   which scanners run on which OS
@@ -23,7 +24,7 @@ internal/tui           root model: keys, overlays, scan lifecycle, data loading
 ```
 
 Dependency rule: `tui` depends only on `core` interfaces. `app` is the only
-package that knows about `database`, `inventory`, `updates`, `analysis` and `cleanup`.
+package that knows about `database`, `inventory`, `updates`, `analysis`, `cleanup` and `discover`.
 
 ## Phase 1 — Go bootstrap and TUI foundation — DONE
 
@@ -103,14 +104,21 @@ Changes from the plan:
 - Clean-up results are kept for the session only. They go stale quickly and finding
   them again takes seconds.
 
-## Phase 6 — Discover Apps (planned, not started)
+## Phase 6 — Discover Apps — DONE
 
-- A small curated catalogue, shipped with ATLAS, of well-regarded tools by category,
-  each with a plain explanation and its winget, Scoop, APT, Snap or Flatpak ID.
-- Suggestions based on what is installed. Nothing is suggested twice and nothing is
-  already installed. No network calls or telemetry to build suggestions.
-- Install through the same preview and terminal handover. Each install is recorded.
+| Step | Result |
+|------|--------|
+| Core: CatalogEntry, DiscoverItem, Discovery, DiscoverService, install action | done |
+| Embedded catalogue, strict validation (IDs per manager, categories, https homepages, product keys) | done |
+| Assessment: installed by product key or package ID, platform filtering, manager preference, blocked managers, suggestions with reasons | done |
+| Install planning per manager, exact commands, notes (classic snaps, batcat), rollback via My Software | done |
+| TUI: Discover screen with categories and multi-select, install preview and handover, Home "Find New Tools" opens it | done |
 
-## Phase 7+ (outline)
+## Phase 7+ (outline, not started)
 
-Optional AI explanations (off by default), packaging and release.
+- Catalogue maintenance: a documented review checklist, and a test that every catalogue
+  ID still resolves (run manually with network, never at runtime).
+- Optional AI explanations, off by default and clearly labelled.
+- Packaging and release: Windows installer or winget manifest, signed binaries, Linux packages.
+- Verification on real Windows 11 hardware: registry, winget, UserAssist, Chocolatey,
+  Scoop, UAC handover, Windows Terminal and conhost rendering.

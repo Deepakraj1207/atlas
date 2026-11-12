@@ -188,3 +188,29 @@ Short, dated records of choices that shape the code.
   is stated in the preview.
 - **D54. After removals, the saved list drops removed items, and Smart Analysis is
   marked stale** (latest removal is newer than the analysis).
+
+## 2026-11-12 — Phase 6
+
+- **D55. The catalogue is embedded YAML (`internal/discover/catalog.yaml`), dated and
+  validated strictly at load.** A bad entry fails the test suite, not a user's session.
+  Only free, widely used tools are listed, and only package IDs believed correct as of
+  2026-11. Where unsure (for example GIMP's winget ID after 3.0, or 7-Zip on DNF), the
+  package is left out rather than guessed.
+- **D56. Every Windows tool must have a winget package**, the default on Windows 11.
+  Linux prefers the distribution's own manager, then Flatpak, then Snap.
+- **D57. Suggestions are local and explained.** They come only from the saved software
+  list: "because you have X", or "useful for almost everyone" for a few essentials.
+  Installed tools are never suggested. No network calls are made.
+- **D58. Recognising installed tools** uses product keys ("+" becomes "plus", so
+  Notepad++ is not Notepad) and package IDs per manager. Version stripping keeps leading
+  digits ("7-Zip"); this was also fixed in Smart Analysis.
+- **D59. Managers that can't install here are blocked during assessment, not at the
+  last step**: Chocolatey without admin, APT without package lists, Flatpak without
+  Flathub. That lets the next manager be chosen, and every block is explained.
+- **D60. A missing Scoop bucket is added as a visible step in the preview.** Classic
+  snaps say they get full system access.
+- **D61. "Find New Tools" on Home opens Discover directly**, because opening a screen
+  changes nothing. Installing still needs a preview. Install previews use Enter, like
+  updates: installing isn't a deletion.
+- **D62. Installed tools are remembered for the session** until the next scan adds them
+  to My Software, so Discover doesn't offer them again.

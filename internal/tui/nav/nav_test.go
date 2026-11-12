@@ -30,7 +30,7 @@ func TestComingSoonSectionsHavePlanAndPhase(t *testing.T) {
 		switch info.Availability {
 		case Available:
 			switch s {
-			case Home, MySoftware, Updates, SmartAnalysis, Dependencies, Cleanup, ActivityHistory, Settings:
+			case Home, MySoftware, Updates, SmartAnalysis, Dependencies, Cleanup, DiscoverApps, ActivityHistory, Settings:
 			default:
 				t.Errorf("%q marked Available but is not built yet", s.Title())
 			}

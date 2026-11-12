@@ -6,7 +6,8 @@ Windows 11. Linux stays compatible.
 
 ## Current phase
 
-**Phase 5 — Cleanup: complete.** Awaiting approval to start Phase 6.
+**Phase 6 — Discover Apps: complete.** All nine sections are now real. Awaiting
+direction for what comes next (see IMPLEMENTATION_PLAN.md, Phase 7+).
 
 | Phase | Status |
 |-------|--------|
@@ -15,7 +16,7 @@ Windows 11. Linux stays compatible.
 | 3. Updates: check, review, install through the package managers | done |
 | 4. Smart Analysis and Dependencies | done |
 | 5. Cleanup: remove software and tidy caches, with a fresh dependency gate | done |
-| 6. Discover Apps | not started |
+| 6. Discover Apps: curated catalogue, local suggestions, install with preview | done |
 
 ## What exists now
 
@@ -50,13 +51,16 @@ Windows 11. Linux stays compatible.
 | **Things to tidy** | done | Exact, read-only discovery: APT and DNF caches, packages APT or DNF marks unneeded, old snap revisions, old Scoop versions and downloads; sizes shown |
 | **Destructive confirmation** | done | Removal and clean-up previews need `r`; Enter alone never confirms a deletion |
 | **Run and record** | done | Same terminal handover as updates; removed software leaves My Software; Smart Analysis marked stale; Activity History records everything |
-| Discover Apps | empty state | Honest "arrives in Phase 6" screen |
+| **Discover Apps** | done | 30 curated tools in 7 categories, embedded and validated at build time, dated 2026-11; suggestions only from local data with a reason ("because you have Git"); installed and not-installable tools clearly marked with the reason |
+| **Installing** | done | Picks the best available manager (winget, Scoop, Chocolatey; APT, DNF, Flatpak, Snap); blocks Chocolatey without admin, APT without package lists, Flatpak without Flathub; adds a missing Scoop bucket as a visible step; classic snaps explained |
 | Removals, cleanup actions | not started | Phase 5 |
 
 ## Guarantees still held
 
-- ATLAS changes the system only by installing updates, removing software, or clearing caches,
-  and only after a preview the user confirms. Removals and clean-ups need `r`, not Enter.
+- ATLAS changes the system only by installing updates, installing tools the user picked in
+  Discover, removing software, or clearing caches, and only after a preview the user confirms.
+  Removals and clean-ups need `r`, not Enter.
+- Discover makes no network calls to build suggestions; they come from the saved list.
 - ATLAS never answers a package manager's prompt, accepts an agreement, or handles a password.
   The package manager asks the user directly in the terminal.
 - ATLAS never asks for elevation for itself. It explains when sudo, UAC or PolicyKit may ask.

@@ -91,6 +91,13 @@ type DataView struct {
 	Tidying *ScanProgress
 	// LastRemoved is when software was last removed (zero if never).
 	LastRemoved time.Time
+
+	// DiscoverAvailable is false when Discover Apps is unavailable.
+	DiscoverAvailable bool
+	// Discovery is the catalogue assessed for this computer (nil until loaded).
+	Discovery *core.Discovery
+	// InstalledNow lists catalogue IDs installed this session, before a rescan.
+	InstalledNow map[string]bool
 }
 
 // Busy reports whether a background task is running.

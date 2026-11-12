@@ -185,8 +185,8 @@ func TestTabAndDigitsNavigate(t *testing.T) {
 	if m.Section() != nav.DiscoverApps {
 		t.Errorf("digit 7 = %v, want Discover Apps", m.Section())
 	}
-	if !strings.Contains(m.View(), "Not available in this version") {
-		t.Error("coming-soon section should render its empty state")
+	if !strings.Contains(m.View(), "Discover Apps") {
+		t.Error("section 7 should render Discover Apps")
 	}
 }
 
@@ -287,14 +287,12 @@ func TestHelpOverlayOpensAndCloses(t *testing.T) {
 func TestQuickActionOpensPreviewAndChangesNothing(t *testing.T) {
 	m, path := newTestModel(t)
 	m = press(t, m, "right")
-	m = press(t, m, "right")
-	m = press(t, m, "right")
 	m = press(t, m, "enter")
 	if !m.PreviewOpen() {
 		t.Fatal("enter on a quick action should open the preview")
 	}
 	view := m.View()
-	for _, want := range []string{"Find New Tools", "Not available: discovery arrives in Phase 6", "What will happen", "Is it safe?", "Can it be undone?"} {
+	for _, want := range []string{"Check for Updates", "Not available:", "What will happen", "Is it safe?", "Can it be undone?"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("preview missing %q", want)
 		}
@@ -305,6 +303,17 @@ func TestQuickActionOpensPreviewAndChangesNothing(t *testing.T) {
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Error("previewing must not write anything")
+	}
+}
+
+func TestFindNewToolsOpensDiscoverWithoutPreview(t *testing.T) {
+	m, _ := newTestModel(t)
+	for i := 0; i < 3; i++ {
+		m = press(t, m, "right")
+	}
+	m = press(t, m, "enter")
+	if m.PreviewOpen() || m.Section() != nav.DiscoverApps {
+		t.Errorf("Find New Tools should just open Discover Apps (preview open: %v, section %v)", m.PreviewOpen(), m.Section())
 	}
 }
 

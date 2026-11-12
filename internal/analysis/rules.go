@@ -241,8 +241,9 @@ func supportFindings(runtimes []core.Runtime, now time.Time) (ended, ending, vc 
 }
 
 var (
-	reParens   = regexp.MustCompile(`\([^)]*\)`)
-	reVersions = regexp.MustCompile(`\b[vV]?\d+(?:[._]\d+)*\b`)
+	reParens = regexp.MustCompile(`\([^)]*\)`)
+	// Dotted versions anywhere, and standalone numbers; "7" in "7-Zip" stays.
+	reVersions = regexp.MustCompile(`\b[vV]?\d+(?:[._]\d+)+\b|(?:^|\s)[vV]?\d+(?:\s|$)`)
 	reArchWord = regexp.MustCompile(`(?i)\b(x64|x86|arm64|amd64|64-bit|32-bit|64bit|32bit)\b`)
 	reNonAlnum = regexp.MustCompile(`[^a-z0-9]+`)
 )

@@ -15,6 +15,7 @@ import (
 	"github.com/deepakraj1207/atlas/internal/config"
 	"github.com/deepakraj1207/atlas/internal/core"
 	"github.com/deepakraj1207/atlas/internal/database"
+	"github.com/deepakraj1207/atlas/internal/discover"
 	"github.com/deepakraj1207/atlas/internal/inventory"
 	"github.com/deepakraj1207/atlas/internal/logging"
 	"github.com/deepakraj1207/atlas/internal/platform"
@@ -78,6 +79,7 @@ func Run(opts Options) error {
 	var upd core.UpdateService
 	var ana core.AnalysisService
 	var cln core.CleanupService
+	var dsc core.DiscoverService
 	elevated := platform.IsElevated()
 	dbPath, storeErr := "", ""
 	if dir, err := platform.DataDir(); err != nil {
@@ -93,6 +95,11 @@ func Run(opts Options) error {
 			upd = updates.NewService(updates.DefaultManagers(elevated), db, logger, updates.DefaultTimeouts())
 			ana = analysis.NewService(analysis.DefaultSources(), db, logger, analysis.UsageSupported)
 			cln = cleanup.NewService(cleanup.DefaultConfig(elevated), db, logger)
+			if d, err := discover.NewService(discover.DefaultConfig(elevated), db, logger); err != nil {
+				logger.Error("discover catalogue", "error", err)
+			} else {
+				dsc = d
+			}
 		}
 	}
 	if storeErr != "" {
@@ -111,6 +118,7 @@ func Run(opts Options) error {
 		Updates:      upd,
 		Analysis:     ana,
 		Cleanup:      cln,
+		Discover:     dsc,
 		Elevated:     elevated,
 		StoreErr:     storeErr,
 		DBPath:       dbPath,

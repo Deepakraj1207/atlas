@@ -587,3 +587,76 @@ type CleanupService interface {
 	// the saved list.
 	RecordResults(ctx context.Context, results []StepResult) error
 }
+
+// ActionInstall installs new software (a step action).
+const ActionInstall = "install"
+
+// CatalogPackage says how one package manager installs a catalogue entry.
+type CatalogPackage struct {
+	// Manager is "winget", "scoop", "chocolatey", "apt", "dnf", "snap" or "flatpak".
+	Manager string `yaml:"manager"`
+	ID      string `yaml:"id"`
+	// Classic marks snaps that need classic confinement (full system access).
+	Classic bool `yaml:"classic,omitempty"`
+	// Note is a plain remark, e.g. "the command is batcat on Debian/Ubuntu".
+	Note string `yaml:"note,omitempty"`
+}
+
+// CatalogEntry is one curated tool in Discover Apps.
+type CatalogEntry struct {
+	ID       string `yaml:"id"`
+	Name     string `yaml:"name"`
+	Category string `yaml:"category"`
+	// Summary says what it is in one plain sentence.
+	Summary string `yaml:"summary"`
+	// Why says who it helps.
+	Why      string           `yaml:"why"`
+	Homepage string           `yaml:"homepage"`
+	Packages []CatalogPackage `yaml:"packages"`
+	// Provides are product keys that mean it's already installed.
+	Provides []string `yaml:"provides"`
+	// Related are product keys of installed software that make this a
+	// suggestion ("because you have …").
+	Related []string `yaml:"related,omitempty"`
+	// Everyone marks tools useful to almost anyone.
+	Everyone bool `yaml:"everyone,omitempty"`
+}
+
+// DiscoverItem is a catalogue entry assessed against this computer.
+type DiscoverItem struct {
+	Entry CatalogEntry
+	// Installed is true when the saved software list already has it.
+	Installed   bool
+	InstalledAs string
+	// Via is the package manager ATLAS would use, "" if none is available.
+	Via      string
+	ViaLabel string
+	Package  CatalogPackage
+	// Unavailable explains why it can't be installed here.
+	Unavailable string
+	// Because lists plain reasons it is suggested; empty means browse-only.
+	Because []string
+}
+
+// Discovery is Discover Apps' view of the catalogue for this computer.
+type Discovery struct {
+	Items []DiscoverItem
+	// Scanned is false when there is no saved software list, so installed
+	// software can't be recognised.
+	Scanned      bool
+	CatalogAsOf  string
+	Categories   []string
+	ManagersHere []string
+}
+
+// DiscoverService is the port the TUI uses for Discover Apps. Implemented
+// by internal/discover.Service.
+type DiscoverService interface {
+	// Discover assesses the catalogue against the saved software list.
+	// Read-only and local: no network access.
+	Discover(ctx context.Context) (Discovery, error)
+	// PlanInstall returns install steps for catalogue entries. It runs nothing.
+	PlanInstall(ctx context.Context, ids []string) ([]UpdateStep, error)
+	NewJob(steps []UpdateStep) TerminalJob
+	RecordResults(ctx context.Context, results []StepResult) error
+}

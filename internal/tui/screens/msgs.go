@@ -43,6 +43,14 @@ type RequestCleanupMsg struct {
 // terminal. Only sent after the user confirms the preview with r.
 type ApplyCleanupMsg struct{ Steps []core.UpdateStep }
 
+// RequestInstallMsg asks the root to plan installing catalogue entries and
+// show the preview.
+type RequestInstallMsg struct{ IDs []string }
+
+// ApplyInstallMsg asks the root to run install steps in the terminal. Only
+// sent after the user confirms the preview.
+type ApplyInstallMsg struct{ Steps []core.UpdateStep }
+
 // RequestApplyMsg asks the root to plan these updates and show the preview.
 type RequestApplyMsg struct{ Updates []core.Update }
 
