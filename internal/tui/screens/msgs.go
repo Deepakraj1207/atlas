@@ -24,6 +24,10 @@ type StartScanMsg struct{}
 // StartCheckMsg asks the root to check for updates. Only sent after a preview.
 type StartCheckMsg struct{}
 
+// StartAnalysisMsg asks the root to analyze the saved software list. Only
+// sent after a preview.
+type StartAnalysisMsg struct{}
+
 // RequestApplyMsg asks the root to plan these updates and show the preview.
 type RequestApplyMsg struct{ Updates []core.Update }
 
@@ -65,4 +69,9 @@ func requestScan(ctx Context) tea.Cmd {
 // requestCheck builds the update-check preview request.
 func requestCheck(ctx Context) tea.Cmd {
 	return send(ShowActionPreviewMsg{Plan: CheckPlan(ctx), Confirm: StartCheckMsg{}})
+}
+
+// requestAnalysis builds the analysis preview request.
+func requestAnalysis(ctx Context) tea.Cmd {
+	return send(ShowActionPreviewMsg{Plan: AnalyzePlan(ctx), Confirm: StartAnalysisMsg{}})
 }

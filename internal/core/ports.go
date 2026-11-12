@@ -405,3 +405,132 @@ type UpdateService interface {
 	// applied updates from the saved list.
 	RecordResults(ctx context.Context, results []StepResult) error
 }
+
+// Severity ranks a finding.
+type Severity string
+
+const (
+	// SeverityAttention: worth acting on soon, e.g. software no longer
+	// receiving security fixes.
+	SeverityAttention Severity = "attention"
+	// SeverityInfo: worth knowing; nothing urgent.
+	SeverityInfo Severity = "info"
+)
+
+// ItemRef points at a software item a finding is about.
+type ItemRef struct {
+	Name, Version, Source, PackageID string
+	// Note is item-specific context, e.g. "last opened 3 Mar 2024".
+	Note string
+}
+
+// Finding is one plain-language observation from Smart Analysis.
+type Finding struct {
+	// Key is stable across runs, e.g. "eol:python:3.8".
+	Key      string
+	Kind     string
+	Severity Severity
+	Title    string
+	// Summary says what was found.
+	Summary string
+	// Why says why it matters.
+	Why string
+	// Suggestion says what the user can do now. Never an action ATLAS
+	// takes on its own.
+	Suggestion string
+	Items      []ItemRef
+	// Details are technical lines for Advanced mode.
+	Details []string
+	// Reference names where the underlying facts come from.
+	Reference string
+}
+
+// Support describes a runtime version's support status.
+type Support struct {
+	// State is "supported", "ending", "ended" or "unknown".
+	State string
+	// EndDate is YYYY-MM-DD or YYYY-MM when known.
+	EndDate   string
+	Reference string
+	// DistroManaged is true for distribution packages, whose maintainers may
+	// keep fixing them after the upstream project stops.
+	DistroManaged bool
+	Note          string
+}
+
+// Runtime is an installed runtime other software may need.
+type Runtime struct {
+	// Family is "Python", "Node.js", ".NET", "Java" or "Visual C++".
+	Family string
+	// Branch is the support line, e.g. "3.12", "20", "8.0", "2015-2022 x64".
+	Branch    string
+	Name      string
+	Version   string
+	Source    string
+	PackageID string
+	Support   Support
+	// DepsKnown is false when the source records no dependency data.
+	DepsKnown bool
+	// DepsSource names where dependency data came from.
+	DepsSource string
+	// Dependents are installed packages that directly need this runtime.
+	Dependents []string
+	// Indirect counts packages that need it through something else.
+	Indirect int
+}
+
+// CheckSummary reports one analysis check, including "found nothing" and
+// "couldn't check", so the user knows what was and wasn't looked at.
+type CheckSummary struct {
+	Name  string
+	Found int
+	// Note explains a check that couldn't run, or its limits.
+	Note      string
+	Available bool
+}
+
+// AnalysisResult is the outcome of Analyze My Software.
+type AnalysisResult struct {
+	StartedAt  time.Time
+	FinishedAt time.Time
+	Status     ScanStatus
+	// Sources are the extra data sources read (dependency data, usage records).
+	Sources  []SourceResult
+	Findings []Finding
+	Runtimes []Runtime
+	Checks   []CheckSummary
+	// BasedOnScan is when the analysed software list was scanned.
+	BasedOnScan time.Time
+	// SupportDataAsOf is the date of ATLAS's built-in support table.
+	SupportDataAsOf string
+}
+
+// Counts returns how many findings need attention and how many are info.
+func (r AnalysisResult) Counts() (attention, info int) {
+	for _, f := range r.Findings {
+		if f.Severity == SeverityAttention {
+			attention++
+		} else {
+			info++
+		}
+	}
+	return attention, info
+}
+
+// AnalysisStore persists the latest analysis. Implemented by
+// internal/database.
+type AnalysisStore interface {
+	SaveAnalysis(ctx context.Context, r AnalysisResult) error
+	LatestAnalysis(ctx context.Context) (AnalysisResult, bool, error)
+}
+
+// AnalysisService is the port the TUI uses for Smart Analysis and
+// Dependencies. Implemented by internal/analysis.Service.
+type AnalysisService interface {
+	Sources() []SourceInfo
+	// Analyze reads extra data, applies the rules to the saved software
+	// list, saves and records the result. The error is non-nil only when
+	// there is no saved software list or saving failed.
+	Analyze(ctx context.Context, progress func(SourceEvent)) (AnalysisResult, error)
+	Latest(ctx context.Context) (AnalysisResult, bool, error)
+}

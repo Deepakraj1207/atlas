@@ -38,7 +38,9 @@ type Context struct {
 	Managers []core.SourceInfo
 	// Elevated is true when ATLAS runs as administrator or root.
 	Elevated bool
-	Data     DataView
+	// AnalysisSources are the extra data sources Smart Analysis reads.
+	AnalysisSources []core.SourceInfo
+	Data            DataView
 }
 
 // DataView is the root model's read-only snapshot of saved data.
@@ -71,10 +73,23 @@ type DataView struct {
 	// not produce results (failed or nothing to check). It isn't saved, so
 	// it is kept here to explain what went wrong.
 	FailedCheck *core.UpdateCheck
+
+	// AnalysisAvailable is false when analysis is unavailable.
+	AnalysisAvailable bool
+	// Analysis is nil until an analysis has been saved.
+	Analysis *core.AnalysisResult
+	// Analyze is non-nil while an analysis is running.
+	Analyze *ScanProgress
 }
 
-// Busy reports whether a scan or update check is running.
-func (d DataView) Busy() bool { return d.Scan != nil || d.Check != nil }
+// Busy reports whether a scan, update check or analysis is running.
+func (d DataView) Busy() bool { return d.Scan != nil || d.Check != nil || d.Analyze != nil }
+
+// AnalysisStale reports whether the software list changed after the
+// saved analysis was made.
+func (d DataView) AnalysisStale() bool {
+	return d.Analysis != nil && d.Summary != nil && d.Summary.FinishedAt.After(d.Analysis.BasedOnScan)
+}
 
 // PendingUpdates counts updates that "update all" would include.
 func (d DataView) PendingUpdates() (apps, components int) {

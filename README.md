@@ -13,6 +13,11 @@ What works today:
   hides libraries and runtimes unless you ask for them.
 - **Updates** checks winget, Chocolatey and Scoop on Windows, and APT, DNF, Snap
   and Flatpak on Linux. Install everything with one key, or pick what to update.
+- **Smart Analysis** explains what's worth knowing in plain language: runtimes that no
+  longer get security fixes, apps installed twice, old versions, and apps you haven't
+  opened in a year (Windows). It also lists what it checked and what it couldn't.
+- **Dependencies** shows which runtimes (Python, Node.js, Java, .NET, Visual C++) other
+  software needs, from your package managers' own records.
 - **Activity History** records every scan and change, so nothing happens silently.
 - Simple and Advanced modes, dark and light themes, and help on every screen.
 
@@ -51,6 +56,7 @@ version. Setting `ATLAS_HOME` keeps settings and logs in one folder (portable us
 | `pgup` / `pgdn` | Scroll when a screen does not fit |
 | `/`, `f`, `s` | In My Software: search, show system components, scan |
 | `c`, `u`, `space`, `enter` | In Updates: check, update all, select, update selected |
+| `a` | In Smart Analysis and Dependencies: analyze (again) |
 | `x` | Stop a running scan or update check |
 | `Ctrl+C` | While updates run: stop; nothing further starts |
 | `q` | Quit |

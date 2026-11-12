@@ -3,6 +3,7 @@ package screens
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 
@@ -14,6 +15,53 @@ import (
 // scanProgressView renders the live per-source state of a running scan.
 func scanProgressView(ctx Context, p ScanProgress) string {
 	return progressView(ctx, p, "Scanning your system", "Stopping the scan…")
+}
+
+// analyzeProgressView renders the live state of a running analysis.
+func analyzeProgressView(ctx Context, p ScanProgress) string {
+	return progressView(ctx, p, "Analyzing your software", "Stopping the analysis…")
+}
+
+// windowLines returns the slice of lines to show so the selected block
+// [selStart, selEnd) is visible within avail lines.
+func windowLines(lines []string, selStart, selEnd, avail int) []string {
+	avail = max(avail, 1)
+	offset := 0
+	if selEnd > avail {
+		offset = min(selStart, selEnd-avail)
+	}
+	end := min(offset+avail, len(lines))
+	return lines[offset:end]
+}
+
+// supportLabel renders a runtime's support status in plain words.
+func supportLabel(t theme.Theme, s core.Support) string {
+	switch s.State {
+	case "ended":
+		if s.DistroManaged {
+			return t.Warning.Render("upstream support ended " + endText(s.EndDate))
+		}
+		return t.Danger.Render("support ended " + endText(s.EndDate))
+	case "ending":
+		return t.Warning.Render("support ends " + endText(s.EndDate))
+	case "supported":
+		if s.EndDate != "" {
+			return t.Success.Render("supported until " + endText(s.EndDate))
+		}
+		return t.Success.Render("supported")
+	default:
+		return t.Muted.Render("support not judged")
+	}
+}
+
+func endText(d string) string {
+	if t, err := time.Parse("2006-01-02", d); err == nil {
+		return t.Format("2 Jan 2006")
+	}
+	if t, err := time.Parse("2006-01", d); err == nil {
+		return t.Format("Jan 2006")
+	}
+	return d
 }
 
 // checkProgressView renders the live state of a running update check.

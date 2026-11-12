@@ -65,24 +65,11 @@ var infos = [sectionCount]Info{
 		Title:   "Smart Analysis",
 		Short:   "Analysis",
 		Summary: "Plain-language insight into what you have and what you might not need.",
-		Plan: []string{
-			"Spot duplicate tools that do the same job",
-			"Flag software that has not been used in a long time",
-			"Highlight risky or unmaintained applications",
-		},
-		Phase:        4,
-		Availability: ComingSoon,
 	},
 	Dependencies: {
 		Title:   "Dependencies",
 		Short:   "Depends",
 		Summary: "Understand which tools rely on which runtimes and libraries.",
-		Plan: []string{
-			"Map runtimes (for example .NET, Java, Python) to the apps that need them",
-			"Warn before removing something another application depends on",
-		},
-		Phase:        4,
-		Availability: ComingSoon,
 	},
 	Cleanup: {
 		Title:   "Cleanup",

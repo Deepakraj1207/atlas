@@ -6,14 +6,15 @@ Windows 11. Linux stays compatible.
 
 ## Current phase
 
-**Phase 3 — Updates: complete.** Awaiting approval to start Phase 4.
+**Phase 4 — Smart Analysis and Dependencies: complete.** Awaiting approval to start Phase 5.
 
 | Phase | Status |
 |-------|--------|
 | 1. Go bootstrap and TUI foundation | done |
 | 2. Inventory: read-only scanning, SQLite, My Software, Activity History | done |
 | 3. Updates: check, review, install through the package managers | done |
-| 4. Smart Analysis and Dependencies | not started |
+| 4. Smart Analysis and Dependencies | done |
+| 5. Cleanup | not started |
 
 ## What exists now
 
@@ -39,7 +40,11 @@ Windows 11. Linux stays compatible.
 | **Installing updates** | done | Preview lists every change, permission prompts, rollback per manager, exact commands (Advanced). Then ATLAS hands the terminal to each package manager |
 | **Elevation** | done | sudo on Linux (password asked by sudo), Windows installers may show UAC, Chocolatey and global Scoop blocked with an explanation unless ATLAS runs as administrator |
 | **Results** | done | Per-step outcome, exit codes and restart notices in Activity History; applied updates leave the list; Home suggests a rescan |
-| Smart Analysis, Dependencies, Cleanup, Discover Apps | empty states | Honest "arrives in Phase N" screens |
+| **Smart Analysis** | done | Runtimes past or near end of support (Python, Node.js, .NET, Visual C++), same app from two tools, several versions, apps not opened in over a year (Windows, positive evidence only), runtimes nothing needs, updates waiting, stale data. Each finding says why it matters, what you can do, and its source |
+| **What ATLAS checked** | done | Every check listed with its result, including "none found" and "not checked" with the reason |
+| **Dependencies** | done | Runtimes grouped by version with support status; direct and indirect dependents from dpkg, RPM, Chocolatey and Scoop records; "not recorded" where Windows keeps none |
+| **Analysis storage** | done | Schema v3; latest analysis kept as one document; cleared with the software list; marked stale after a newer scan |
+| Cleanup, Discover Apps | empty states | Honest "arrives in Phase N" screens |
 | Removals, cleanup actions | not started | Phase 5 |
 
 ## Guarantees still held
@@ -49,4 +54,6 @@ Windows 11. Linux stays compatible.
   The package manager asks the user directly in the terminal.
 - ATLAS never asks for elevation for itself. It explains when sudo, UAC or PolicyKit may ask.
 - No removals. No sample data in shipped code; test fixtures live only in `_test.go` files.
-- Every scan, check, clear and update run is recorded in Activity History.
+- Every scan, check, analysis, clear and update run is recorded in Activity History.
+- Analysis never infers from missing data: no usage record means no claim about usage,
+  and no dependency record means "treat it as needed".

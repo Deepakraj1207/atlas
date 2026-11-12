@@ -26,7 +26,7 @@ var (
 		{Key: "t", Desc: "Switch between dark and light theme (remembered)"},
 		{Key: "?", Desc: "Open or close this help"},
 		{Key: "esc", Desc: "Close an overlay, or cancel a preview without doing anything"},
-		{Key: "x", Desc: "Stop a running scan or update check (nothing is changed either way)"},
+		{Key: "x", Desc: "Stop a running scan, update check or analysis (nothing is changed either way)"},
 		{Key: "q / ctrl+c", Desc: "Quit ATLAS"},
 	}
 )

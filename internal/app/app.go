@@ -10,6 +10,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/deepakraj1207/atlas/internal/analysis"
 	"github.com/deepakraj1207/atlas/internal/config"
 	"github.com/deepakraj1207/atlas/internal/core"
 	"github.com/deepakraj1207/atlas/internal/database"
@@ -74,6 +75,7 @@ func Run(opts Options) error {
 	// and explains in Settings why scanning is off.
 	var inv core.InventoryService
 	var upd core.UpdateService
+	var ana core.AnalysisService
 	elevated := platform.IsElevated()
 	dbPath, storeErr := "", ""
 	if dir, err := platform.DataDir(); err != nil {
@@ -87,6 +89,7 @@ func Run(opts Options) error {
 			defer db.Close()
 			inv = inventory.NewService(inventory.DefaultScanners(), db, logger, inventory.DefaultTimeouts())
 			upd = updates.NewService(updates.DefaultManagers(elevated), db, logger, updates.DefaultTimeouts())
+			ana = analysis.NewService(analysis.DefaultSources(), db, logger, analysis.UsageSupported)
 		}
 	}
 	if storeErr != "" {
@@ -103,6 +106,7 @@ func Run(opts Options) error {
 		Version:      opts.Version,
 		Inventory:    inv,
 		Updates:      upd,
+		Analysis:     ana,
 		Elevated:     elevated,
 		StoreErr:     storeErr,
 		DBPath:       dbPath,

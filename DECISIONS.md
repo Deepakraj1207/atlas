@@ -122,3 +122,36 @@ Short, dated records of choices that shape the code.
   runs at a time, and `x` stops it.
 - **D37. Rollback is stated honestly per manager.** Snap and Scoop can revert. winget,
   Chocolatey, APT and DNF need a specific older version, if the source still has it.
+
+## 2026-11-12 — Phase 4
+
+- **D38. Analysis is a single, explicit action.** "Analyze My Software" reads the extra
+  sources, applies the rules and saves the result. Smart Analysis and Dependencies both
+  show the latest result. It has a preview and an Activity History entry like
+  everything else, and it requires a saved scan.
+- **D39. The analysis result is stored as one JSON document (schema v3).** It's derived
+  data, always read and written whole, and its shape will grow. Only the latest is kept,
+  and it is removed when the software list is cleared.
+- **D40. Built-in support table, dated and sourced.** It covers Python, Node.js, .NET
+  and Visual C++, as of 2026-11. Every finding shows its source so users can verify it.
+  Month-only dates count as the end of that month. "Ending" means within 183 days.
+  The table must be reviewed with each release.
+- **D41. Java support isn't judged.** It depends on the vendor (Oracle, Temurin,
+  Microsoft, distributions), so a single date would mislead.
+- **D42. Distro-packaged runtimes past upstream end-of-life are "worth knowing", not
+  "attention".** Distributions often keep patching them. The finding says so and
+  points to the distribution's policy.
+- **D43. No inference from missing data.**
+  - Usage: only Windows UserAssist records with a timestamp count. Absence of a record
+    is never "unused". Matching is by install folder, never a drive root.
+  - Dependencies: when the source keeps no records (Windows installers), the runtime
+    shows "not recorded" and "treat it as needed".
+- **D44. Distro package names are compared exactly.** Versions inside names
+  (`clang-18`, `python3.12-venv`) mark different packages, not versions of one. Other
+  sources use a normalised product key that ignores versions and architecture.
+- **D45. Only hard requirements count as dependencies** (dpkg Depends/Pre-Depends,
+  RPM requires, Chocolatey dependency, Scoop depends). "Nothing else needs it" says that
+  recommendations aren't counted.
+- **D46. Database reads inside a cancellable task use an uninterruptible context.**
+  Stopping applies to the slow external sources; a cancel at the very start must read
+  as "stopped", never as a save error. This was found by the race detector's timing.

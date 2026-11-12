@@ -129,3 +129,7 @@ func parseDpkgStatus(ctx context.Context, r io.Reader, auto map[string]bool) ([]
 	})
 	return items, err
 }
+
+// ReadStanzas reads RFC 822 style paragraphs such as dpkg's status file,
+// keeping only the first line of multi-line fields.
+func ReadStanzas(r io.Reader, each func(map[string]string) error) error { return stanzas(r, each) }

@@ -1,23 +1,26 @@
 # ATLAS — Test Status
 
-Last run: 2026-11-12, end of Phase 3, Go 1.24.7 (`GOTOOLCHAIN=local`) on linux/amd64.
+Last run: 2026-11-12, end of Phase 4, Go 1.24.7 (`GOTOOLCHAIN=local`) on linux/amd64.
 
-## Unit tests (`go test ./...`) — all passing, 111 tests in 12 packages
+## Unit tests (`go test ./...`) — all passing, 131 tests in 13 packages
 
 | Package | Tests | Covers |
 |---------|-------|--------|
+| internal/analysis | 13 | support dates incl. month-precision ends and the 6-month window; runtime detection for 18 real name formats and 8 look-alikes that must not match; dpkg graph with Provides and alternatives, direct and indirect dependents; RPM requires-to-provides; Chocolatey nested `<dependency>`; Scoop string or list `depends`; UserAssist ROT13, value decoding, zero timestamps, known-folder paths, folder-boundary matching; support rules (attention vs distro info, ending soon, old VC++ grouped); duplicates vs versions incl. transitional snap stub, distro names and components; unused needs positive evidence; dependents and "may no longer be needed"; freshness; service refuses without a scan, saves, records, partial when a source fails; cancel before start is "cancelled", not an error |
 | internal/config | 10 | defaults, missing/malformed/partial files, enum warnings, save round-trip, backup |
-| internal/core | 3 | command rendering and quoting; exit-code interpretation incl. restart codes; status and count helpers |
-| internal/logging | 2 | JSON lines, levels, append |
-| internal/platform | 3 | `ATLAS_HOME` override for config, log and data dirs; default dir names |
-| internal/database | 10 | migrations incl. upgrading a Phase 2 (v1) database in place; scans; activity; update check round-trip, held/component/scope fields, removal of applied updates, pruning old checks |
-| internal/inventory | 21 | all Phase 2 parsers and rules; plain-language source errors |
-| internal/updates | 12 | winget upgrade tables (truncated IDs blocked, explicit-target table held, no-updates messages, no agreement flags); Chocolatey exit code 2, pins, admin blocking, restart codes; Scoop bucket comparison and holds, global blocking; APT parsing, holds, missing package lists, sudo vs root, no `-y`; DNF exit 100; Snap; Flatpak; service enrichment from saved list; planning skips held and keeps manager order; terminal job (multi-command steps, blocked, failed, missing program, restart, output wording); Ctrl+C stops remaining steps; recording removes only applied updates; activity outcomes |
-| internal/tui/nav | 4 | order, titles, shortcuts, availability, wrap, jumps |
-| internal/tui/layout | 6 | breakpoints, sidebar, tab bar, short terminals, bounds |
-| internal/tui/theme | 2 | selection, palette completeness |
-| internal/tui/components | 6 | tab-bar tiers, scroll window, states, human time, truncate/pad |
-| internal/tui | 32 | Phase 1 and 2 behaviour plus: check preview → check → Home and Updates show counts (held excluded); update-all preview lists every change, sudo and rollback, runs nothing before Enter, Esc cancels; confirmed run executes exactly the planned command and records it; Home suggests a rescan; selecting one update runs only it; held updates can't be selected; failure reported with exit code in Advanced history; blocked steps explained and never run; check stoppable and exclusive with scans; never-checked and up-to-date states; components hidden but included in update all; failed check explained on Updates screen |
+| internal/core | 3 | command rendering, exit codes, status helpers |
+| internal/database | 11 | migrations incl. upgrading a v1 database; scans; activity; update checks; analysis round-trip, latest only, cleared with the software list |
+| internal/inventory | 21 | Phase 2 parsers and rules; plain-language source errors |
+| internal/updates | 12 | Phase 3 managers, planning, terminal job, recording |
+| internal/logging, platform | 5 | file logging; directories |
+| internal/tui/nav, layout, theme, components | 18 | navigation, responsive layout, themes, shared components |
+| internal/tui | 38 | earlier phases plus: analysis needs a scan (screens and preview); full flow from Home to Smart Analysis, What ATLAS checked, Dependencies and Activity History; real dependency graph with direct and indirect dependents and the Advanced data-source line; stale analysis note and clearing with the list; analysis can be stopped and excludes scans; group heading stays visible on a 60×18 terminal |
+
+### Race detector
+
+`go test -race -count=5` over the tui, inventory, updates and analysis packages (all
+that use goroutines) reports no data races and no failures. An earlier race-detector run
+found a real timing bug (D46), which is now fixed and has a regression test.
 
 ## Checks
 
@@ -27,11 +30,22 @@ Last run: 2026-11-12, end of Phase 3, Go 1.24.7 (`GOTOOLCHAIN=local`) on linux/a
 | `go vet ./...` (linux) | clean |
 | `GOOS=windows GOARCH=amd64 go vet ./...` | clean |
 | `go test -count=1 ./...` | pass |
-| `GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build ./cmd/atlas` | pass (~13.8 MB) |
-| `GOOS=windows GOARCH=arm64 CGO_ENABLED=0 go build ./cmd/atlas` | pass (~13.2 MB) |
+| `GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build ./cmd/atlas` | pass (~14.2 MB) |
+| `GOOS=windows GOARCH=arm64 CGO_ENABLED=0 go build ./cmd/atlas` | pass (~13.6 MB) |
 | Linux build | pass |
 
 ## End-to-end runs in a pseudo-terminal
+
+**Phase 4, real binary, real data.** Scan, then Analyze My Software (previewed), on this
+Ubuntu container. 837 packages were analyzed in about 14 ms. The 7 runtimes found were
+Python 3.11, 3.12 and 3.13 and four Java 21 packages. For example, python3.12 is needed
+directly by 4 packages and by 38 more through them, from dpkg records. The only finding
+was "Updates haven't been checked yet". "Apps not opened in over a year" was reported
+as not checked, because Linux keeps no record. Both screens rendered, and q exited with 0.
+
+A first live run surfaced 14 false "several versions" findings for distro packages such
+as `clang`/`clang-18` and `python3.11-venv`/`python3.12-venv`. Fixed by comparing distro
+package names exactly (D44), with a regression test.
 
 **Real binary, real APT.** Check for Updates opened its preview, then ran. This
 container has never downloaded APT package lists, so the check failed with
@@ -59,6 +73,11 @@ checkbox column, a doubled period in rollback text, and Home counting apps while
 the recommendation counted everything.
 
 ## Not verified in this environment
+
+- Windows-only analysis sources on a real Windows machine: the UserAssist registry read,
+  and Chocolatey and Scoop dependency folders. Decoding and matching are unit-tested.
+- The support table against the projects' pages at release time. Dates are as of 2026-11
+  and are shown with their sources.
 
 - Real update runs of winget, Chocolatey, Scoop, APT, DNF, Snap or Flatpak. No Windows
   host is available, and this container has no APT lists, so nothing was updated for

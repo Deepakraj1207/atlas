@@ -35,6 +35,7 @@ type Options struct {
 	// StoreErr then explains why.
 	Inventory core.InventoryService
 	Updates   core.UpdateService
+	Analysis  core.AnalysisService
 	StoreErr  string
 	DBPath    string
 	// Elevated is true when ATLAS runs as administrator or root.
@@ -59,6 +60,8 @@ type Model struct {
 	upd      core.UpdateService
 	elevated bool
 	check    *scanRun
+	ana      core.AnalysisService
+	analysis *scanRun
 	// exec hands the terminal to a job; replaced in tests.
 	exec     func(core.TerminalJob, tea.ExecCallback) tea.Cmd
 	storeErr string
@@ -102,6 +105,7 @@ func New(opts Options) Model {
 		scroll:   map[nav.Section]int{},
 		inv:      opts.Inventory,
 		upd:      opts.Updates,
+		ana:      opts.Analysis,
 		elevated: opts.Elevated,
 		exec:     func(j core.TerminalJob, cb tea.ExecCallback) tea.Cmd { return tea.Exec(j, cb) },
 		storeErr: opts.StoreErr,
@@ -111,6 +115,7 @@ func New(opts Options) Model {
 	}
 	m.data.Available = m.inv != nil
 	m.data.UpdatesAvailable = m.upd != nil
+	m.data.AnalysisAvailable = m.ana != nil
 	m.data.StoreErr = m.storeErr
 	if m.inv == nil && m.storeErr == "" {
 		m.data.StoreErr = "no database was configured"
@@ -122,6 +127,10 @@ func New(opts Options) Model {
 			m.screens[s] = screens.NewHome()
 		case nav.MySoftware:
 			m.screens[s] = screens.NewMySoftware()
+		case nav.SmartAnalysis:
+			m.screens[s] = screens.NewSmartAnalysis()
+		case nav.Dependencies:
+			m.screens[s] = screens.NewDependencies()
 		case nav.Updates:
 			m.screens[s] = screens.NewUpdates()
 		case nav.ActivityHistory:
@@ -169,7 +178,7 @@ type configSavedMsg struct {
 
 // Init starts the status-clear timer and loads saved data.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(m.scheduleStatusClear(), loadData(m.inv), loadUpdates(m.upd))
+	return tea.Batch(m.scheduleStatusClear(), loadData(m.inv), loadUpdates(m.upd), loadAnalysis(m.ana))
 }
 
 // Accessors used by tests.
@@ -198,6 +207,9 @@ func (m Model) Scanning() bool { return m.scan != nil }
 // Checking reports whether an update check is running.
 func (m Model) Checking() bool { return m.check != nil }
 
+// Analyzing reports whether an analysis is running.
+func (m Model) Analyzing() bool { return m.analysis != nil }
+
 // Screen returns the screen for a section (for tests).
 func (m Model) Screen(s nav.Section) screens.Screen { return m.screens[s] }
 
@@ -222,6 +234,11 @@ func (m Model) dataView() screens.DataView {
 		p.Spinner = m.spinner.View()
 		d.Check = &p
 	}
+	if m.analysis != nil {
+		p := m.analysis.progress
+		p.Spinner = m.spinner.View()
+		d.Analyze = &p
+	}
 	for _, a := range d.Activity {
 		if a.Kind == "updates.apply" {
 			d.LastApplied = a.At
@@ -239,22 +256,27 @@ func (m Model) ctx() screens.Context {
 	if m.upd != nil {
 		managers = m.upd.Managers()
 	}
+	var anaSources []core.SourceInfo
+	if m.ana != nil {
+		anaSources = m.ana.Sources()
+	}
 	return screens.Context{
-		Theme:        m.theme,
-		Layout:       m.layout,
-		Config:       m.cfg,
-		Now:          m.now(),
-		ConfigPath:   m.cfgRes.Path,
-		ConfigResult: m.cfgRes,
-		LogPath:      m.logPath,
-		LogError:     m.logErr,
-		DBPath:       m.dbPath,
-		Version:      m.version,
-		Platform:     runtime.GOOS + "/" + runtime.GOARCH,
-		Sources:      sources,
-		Managers:     managers,
-		Elevated:     m.elevated,
-		Data:         m.dataView(),
+		Theme:           m.theme,
+		Layout:          m.layout,
+		Config:          m.cfg,
+		Now:             m.now(),
+		ConfigPath:      m.cfgRes.Path,
+		ConfigResult:    m.cfgRes,
+		LogPath:         m.logPath,
+		LogError:        m.logErr,
+		DBPath:          m.dbPath,
+		Version:         m.version,
+		Platform:        runtime.GOOS + "/" + runtime.GOARCH,
+		Sources:         sources,
+		Managers:        managers,
+		AnalysisSources: anaSources,
+		Elevated:        m.elevated,
+		Data:            m.dataView(),
 	}
 }
 
@@ -318,7 +340,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.Update(screens.ShowActionPreviewMsg{Plan: plan, Confirm: screens.ApplyUpdatesMsg{Steps: steps}})
 
 	case screens.ApplyUpdatesMsg:
-		if m.upd == nil || m.scan != nil || m.check != nil {
+		if m.upd == nil || m.busy() {
 			return m, m.setStatus(components.Status{Text: "Updates can't start right now. Nothing was changed.", Kind: components.StatusWarning})
 		}
 		job := m.upd.NewJob(msg.Steps)
@@ -395,7 +417,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.log.Error("clear inventory", "error", msg.err)
 			return m, tea.Batch(m.setStatus(components.Status{Text: "The saved list couldn't be cleared: " + msg.err.Error(), Kind: components.StatusError}), loadData(m.inv))
 		}
-		return m, tea.Batch(m.setStatus(components.Status{Text: "Saved software list cleared. No software on your computer was touched.", Kind: components.StatusSuccess}), loadData(m.inv))
+		return m, tea.Batch(m.setStatus(components.Status{Text: "Saved software list cleared. No software on your computer was touched.", Kind: components.StatusSuccess}), loadData(m.inv), loadAnalysis(m.ana))
+
+	case screens.StartAnalysisMsg:
+		return m, m.startAnalysis()
+
+	case analysisEventMsg:
+		applyEvent(m.analysis, msg.ev)
+		if m.analysis == nil {
+			return m, nil
+		}
+		return m, listen(m.analysis.events)
+
+	case analysisDoneMsg:
+		m.analysis = nil
+		return m, tea.Batch(m.setStatus(analysisResultStatus(msg.result, msg.err)), loadData(m.inv), loadAnalysis(m.ana))
+
+	case analysisLoadedMsg:
+		if msg.err != nil {
+			m.log.Error("load analysis", "error", msg.err)
+			m.data.LoadErr = msg.err.Error()
+		}
+		m.data.Analysis = msg.result
+		return m, nil
 
 	case dataLoadedMsg:
 		m.data.Loaded = true
@@ -408,7 +452,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case spinner.TickMsg:
-		if m.scan == nil && m.check == nil {
+		if !m.busy() {
 			return m, nil
 		}
 		var cmd tea.Cmd
@@ -510,7 +554,7 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "q":
 		return m.quit()
 	case "x":
-		if m.scan != nil || m.check != nil {
+		if m.busy() {
 			m.cancelTasks()
 			return m, nil
 		}
@@ -654,7 +698,7 @@ func (m Model) View() string {
 		right = modeBadge + " " + right
 	}
 	status := m.status
-	if (m.scan != nil || m.check != nil) && (status.Text == "" || status.Kind == components.StatusInfo) {
+	if m.busy() && (status.Text == "" || status.Kind == components.StatusInfo) {
 		status = m.busyStatus()
 	}
 	b.WriteString(components.StatusBar(t, l.Width, status, right, m.hints(), l.ShowHints && m.cfg.UI.ShowHints))
@@ -710,6 +754,8 @@ func (m Model) hints() []components.KeyHint {
 	switch {
 	case m.scan != nil:
 		out = append(out, components.KeyHint{Key: "x", Desc: "stop scan"})
+	case m.analysis != nil:
+		out = append(out, components.KeyHint{Key: "x", Desc: "stop analysis"})
 	case m.check != nil:
 		out = append(out, components.KeyHint{Key: "x", Desc: "stop check"})
 	}

@@ -79,6 +79,10 @@ func (h *Home) View(ctx Context) string {
 		b.WriteString(checkProgressView(ctx, *p))
 		b.WriteString("\n\n")
 	}
+	if p := ctx.Data.Analyze; p != nil {
+		b.WriteString(analyzeProgressView(ctx, *p))
+		b.WriteString("\n\n")
+	}
 
 	if ctx.Layout.TwoColumn {
 		leftW := (w - 3) / 2
@@ -194,6 +198,21 @@ func (h *Home) overview(ctx Context) string {
 			rows = append(rows, [2]string{"", t.Warning.Render("some managers not checked")})
 		}
 	}
+	if d.AnalysisAvailable && d.Loaded && d.Summary != nil {
+		switch a := d.Analysis; {
+		case a == nil:
+			rows = append(rows, [2]string{"Smart Analysis", muted("not run yet")})
+		default:
+			att, info := a.Counts()
+			val := t.Success.Render("nothing to look at")
+			if att > 0 {
+				val = t.Warning.Render(fmt.Sprintf("%d worth your attention", att))
+			} else if info > 0 {
+				val = t.Body.Render(fmt.Sprintf("%d worth knowing", info))
+			}
+			rows = append(rows, [2]string{"Smart Analysis", val})
+		}
+	}
 	return t.Heading.Render("Software overview") + "\n" + components.LabelValue(t, rows)
 }
 
@@ -233,6 +252,8 @@ func (h *Home) recommended(ctx Context) string {
 		items = append(items, "A scan is running. You can keep using ATLAS; results appear when it finishes.")
 	case d.Check != nil:
 		items = append(items, "An update check is running. You can keep using ATLAS; results appear in Updates (3).")
+	case d.Analyze != nil:
+		items = append(items, "Analysis is running. Results appear in Smart Analysis (4) and Dependencies (5).")
 	case d.Loaded && d.Summary == nil:
 		items = append(items, "Scan your system to see what is installed. It only reads information and takes a few seconds.")
 	case d.Summary != nil:
@@ -246,6 +267,18 @@ func (h *Home) recommended(ctx Context) string {
 			items = append(items, "You installed updates after your last scan. Scan again so My Software shows the new versions.")
 		}
 		items = append(items, "Browse and search everything that was found in My Software (2).")
+	}
+	if d.Loaded && d.AnalysisAvailable && d.Summary != nil && !d.Busy() {
+		switch a := d.Analysis; {
+		case a == nil:
+			items = append(items, "Analyze your software to spot runtimes that no longer get security fixes, duplicates, and what depends on what.")
+		case d.AnalysisStale():
+			items = append(items, "Your software list changed since the last analysis. Analyze again to bring Smart Analysis up to date.")
+		default:
+			if att, _ := a.Counts(); att > 0 {
+				items = append(items, fmt.Sprintf("Smart Analysis found %d things worth your attention. See Smart Analysis (4).", att))
+			}
+		}
 	}
 	if d.Loaded && d.UpdatesAvailable && !d.Busy() {
 		apps, comps := d.PendingUpdates()

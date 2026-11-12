@@ -258,8 +258,8 @@ func TestMigratesVersion1DatabaseForward(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Simulate a Phase 2 database: drop v2 tables and reset the version.
-	for _, q := range []string{"DROP TABLE updates", "DROP TABLE update_check_sources", "DROP TABLE update_checks", "PRAGMA user_version = 1"} {
+	// Simulate a Phase 2 database: drop v2+ tables and reset the version.
+	for _, q := range []string{"DROP TABLE analyses", "DROP TABLE updates", "DROP TABLE update_check_sources", "DROP TABLE update_checks", "PRAGMA user_version = 1"} {
 		if _, err := db.sql.Exec(q); err != nil {
 			t.Fatal(err)
 		}
@@ -279,5 +279,41 @@ func TestMigratesVersion1DatabaseForward(t *testing.T) {
 	}
 	if _, _, _, err := db2.LatestUpdateCheck(context.Background()); err != nil {
 		t.Errorf("v2 tables missing after migration: %v", err)
+	}
+}
+
+func TestAnalysisRoundTripAndClearedWithInventory(t *testing.T) {
+	db, _ := openTemp(t)
+	ctx := context.Background()
+	if _, ok, err := db.LatestAnalysis(ctx); ok || err != nil {
+		t.Fatalf("empty: %v %v", ok, err)
+	}
+	r := core.AnalysisResult{
+		StartedAt: time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC), FinishedAt: time.Date(2026, 11, 12, 9, 0, 1, 0, time.UTC),
+		Status:   core.ScanComplete,
+		Findings: []core.Finding{{Key: "k", Severity: core.SeverityAttention, Title: "T", Items: []core.ItemRef{{Name: "a"}}}},
+		Runtimes: []core.Runtime{{Family: "Python", Branch: "3.12", Dependents: []string{"x", "y"}, DepsKnown: true}},
+		Checks:   []core.CheckSummary{{Name: "c", Found: 1, Available: true}},
+	}
+	if err := db.SaveAnalysis(ctx, r); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SaveAnalysis(ctx, r); err != nil {
+		t.Fatal(err)
+	}
+	got, ok, err := db.LatestAnalysis(ctx)
+	if err != nil || !ok || got.Findings[0].Title != "T" || len(got.Runtimes[0].Dependents) != 2 || !got.FinishedAt.Equal(r.FinishedAt) {
+		t.Fatalf("round trip: %+v %v %v", got, ok, err)
+	}
+	var n int
+	db.sql.QueryRow("SELECT COUNT(*) FROM analyses").Scan(&n)
+	if n != 1 {
+		t.Errorf("only the latest analysis is kept, have %d", n)
+	}
+	if err := db.ClearInventory(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, _ := db.LatestAnalysis(ctx); ok {
+		t.Error("clearing the software list must clear the analysis based on it")
 	}
 }

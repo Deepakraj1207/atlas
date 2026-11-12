@@ -181,9 +181,9 @@ func TestTabAndDigitsNavigate(t *testing.T) {
 	if m.Section() != nav.Settings {
 		t.Errorf("shift+tab twice from My Software = %v, want Settings", m.Section())
 	}
-	m = press(t, m, "4")
-	if m.Section() != nav.SmartAnalysis {
-		t.Errorf("digit 4 = %v, want Smart Analysis", m.Section())
+	m = press(t, m, "6")
+	if m.Section() != nav.Cleanup {
+		t.Errorf("digit 6 = %v, want Cleanup", m.Section())
 	}
 	if !strings.Contains(m.View(), "Not available in this version") {
 		t.Error("coming-soon section should render its empty state")
@@ -288,12 +288,13 @@ func TestQuickActionOpensPreviewAndChangesNothing(t *testing.T) {
 	m, path := newTestModel(t)
 	m = press(t, m, "right")
 	m = press(t, m, "right")
+	m = press(t, m, "right")
 	m = press(t, m, "enter")
 	if !m.PreviewOpen() {
 		t.Fatal("enter on a quick action should open the preview")
 	}
 	view := m.View()
-	for _, want := range []string{"Analyze My Software", "Not available: analysis arrives in Phase 4", "What will happen", "Is it safe?", "Can it be undone?"} {
+	for _, want := range []string{"Find New Tools", "Not available: discovery arrives in Phase 6", "What will happen", "Is it safe?", "Can it be undone?"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("preview missing %q", want)
 		}

@@ -37,9 +37,46 @@ func ScanPlan(ctx Context) core.ActionPlan {
 	case ctx.Data.Scan != nil:
 		p.Available = false
 		p.Unavailability = "a scan is already running."
-	case ctx.Data.Check != nil:
+	case ctx.Data.Busy():
 		p.Available = false
-		p.Unavailability = "an update check is running. Wait for it to finish, or stop it with x."
+		p.Unavailability = "another task is running. Wait for it to finish, or stop it with x."
+	}
+	return p
+}
+
+// AnalyzePlan describes "Analyze My Software".
+func AnalyzePlan(ctx Context) core.ActionPlan {
+	happens := "ATLAS will review your saved software list for things worth knowing: runtimes whose support has ended or ends soon, apps installed twice or in several versions, and updates waiting. It also maps which runtimes other software needs, using your package managers' own records."
+	reads := false
+	for _, s := range ctx.AnalysisSources {
+		if s.ID == "usage" {
+			reads = true
+		}
+	}
+	if reads {
+		happens += " It also reads Windows' own record of when you last opened programs, to spot apps you haven't used in over a year."
+	}
+	p := core.ActionPlan{
+		Title:       "Analyze My Software",
+		WhatHappens: happens,
+		Why:         "It helps you decide what to keep, update or replace, without reading technical documentation.",
+		Safety:      "Safe. Analysis only reads information and never changes anything. Nothing leaves this computer.",
+		Reversible:  "There is nothing to undo. Results are saved so you can come back to them.",
+		Available:   true,
+	}
+	for _, s := range ctx.AnalysisSources {
+		p.Technical = append(p.Technical, s.Label+": "+s.Detail)
+	}
+	p.Technical = append(p.Technical,
+		"Support dates: built-in table for Python, Node.js, .NET and Visual C++ (as of 2026-11), with sources shown on each finding.",
+		"Nothing is inferred from missing data: no usage record means no claim about usage.")
+	switch {
+	case !ctx.Data.AnalysisAvailable:
+		p.Available, p.Unavailability = false, "ATLAS can't open its saved data. See Settings for details."
+	case ctx.Data.Summary == nil:
+		p.Available, p.Unavailability = false, "there is no software list to analyze yet. Scan your system first."
+	case ctx.Data.Busy():
+		p.Available, p.Unavailability = false, "another task is running. Wait for it to finish, or stop it with x."
 	}
 	return p
 }
@@ -65,8 +102,8 @@ func CheckPlan(ctx Context) core.ActionPlan {
 		p.Available, p.Unavailability = false, "ATLAS can't open its saved data. See Settings for details."
 	case ctx.Data.Check != nil:
 		p.Available, p.Unavailability = false, "an update check is already running."
-	case ctx.Data.Scan != nil:
-		p.Available, p.Unavailability = false, "a scan is running. Wait for it to finish, or stop it with x."
+	case ctx.Data.Busy():
+		p.Available, p.Unavailability = false, "another task is running. Wait for it to finish, or stop it with x."
 	}
 	return p
 }
@@ -166,8 +203,8 @@ func ClearPlan(ctx Context) core.ActionPlan {
 		Title:       "Clear saved software list",
 		WhatHappens: "ATLAS will delete the list of software it saved from your last scan.",
 		Why:         "Useful if you want to start fresh, or don't want ATLAS to keep this list.",
-		WhatChanges: []string{what},
-		Safety:      "Safe. No software on your computer is installed, removed or changed. Activity History is kept.",
+		WhatChanges: []string{what, "Smart Analysis results based on the list are removed too"},
+		Safety:      "Safe. No software on your computer is installed, removed or changed. Activity History and update checks are kept.",
 		Reversible:  "Not directly, but running a new scan rebuilds the list.",
 		Technical:   []string{"Deletes all rows from the software, scans and scan_sources tables in " + ctx.DBPath},
 		Available:   true,
@@ -183,24 +220,13 @@ func ClearPlan(ctx Context) core.ActionPlan {
 	return p
 }
 
-// quickActions are the Home buttons. Scanning and checking for updates
-// work; the others explain what they will do and when they arrive.
+// quickActions are the Home buttons. Scanning, checking for updates and
+// analysis work; Find New Tools explains what it will do and when.
 func quickActions(ctx Context) []QuickAction {
 	return []QuickAction{
 		{Label: "Scan My System", Plan: ScanPlan(ctx), Confirm: StartScanMsg{}},
 		{Label: "Check for Updates", Plan: CheckPlan(ctx), Confirm: StartCheckMsg{}},
-		{
-			Label: "Analyze My Software",
-			Plan: core.ActionPlan{
-				Title:          "Analyze My Software",
-				WhatHappens:    "ATLAS will review your software list and explain, in plain language, what looks duplicated, unused or risky.",
-				Why:            "It helps you decide what to keep without reading technical documentation.",
-				Safety:         "Safe. Analysis only reads the saved list and never changes anything.",
-				Reversible:     "There is nothing to undo.",
-				Technical:      []string{"Rules-based analysis first; optional AI explanations later, off by default"},
-				Unavailability: "analysis arrives in Phase 4.",
-			},
-		},
+		{Label: "Analyze My Software", Plan: AnalyzePlan(ctx), Confirm: StartAnalysisMsg{}},
 		{
 			Label: "Find New Tools",
 			Plan: core.ActionPlan{

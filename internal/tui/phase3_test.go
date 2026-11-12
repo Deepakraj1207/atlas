@@ -251,7 +251,7 @@ func TestCheckCanBeStoppedAndExcludesScan(t *testing.T) {
 	}
 	next, _ = m.Update(screens.StartScanMsg{})
 	m = next.(Model)
-	if m.Scanning() || !strings.Contains(m.Status().Text, "Wait for the update check") {
+	if m.Scanning() || !strings.Contains(m.Status().Text, "Wait for the running task") {
 		t.Error("a scan must not start during a check")
 	}
 	next, _ = m.Update(key("x"))

@@ -10,6 +10,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -143,6 +144,16 @@ var migrations = []string{
 		component         INTEGER NOT NULL DEFAULT 0
 	);
 	CREATE INDEX updates_check ON updates(check_id);`,
+
+	// v3: Smart Analysis (Phase 4). The result is derived data, read and
+	// written as a whole, so it is stored as one JSON document.
+	`CREATE TABLE analyses (
+		id          INTEGER PRIMARY KEY,
+		started_at  TEXT NOT NULL,
+		finished_at TEXT NOT NULL,
+		status      TEXT NOT NULL,
+		result_json TEXT NOT NULL
+	);`,
 }
 
 // SchemaVersion is the version this build migrates to.
@@ -305,15 +316,16 @@ func (d *DB) Software(ctx context.Context) ([]core.SoftwareItem, error) {
 	return out, rows.Err()
 }
 
-// ClearInventory deletes the saved software list and all scan summaries.
-// Activity history is kept.
+// ClearInventory deletes the saved software list, all scan summaries and
+// the analysis based on them. Activity history and update checks are kept.
 func (d *DB) ClearInventory(ctx context.Context) error {
 	tx, err := d.sql.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	for _, q := range []string{`DELETE FROM software`, `DELETE FROM scan_sources`, `DELETE FROM scans`} {
+	// Analysis results describe the list, so they go with it.
+	for _, q := range []string{`DELETE FROM software`, `DELETE FROM scan_sources`, `DELETE FROM scans`, `DELETE FROM analyses`} {
 		if _, err := tx.ExecContext(ctx, q); err != nil {
 			return fmt.Errorf("clear saved list: %w", err)
 		}
@@ -482,4 +494,44 @@ func (d *DB) RemoveUpdates(ctx context.Context, ids []int64) error {
 		}
 	}
 	return tx.Commit()
+}
+
+var _ core.AnalysisStore = (*DB)(nil)
+
+// SaveAnalysis stores an analysis, replacing the previous one.
+func (d *DB) SaveAnalysis(ctx context.Context, r core.AnalysisResult) error {
+	data, err := json.Marshal(r)
+	if err != nil {
+		return fmt.Errorf("encode analysis: %w", err)
+	}
+	tx, err := d.sql.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `DELETE FROM analyses`); err != nil {
+		return fmt.Errorf("replace analysis: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO analyses (started_at, finished_at, status, result_json) VALUES (?, ?, ?, ?)`,
+		fmtTime(r.StartedAt), fmtTime(r.FinishedAt), string(r.Status), string(data)); err != nil {
+		return fmt.Errorf("save analysis: %w", err)
+	}
+	return tx.Commit()
+}
+
+// LatestAnalysis returns the saved analysis, if any.
+func (d *DB) LatestAnalysis(ctx context.Context) (core.AnalysisResult, bool, error) {
+	var data string
+	err := d.sql.QueryRowContext(ctx, `SELECT result_json FROM analyses ORDER BY id DESC LIMIT 1`).Scan(&data)
+	if errors.Is(err, sql.ErrNoRows) {
+		return core.AnalysisResult{}, false, nil
+	}
+	if err != nil {
+		return core.AnalysisResult{}, false, fmt.Errorf("read analysis: %w", err)
+	}
+	var r core.AnalysisResult
+	if err := json.Unmarshal([]byte(data), &r); err != nil {
+		return core.AnalysisResult{}, false, fmt.Errorf("read analysis: %w", err)
+	}
+	return r, true, nil
 }

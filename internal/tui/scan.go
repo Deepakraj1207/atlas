@@ -124,8 +124,8 @@ func (m *Model) startScan() tea.Cmd {
 	if m.scan != nil {
 		return m.setStatus(components.Status{Text: "A scan is already running.", Kind: components.StatusWarning})
 	}
-	if m.check != nil {
-		return m.setStatus(components.Status{Text: "Wait for the update check to finish, or stop it with x.", Kind: components.StatusWarning})
+	if m.busy() {
+		return m.setStatus(components.Status{Text: "Wait for the running task to finish, or stop it with x.", Kind: components.StatusWarning})
 	}
 	sources := m.inv.Sources()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -154,8 +154,8 @@ func (m *Model) startCheck() tea.Cmd {
 	if m.check != nil {
 		return m.setStatus(components.Status{Text: "An update check is already running.", Kind: components.StatusWarning})
 	}
-	if m.scan != nil {
-		return m.setStatus(components.Status{Text: "Wait for the scan to finish, or stop it with x.", Kind: components.StatusWarning})
+	if m.busy() {
+		return m.setStatus(components.Status{Text: "Wait for the running task to finish, or stop it with x.", Kind: components.StatusWarning})
 	}
 	managers := m.upd.Managers()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -268,7 +268,7 @@ func applyEvent(run *scanRun, ev core.SourceEvent) {
 
 // cancelTasks stops a running scan or update check.
 func (m *Model) cancelTasks() {
-	for _, run := range []*scanRun{m.scan, m.check} {
+	for _, run := range []*scanRun{m.scan, m.check, m.analysis} {
 		if run == nil || run.progress.Cancelling {
 			continue
 		}
@@ -286,6 +286,13 @@ func (m Model) busyStatus() components.Status {
 			return components.Status{Text: "Stopping the scan… nothing has been changed."}
 		}
 		return components.Status{Text: fmt.Sprintf("Scanning… %d of %d sources finished. Press x to stop.", p.Finished(), len(p.Sources))}
+	}
+	if m.analysis != nil {
+		p := m.analysis.progress
+		if p.Cancelling {
+			return components.Status{Text: "Stopping the analysis… nothing has been changed."}
+		}
+		return components.Status{Text: fmt.Sprintf("Analyzing… %d of %d data sources read. Press x to stop.", p.Finished(), len(p.Sources))}
 	}
 	p := m.check.progress
 	if p.Cancelling {

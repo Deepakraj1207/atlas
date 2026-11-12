@@ -12,6 +12,7 @@ internal/platform      OS-specific paths (build-tagged)
 internal/database      SQLite adapter for core.Store (modernc.org/sqlite, CGO-free)
 internal/inventory     scanners (core.Scanner), merge, RunAll, Service (core.InventoryService)
 internal/updates       package managers (core.PackageManager), Service (core.UpdateService), terminal Job
+internal/analysis      support table, runtime detection, dependency readers, usage records, rules, Service
   registry*.go         Windows Uninstall keys (pure mapping + windows-only enumeration)
   winget, scoop, chocolatey, dpkg, rpm, snap, flatpak
   defaults_{windows,other}.go   which scanners run on which OS
@@ -20,7 +21,7 @@ internal/tui           root model: keys, overlays, scan lifecycle, data loading
 ```
 
 Dependency rule: `tui` depends only on `core` interfaces. `app` is the only
-package that knows about `database`, `inventory` and `updates`.
+package that knows about `database`, `inventory`, `updates` and `analysis`.
 
 ## Phase 1 — Go bootstrap and TUI foundation — DONE
 
@@ -62,14 +63,35 @@ Changes from the plan:
   it means the user sees the package manager's real output.
 - APT refuses to report "up to date" when no package lists were ever downloaded.
 
-## Phase 4 — Smart Analysis and Dependencies (planned, not started)
+## Phase 4 — Smart Analysis and Dependencies — DONE
 
-- Smart Analysis: duplicates (same app from two sources), long-unused software where
-  the platform records it, unmaintained or end-of-life runtimes, all explained plainly.
-- Dependencies: which installed runtimes (.NET, Java, Python, VC++ redistributables)
-  are needed by what, using package manager dependency data where available.
-- Read-only. Any suggested action links to a preview in a later phase.
+| Step | Result |
+|------|--------|
+| Core: Finding, Runtime, Support, CheckSummary, AnalysisResult, AnalysisService | done |
+| Schema v3: analyses (latest result as one JSON document) | done |
+| Support table with references, as of 2026-11 | done |
+| Runtime detection for Python, Node.js, .NET, Java and Visual C++ across registry, scoop, choco, dpkg and rpm names | done |
+| Dependency readers: dpkg (Depends, Pre-Depends, Provides), RPM (requires to provides), Chocolatey (.nuspec), Scoop (manifest depends) | done |
+| Windows usage records (UserAssist), decoded and matched by install folder | done |
+| Rules engine (pure) and service; analysis needs a scan first | done |
+| TUI: Smart Analysis, Dependencies, Home figure and recommendations, stale notes | done |
 
-## Phase 5+ (outline)
+Changes from the plan:
+- "Long-unused" is Windows-only and needs positive evidence. Linux has no
+  equivalent record, and the check says so.
+- Java support isn't judged because it depends on the vendor; the check says so.
+- Runtime detection deliberately ignores Debian's `python3` meta-package and
+  versioned helper packages such as `python3.12-venv`.
 
-Cleanup (removals with preview and dependency warnings), Discover Apps, optional AI explanations.
+## Phase 5 — Cleanup (planned, not started)
+
+- Removal through each package manager, with the same terminal handover as updates.
+- Before every removal, a fresh dependency check. Anything needed by other installed
+  software is blocked or clearly warned about, using the Dependencies data.
+- Candidates from Smart Analysis: duplicates, old versions, unneeded runtimes, unused
+  apps. Each removal is listed in the preview with how to reinstall.
+- Leftover files and caches only where the location is certain, always previewed.
+
+## Phase 6+ (outline)
+
+Discover Apps, optional AI explanations (off by default).
