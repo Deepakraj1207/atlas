@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -29,6 +30,12 @@ type Options struct {
 	LogError     string
 	Logger       *slog.Logger
 	Version      string
+
+	// Inventory is nil when the database could not be opened; StoreErr
+	// then explains why.
+	Inventory core.InventoryService
+	StoreErr  string
+	DBPath    string
 }
 
 // Model is the root Bubble Tea model.
@@ -45,8 +52,20 @@ type Model struct {
 	layout  layout.Layout
 	screens map[nav.Section]screens.Screen
 
+	inv      core.InventoryService
+	storeErr string
+	dbPath   string
+	data     screens.DataView
+	scan     *scanRun
+	spinner  spinner.Model
+	now      func() time.Time
+
 	helpOpen bool
-	preview  *core.ActionPlan
+	// overlayScroll is the scroll offset of the help or preview overlay.
+	overlayScroll int
+	preview       *core.ActionPlan
+	// confirm is dispatched when an available previewed plan is accepted.
+	confirm tea.Msg
 	// scroll is the content scroll offset per section, in lines.
 	scroll map[nav.Section]int
 
@@ -62,22 +81,37 @@ func New(opts Options) Model {
 		log = slog.New(slog.DiscardHandler)
 	}
 	m := Model{
-		cfg:     opts.ConfigResult.Config,
-		cfgRes:  opts.ConfigResult,
-		logPath: opts.LogPath,
-		logErr:  opts.LogError,
-		log:     log,
-		version: opts.Version,
-		theme:   theme.ByName(opts.ConfigResult.Config.UI.Theme),
-		nav:     nav.NewState(),
-		layout:  layout.Compute(80, 24),
-		screens: map[nav.Section]screens.Screen{},
-		scroll:  map[nav.Section]int{},
+		cfg:      opts.ConfigResult.Config,
+		cfgRes:   opts.ConfigResult,
+		logPath:  opts.LogPath,
+		logErr:   opts.LogError,
+		log:      log,
+		version:  opts.Version,
+		theme:    theme.ByName(opts.ConfigResult.Config.UI.Theme),
+		nav:      nav.NewState(),
+		layout:   layout.Compute(80, 24),
+		screens:  map[nav.Section]screens.Screen{},
+		scroll:   map[nav.Section]int{},
+		inv:      opts.Inventory,
+		storeErr: opts.StoreErr,
+		dbPath:   opts.DBPath,
+		now:      time.Now,
+		spinner:  spinner.New(spinner.WithSpinner(spinner.Line)),
 	}
+	m.data.Available = m.inv != nil
+	m.data.StoreErr = m.storeErr
+	if m.inv == nil && m.storeErr == "" {
+		m.data.StoreErr = "no database was configured"
+	}
+	m.spinner.Style = m.theme.Accent
 	for _, s := range nav.All() {
 		switch s {
 		case nav.Home:
 			m.screens[s] = screens.NewHome()
+		case nav.MySoftware:
+			m.screens[s] = screens.NewMySoftware()
+		case nav.ActivityHistory:
+			m.screens[s] = screens.NewActivityHistory()
 		case nav.Settings:
 			m.screens[s] = screens.NewSettings()
 		default:
@@ -91,6 +125,8 @@ func New(opts Options) Model {
 // startupStatus picks the first message the user sees.
 func (m Model) startupStatus() components.Status {
 	switch {
+	case m.inv == nil:
+		return components.Status{Text: "ATLAS can't open its saved data, so scanning is off. See Settings for details.", Kind: components.StatusWarning}
 	case m.cfgRes.Err != nil:
 		return components.Status{Text: m.cfgRes.Err.Summary + ". See Settings for details.", Kind: components.StatusWarning}
 	case len(m.cfgRes.Warnings) > 0:
@@ -117,9 +153,9 @@ type configSavedMsg struct {
 	what string
 }
 
-// Init starts the status-clear timer.
+// Init starts the status-clear timer and loads saved data.
 func (m Model) Init() tea.Cmd {
-	return m.scheduleStatusClear()
+	return tea.Batch(m.scheduleStatusClear(), loadData(m.inv))
 }
 
 // Accessors used by tests.
@@ -139,6 +175,15 @@ func (m Model) HelpOpen() bool { return m.helpOpen }
 // PreviewOpen reports whether an action preview is showing.
 func (m Model) PreviewOpen() bool { return m.preview != nil }
 
+// Data returns the current data snapshot (for tests).
+func (m Model) Data() screens.DataView { return m.dataView() }
+
+// Scanning reports whether a scan is running.
+func (m Model) Scanning() bool { return m.scan != nil }
+
+// Screen returns the screen for a section (for tests).
+func (m Model) Screen(s nav.Section) screens.Screen { return m.screens[s] }
+
 // Scroll returns the content scroll offset of the current section.
 func (m Model) Scroll() int { return m.scroll[m.nav.Current()] }
 
@@ -148,17 +193,35 @@ func (m Model) Status() components.Status { return m.status }
 // ThemeName returns the active theme.
 func (m Model) ThemeName() config.Theme { return m.theme.Name }
 
+func (m Model) dataView() screens.DataView {
+	d := m.data
+	if m.scan != nil {
+		p := m.scan.progress
+		p.Spinner = m.spinner.View()
+		d.Scan = &p
+	}
+	return d
+}
+
 func (m Model) ctx() screens.Context {
+	var sources []core.SourceInfo
+	if m.inv != nil {
+		sources = m.inv.Sources()
+	}
 	return screens.Context{
 		Theme:        m.theme,
 		Layout:       m.layout,
 		Config:       m.cfg,
+		Now:          m.now(),
 		ConfigPath:   m.cfgRes.Path,
 		ConfigResult: m.cfgRes,
 		LogPath:      m.logPath,
 		LogError:     m.logErr,
+		DBPath:       m.dbPath,
 		Version:      m.version,
 		Platform:     runtime.GOOS + "/" + runtime.GOARCH,
+		Sources:      sources,
+		Data:         m.dataView(),
 	}
 }
 
@@ -197,9 +260,61 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case screens.ShowActionPreviewMsg:
 		plan := msg.Plan
+		if plan.Available && !plan.ChangesSystem() && !m.cfg.UI.ConfirmActions && msg.Confirm != nil {
+			m.log.Info("action started without preview (read-only, previews off)", "action", plan.Title)
+			return m.Update(msg.Confirm)
+		}
 		m.preview = &plan
+		m.confirm = msg.Confirm
+		m.overlayScroll = 0
 		m.log.Info("action preview opened", "action", plan.Title, "available", plan.Available)
 		return m, nil
+
+	case screens.StartScanMsg:
+		return m, m.startScan()
+
+	case screens.ClearInventoryMsg:
+		if m.inv == nil || m.scan != nil || m.data.Summary == nil {
+			return m, m.setStatus(components.Status{Text: "There is no saved list to clear right now.", Kind: components.StatusWarning})
+		}
+		return m, clearInventory(m.inv)
+
+	case scanEventMsg:
+		m.applyScanEvent(msg.ev)
+		if m.scan == nil {
+			return m, nil
+		}
+		return m, listen(m.scan.events)
+
+	case scanDoneMsg:
+		m.scan = nil
+		st := scanResultStatus(msg.report, msg.err, m.cfg.UI.Mode == config.ModeAdvanced)
+		return m, tea.Batch(m.setStatus(st), loadData(m.inv))
+
+	case inventoryClearedMsg:
+		if msg.err != nil {
+			m.log.Error("clear inventory", "error", msg.err)
+			return m, tea.Batch(m.setStatus(components.Status{Text: "The saved list couldn't be cleared: " + msg.err.Error(), Kind: components.StatusError}), loadData(m.inv))
+		}
+		return m, tea.Batch(m.setStatus(components.Status{Text: "Saved software list cleared. No software on your computer was touched.", Kind: components.StatusSuccess}), loadData(m.inv))
+
+	case dataLoadedMsg:
+		m.data.Loaded = true
+		m.data.LoadErr = ""
+		if msg.err != nil {
+			m.data.LoadErr = msg.err.Error()
+			m.log.Error("load saved data", "error", msg.err)
+		}
+		m.data.Summary, m.data.Items, m.data.Activity = msg.summary, msg.items, msg.activity
+		return m, nil
+
+	case spinner.TickMsg:
+		if m.scan == nil {
+			return m, nil
+		}
+		var cmd tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
 
 	case screens.SetModeMsg:
 		return m.setMode(msg.Mode)
@@ -237,16 +352,44 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	k := key.String()
 
+	if k == "ctrl+c" {
+		return m.quit()
+	}
+
 	// Overlays capture input first.
+	if m.preview != nil || m.helpOpen {
+		switch k {
+		case "pgdown", "ctrl+d", "down", "j":
+			step := 1
+			if k == "pgdown" || k == "ctrl+d" {
+				step = max(m.layout.ContentHeight/2, 1)
+			}
+			m.overlayScroll += step
+			return m, nil
+		case "pgup", "ctrl+u", "up", "k":
+			step := 1
+			if k == "pgup" || k == "ctrl+u" {
+				step = max(m.layout.ContentHeight/2, 1)
+			}
+			m.overlayScroll = max(m.overlayScroll-step, 0)
+			return m, nil
+		}
+	}
 	if m.preview != nil {
 		switch k {
-		case "esc", "enter", "q", " ":
-			m.preview = nil
+		case "enter":
+			plan, confirm := *m.preview, m.confirm
+			m.preview, m.confirm = nil, nil
+			if plan.Available && confirm != nil {
+				m.log.Info("action confirmed", "action", plan.Title)
+				return m.Update(confirm)
+			}
 			return m, m.setStatus(components.Status{Text: "Preview closed. Nothing was changed."})
+		case "esc", "q", " ":
+			m.preview, m.confirm = nil, nil
+			return m, m.setStatus(components.Status{Text: "Cancelled. Nothing was changed."})
 		case "m":
 			return m.setMode(m.cfg.UI.Mode.Toggle())
-		case "ctrl+c":
-			return m, tea.Quit
 		}
 		return m, nil
 	}
@@ -254,18 +397,27 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		switch k {
 		case "?", "esc", "q", "enter":
 			m.helpOpen = false
-		case "ctrl+c":
-			return m, tea.Quit
 		}
 		return m, nil
 	}
 
+	cur := m.screens[m.nav.Current()]
+	if ic, ok := cur.(screens.InputCapturer); ok && ic.CapturesInput() {
+		return m.updateScreen(key)
+	}
+	_, selfScroll := cur.(screens.SelfScrolling)
+
 	switch k {
-	case "ctrl+c", "q":
-		m.log.Info("quit requested")
-		return m, tea.Quit
+	case "q":
+		return m.quit()
+	case "x":
+		if m.scan != nil {
+			m.cancelScan()
+			return m, nil
+		}
 	case "?":
 		m.helpOpen = true
+		m.overlayScroll = 0
 		return m, nil
 	case "tab":
 		m.nav.Next()
@@ -280,11 +432,15 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "t":
 		return m.setTheme(m.cfg.UI.Theme.Toggle())
 	case "pgdown", "ctrl+d":
-		m.scroll[m.nav.Current()] += m.layout.ContentHeight / 2
-		return m, nil
+		if !selfScroll {
+			m.scroll[m.nav.Current()] += m.layout.ContentHeight / 2
+			return m, nil
+		}
 	case "pgup", "ctrl+u":
-		m.scroll[m.nav.Current()] = max(m.scroll[m.nav.Current()]-m.layout.ContentHeight/2, 0)
-		return m, nil
+		if !selfScroll {
+			m.scroll[m.nav.Current()] = max(m.scroll[m.nav.Current()]-m.layout.ContentHeight/2, 0)
+			return m, nil
+		}
 	}
 	if m.nav.GoShortcut(k) {
 		m.scroll[m.nav.Current()] = 0
@@ -292,6 +448,14 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	return m.updateScreen(key)
+}
+
+func (m Model) quit() (tea.Model, tea.Cmd) {
+	if m.scan != nil {
+		m.cancelScan()
+	}
+	m.log.Info("quit requested")
+	return m, tea.Quit
 }
 
 func (m Model) updateScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -320,6 +484,7 @@ func (m Model) setTheme(th config.Theme) (tea.Model, tea.Cmd) {
 	}
 	m.cfg.UI.Theme = th
 	m.theme = theme.ByName(th)
+	m.spinner.Style = m.theme.Accent
 	m.log.Info("theme changed", "theme", string(th))
 	return m, m.save(th.Label() + " theme")
 }
@@ -391,7 +556,11 @@ func (m Model) View() string {
 	if !l.ShowHeader {
 		right = modeBadge + " " + right
 	}
-	b.WriteString(components.StatusBar(t, l.Width, m.status, right, m.hints(), l.ShowHints && m.cfg.UI.ShowHints))
+	status := m.status
+	if m.scan != nil && (status.Text == "" || status.Kind == components.StatusInfo) {
+		status = m.scanningStatus()
+	}
+	b.WriteString(components.StatusBar(t, l.Width, status, right, m.hints(), l.ShowHints && m.cfg.UI.ShowHints))
 	return b.String()
 }
 
@@ -406,29 +575,46 @@ func (m Model) content() string {
 	var body string
 	switch {
 	case m.preview != nil:
-		body = components.ActionPreview(m.theme, w, h, *m.preview, ctx.Advanced())
+		body, m.overlayScroll = components.Scroll(m.theme, components.ActionPreview(m.theme, w, *m.preview, ctx.Advanced()), w, h, m.overlayScroll)
 	case m.helpOpen:
-		body = components.Help(m.theme, w, h, m.helpContext(), m.helpGroups())
+		body, m.overlayScroll = components.Scroll(m.theme, components.Help(m.theme, w, m.helpContext(), m.helpGroups()), w, h, m.overlayScroll)
 	default:
-		// Screens render at full height; the root scrolls and clips so a
-		// short terminal still reaches everything.
+		cur := m.nav.Current()
+		scr := m.screens[cur]
+		if _, ok := scr.(screens.SelfScrolling); ok {
+			body = scr.View(ctx)
+			break
+		}
+		// Other screens render at full height; the root scrolls and clips
+		// so a short terminal still reaches everything.
 		full := ctx
 		full.Layout.ContentHeight = 10000
-		cur := m.nav.Current()
-		body, m.scroll[cur] = components.Scroll(m.theme, m.screens[cur].View(full), w, h, m.scroll[cur])
+		body, m.scroll[cur] = components.Scroll(m.theme, scr.View(full), w, h, m.scroll[cur])
 	}
 	return inner.Render(components.Fit(body, w, h))
 }
 
 func (m Model) hints() []components.KeyHint {
 	if m.preview != nil {
-		return []components.KeyHint{{Key: "esc", Desc: "close preview"}, {Key: "m", Desc: "mode"}}
+		if m.preview.Available && m.confirm != nil {
+			return []components.KeyHint{{Key: "enter", Desc: "continue"}, {Key: "esc", Desc: "cancel"}, {Key: "↑/↓", Desc: "scroll"}, {Key: "m", Desc: "mode"}}
+		}
+		return []components.KeyHint{{Key: "esc", Desc: "close preview"}, {Key: "↑/↓", Desc: "scroll"}, {Key: "m", Desc: "mode"}}
 	}
 	if m.helpOpen {
-		return []components.KeyHint{{Key: "esc", Desc: "close help"}}
+		return []components.KeyHint{{Key: "esc", Desc: "close help"}, {Key: "↑/↓", Desc: "scroll"}}
 	}
-	screenHints := m.screens[m.nav.Current()].Hints(m.ctx())
-	return append(screenHints, globalHints...)
+	cur := m.screens[m.nav.Current()]
+	screenHints := cur.Hints(m.ctx())
+	if ic, ok := cur.(screens.InputCapturer); ok && ic.CapturesInput() {
+		return screenHints
+	}
+	var out []components.KeyHint
+	if m.scan != nil {
+		out = append(out, components.KeyHint{Key: "x", Desc: "stop scan"})
+	}
+	out = append(out, screenHints...)
+	return append(out, globalHints...)
 }
 
 func (m Model) helpContext() string {

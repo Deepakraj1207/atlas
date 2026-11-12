@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/deepakraj1207/atlas/internal/tui/theme"
 )
@@ -60,4 +61,21 @@ func Divider(t theme.Theme, width int) string {
 // padding with blank lines. Used to keep regions from pushing each other.
 func Fit(s string, width, height int) string {
 	return lipgloss.NewStyle().Width(width).Height(height).MaxWidth(width).MaxHeight(height).Render(s)
+}
+
+// Truncate shortens s to width cells, adding an ellipsis when cut.
+func Truncate(s string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	return ansi.Truncate(s, width, "…")
+}
+
+// PadRight truncates or pads s to exactly width cells.
+func PadRight(s string, width int) string {
+	s = Truncate(s, width)
+	if gap := width - lipgloss.Width(s); gap > 0 {
+		s += strings.Repeat(" ", gap)
+	}
+	return s
 }

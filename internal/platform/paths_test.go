@@ -23,6 +23,25 @@ func TestAtlasHomeOverridesBothDirs(t *testing.T) {
 	if logs != filepath.Join("some", "portable", "dir", "logs") {
 		t.Errorf("LogDir = %q, want override/logs", logs)
 	}
+
+	data, err := DataDir()
+	if err != nil {
+		t.Fatalf("DataDir: %v", err)
+	}
+	if data != filepath.Join("some", "portable", "dir") {
+		t.Errorf("DataDir = %q, want override", data)
+	}
+}
+
+func TestDefaultDataDirEndsWithAppName(t *testing.T) {
+	t.Setenv(EnvHome, "")
+	data, err := DataDir()
+	if err != nil {
+		t.Skipf("no data dir in this environment: %v", err)
+	}
+	if filepath.Base(data) != appDirName {
+		t.Errorf("DataDir = %q, want to end with %q", data, appDirName)
+	}
 }
 
 func TestDefaultDirsEndWithAppName(t *testing.T) {

@@ -1,25 +1,84 @@
 package tui
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/deepakraj1207/atlas/internal/config"
+	"github.com/deepakraj1207/atlas/internal/core"
+	"github.com/deepakraj1207/atlas/internal/database"
+	"github.com/deepakraj1207/atlas/internal/inventory"
 	"github.com/deepakraj1207/atlas/internal/tui/components"
 	"github.com/deepakraj1207/atlas/internal/tui/layout"
 	"github.com/deepakraj1207/atlas/internal/tui/nav"
 )
 
+// testScanner is a test double. Its items are test data and never shipped.
+type testScanner struct {
+	id    string
+	items []core.SoftwareItem
+	err   error
+	block chan struct{}
+}
+
+func (s testScanner) ID() string     { return s.id }
+func (s testScanner) Label() string  { return "Test " + s.id }
+func (s testScanner) Detail() string { return "reads test data" }
+func (s testScanner) Scan(ctx context.Context) ([]core.SoftwareItem, error) {
+	if s.block != nil {
+		select {
+		case <-s.block:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	return s.items, s.err
+}
+
+func testItems() []core.SoftwareItem {
+	return []core.SoftwareItem{
+		{Name: "Alpha Editor", Version: "1.0", Publisher: "Alpha Co", PackageID: "Alpha.Editor", Source: "one", Kind: core.KindApp},
+		{Name: "Beta Shell", Version: "2.1", Source: "one", Kind: core.KindApp},
+		{Name: "libgamma", Version: "0.9", Source: "one", Kind: core.KindComponent},
+	}
+}
+
+func newTestInventory(t *testing.T, scanners ...core.Scanner) (core.InventoryService, string) {
+	t.Helper()
+	dbPath := filepath.Join(t.TempDir(), "atlas.db")
+	db, err := database.Open(context.Background(), dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	if len(scanners) == 0 {
+		scanners = []core.Scanner{
+			testScanner{id: "one", items: testItems()},
+			testScanner{id: "absent", err: core.ErrSourceUnavailable},
+		}
+	}
+	return inventory.NewService(scanners, db, nil, nil), dbPath
+}
+
+// boot builds a model with a real temp database, sizes it and runs Init.
+func boot(t *testing.T, inv core.InventoryService, cfgPath string) Model {
+	t.Helper()
+	m := New(Options{ConfigResult: config.Load(cfgPath), Version: "test", Inventory: inv, DBPath: "test.db"})
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	return drain(t, next.(Model), m.Init())
+}
+
 func newTestModel(t *testing.T) (Model, string) {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "config.yaml")
-	m := New(Options{ConfigResult: config.Load(path), Version: "test"})
-	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
-	return m2.(Model), path
+	inv, _ := newTestInventory(t)
+	return boot(t, inv, path), path
 }
 
 func key(s string) tea.KeyMsg {
@@ -48,24 +107,45 @@ func key(s string) tea.KeyMsg {
 
 func init() { statusClearAfter = 0 }
 
-// press sends a key and runs returned commands synchronously, feeding each
-// message back in until none remain, so persisted side effects are
-// observable. Status-clear ticks are dropped so tests can read the status.
+// drain runs commands synchronously, feeding each message back in until
+// none remain, so persisted side effects are observable. Timer messages
+// (status clearing, spinner frames) are dropped so tests stay fast and can
+// read the status line.
+func drain(t *testing.T, m Model, first tea.Cmd) Model {
+	t.Helper()
+	queue := []tea.Cmd{first}
+	for len(queue) > 0 {
+		cmd := queue[0]
+		queue = queue[1:]
+		if cmd == nil {
+			continue
+		}
+		msg := cmd()
+		switch msg := msg.(type) {
+		case nil, tea.QuitMsg, statusClearMsg, spinner.TickMsg:
+			continue
+		case tea.BatchMsg:
+			queue = append(queue, msg...)
+			continue
+		}
+		next, c := m.Update(msg)
+		m = next.(Model)
+		queue = append(queue, c)
+	}
+	return m
+}
+
+// press sends a key and drains the resulting commands.
 func press(t *testing.T, m Model, k string) Model {
 	t.Helper()
 	next, cmd := m.Update(key(k))
-	m = next.(Model)
-	for cmd != nil {
-		msg := cmd()
-		if msg == nil {
-			break
-		}
-		switch msg.(type) {
-		case tea.QuitMsg, statusClearMsg:
-			return m
-		}
-		next, cmd = m.Update(msg)
-		m = next.(Model)
+	return drain(t, next.(Model), cmd)
+}
+
+func typeText(t *testing.T, m Model, text string) Model {
+	t.Helper()
+	for _, r := range text {
+		m = press(t, m, string(r))
 	}
 	return m
 }
@@ -80,6 +160,13 @@ func TestStartsOnHomeWithDefaults(t *testing.T) {
 	}
 	if !strings.Contains(m.Status().Text, "default settings") {
 		t.Errorf("first-run status should mention defaults, got %q", m.Status().Text)
+	}
+	d := m.Data()
+	if !d.Available || !d.Loaded || d.Summary != nil || len(d.Items) != 0 {
+		t.Errorf("fresh database should load as empty: %+v", d)
+	}
+	if !strings.Contains(m.View(), "not yet scanned") {
+		t.Error("Home should say not yet scanned before the first scan")
 	}
 }
 
@@ -146,9 +233,9 @@ func TestSaveFailureIsReportedNotSilent(t *testing.T) {
 	if err := os.Mkdir(path, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	m := New(Options{ConfigResult: config.Load(path)})
-	next, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
-	m = press(t, next.(Model), "m")
+	inv, _ := newTestInventory(t)
+	m := boot(t, inv, path)
+	m = press(t, m, "m")
 	if m.Config().UI.Mode != config.ModeAdvanced {
 		t.Error("mode should still change in memory")
 	}
@@ -162,12 +249,12 @@ func TestMalformedConfigIsBackedUpOnFirstSave(t *testing.T) {
 	if err := os.WriteFile(path, []byte("ui: [oops\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	m := New(Options{ConfigResult: config.Load(path)})
+	inv, _ := newTestInventory(t)
+	m := boot(t, inv, path)
 	if m.Status().Kind != components.StatusWarning {
 		t.Errorf("malformed config should produce a warning status, got %+v", m.Status())
 	}
-	next, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
-	m = press(t, next.(Model), "m")
+	m = press(t, m, "m")
 	if _, err := os.Stat(path + ".bak"); err != nil {
 		t.Error("malformed file should be backed up before being replaced")
 	}
@@ -205,7 +292,7 @@ func TestQuickActionOpensPreviewAndChangesNothing(t *testing.T) {
 		t.Fatal("enter on a quick action should open the preview")
 	}
 	view := m.View()
-	for _, want := range []string{"Check for Updates", "Not available yet", "What will happen", "Is it safe?", "Can it be undone?"} {
+	for _, want := range []string{"Check for Updates", "Not available: update checks arrive in Phase 3", "What will happen", "Is it safe?", "Can it be undone?"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("preview missing %q", want)
 		}
@@ -265,6 +352,7 @@ func TestContentScrollsOnShortTerminals(t *testing.T) {
 	m, _ := newTestModel(t)
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 60, Height: 14})
 	m = next.(Model)
+	m = press(t, m, "9") // Settings is root-scrolled and long
 	if !strings.Contains(m.View(), "more below") {
 		t.Fatal("clipped Home content should show a 'more below' indicator")
 	}
@@ -275,9 +363,28 @@ func TestContentScrollsOnShortTerminals(t *testing.T) {
 	if !strings.Contains(m.View(), "more above") {
 		t.Error("scrolled view should show 'more above'")
 	}
-	m = press(t, m, "tab")
+	m = press(t, m, "1")
 	if m.Scroll() != 0 {
 		t.Error("changing section should reset scroll")
+	}
+}
+
+func TestLongPreviewScrollsInsteadOfClipping(t *testing.T) {
+	m, _ := newTestModel(t)
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 60, Height: 16})
+	m = next.(Model)
+	m = press(t, m, "enter") // Scan My System preview
+	if !m.PreviewOpen() || !strings.Contains(m.View(), "more below") {
+		t.Fatalf("a preview taller than the screen must say there is more:\n%s", m.View())
+	}
+	for i := 0; i < 6; i++ {
+		m = press(t, m, "pgdown")
+	}
+	if v := m.View(); !strings.Contains(v, "Enter to continue") || !strings.Contains(v, "more above") {
+		t.Errorf("scrolling should reach the end of the preview:\n%s", v)
+	}
+	if !m.PreviewOpen() {
+		t.Error("scrolling must not close the preview")
 	}
 }
 

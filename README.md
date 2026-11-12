@@ -4,10 +4,18 @@
 that makes the software on your computer easy to understand and manage. Built
 for Windows 11 first; Linux stays supported.
 
-Phase 1 ships the application shell: navigation, Home, Settings, Simple and
-Advanced modes, dark and light themes, a help overlay and honest empty states
-for everything that is not built yet. It never installs, updates or removes
-anything.
+What works today:
+
+- **Scan My System** finds installed software without changing anything. On
+  Windows it reads installed programs, winget, Chocolatey and Scoop. On Linux it
+  reads dpkg/apt, RPM, Snap and Flatpak.
+- **My Software** lists what was found, with search, details, and a filter that
+  hides libraries and runtimes unless you ask for them.
+- **Activity History** records every scan and change, so nothing happens silently.
+- Simple and Advanced modes, dark and light themes, and help on every screen.
+
+ATLAS never installs, updates or removes software yet. Every action shows a
+preview of what it will do first.
 
 ## Build and run
 
@@ -36,6 +44,8 @@ version. Setting `ATLAS_HOME` keeps settings and logs in one folder (portable us
 | `m` | Simple / Advanced mode (remembered) |
 | `t` | Dark / light theme (remembered) |
 | `pgup` / `pgdn` | Scroll when a screen does not fit |
+| `/`, `f`, `s` | In My Software: search, show system components, scan |
+| `x` | Stop a running scan |
 | `q` | Quit |
 
 ## Where files live
@@ -43,13 +53,17 @@ version. Setting `ATLAS_HOME` keeps settings and logs in one folder (portable us
 | | Windows | Linux |
 |-|---------|-------|
 | Settings | `%AppData%\atlas\config.yaml` | `~/.config/atlas/config.yaml` |
+| Database | `%LocalAppData%\atlas\atlas.db` | `~/.local/share/atlas/atlas.db` |
 | Log | `%LocalAppData%\atlas\logs\atlas.log` | `~/.local/state/atlas/logs/atlas.log` |
 
 ## Development
 
+Use the local Go toolchain so dependency updates can't raise the Go version:
+
 ```bash
+export GOTOOLCHAIN=local
 gofmt -l . && go vet ./... && go test ./...
-GOOS=windows GOARCH=amd64 go build ./...
+GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build ./cmd/atlas
 ```
 
 See `PROJECT_STATE.md`, `IMPLEMENTATION_PLAN.md`, `DECISIONS.md` and

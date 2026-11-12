@@ -21,6 +21,8 @@ type settingRow struct {
 	value  string
 	help   string
 	toggle func(ctx Context) tea.Msg
+	// action rows open a preview instead of flipping a value.
+	action bool
 }
 
 func (s *Settings) rows(ctx Context) []settingRow {
@@ -51,11 +53,32 @@ func (s *Settings) rows(ctx Context) []settingRow {
 			toggle: func(ctx Context) tea.Msg { return SetShowHintsMsg{Show: !ctx.Config.UI.ShowHints} },
 		},
 		{
-			label:  "Confirm before actions",
+			label:  "Preview read-only actions",
 			value:  onOff(ui.ConfirmActions),
-			help:   "Always preview what an action will do before it runs. Recommended.",
+			help:   "Show what an action will do before it runs, even when it only reads information (such as scanning). Actions that change anything always ask first.",
 			toggle: func(ctx Context) tea.Msg { return SetConfirmActionsMsg{Confirm: !ctx.Config.UI.ConfirmActions} },
 		},
+		{
+			label:  "Saved software list",
+			value:  savedListValue(ctx),
+			help:   "Delete the list ATLAS saved from your last scan. No software on your computer is touched.",
+			action: true,
+			toggle: func(ctx Context) tea.Msg {
+				return ShowActionPreviewMsg{Plan: ClearPlan(ctx), Confirm: ClearInventoryMsg{}}
+			},
+		},
+	}
+}
+
+func savedListValue(ctx Context) string {
+	d := ctx.Data
+	switch {
+	case !d.Available:
+		return "Unavailable"
+	case d.Summary == nil:
+		return "Empty"
+	default:
+		return "Clear…"
 	}
 }
 
@@ -76,6 +99,9 @@ func (s *Settings) Update(msg tea.Msg, ctx Context) (Screen, tea.Cmd) {
 		s.cursor = (s.cursor + 1) % len(rows)
 	case "enter", " ", "left", "right", "h", "l":
 		row := rows[s.cursor]
+		if row.action && key.String() != "enter" && key.String() != " " {
+			return s, nil
+		}
 		return s, send(row.toggle(ctx))
 	}
 	return s, nil
@@ -97,7 +123,7 @@ func (s *Settings) View(ctx Context) string {
 
 	b.WriteString(t.Title.Render("Settings"))
 	b.WriteString("\n")
-	b.WriteString(t.Muted.Render(components.Wrap("Changes are saved immediately and remembered next time.", w)))
+	b.WriteString(t.Muted.Render(components.Wrap("Preferences are saved immediately and remembered next time.", w)))
 	b.WriteString("\n\n")
 
 	rows := s.rows(ctx)
@@ -131,11 +157,12 @@ func (s *Settings) View(ctx Context) string {
 		b.WriteString("\n")
 		b.WriteString(components.LabelValue(t, [][2]string{
 			{"Settings file", ctx.ConfigPath},
+			{"Database", ctx.DBPath},
 			{"Log file", ctx.LogPath},
 			{"Log level", string(ctx.Config.Logging.Level)},
 		}))
 	}
-	return components.Fit(b.String(), w, ctx.Height())
+	return b.String()
 }
 
 func (s *Settings) fileStatus(ctx Context) string {
@@ -163,6 +190,16 @@ func (s *Settings) fileStatus(ctx Context) string {
 		b.WriteString(t.Warning.Render("Some settings were ignored:"))
 		b.WriteString("\n")
 		b.WriteString(components.Bullets(t, w, res.Warnings))
+	}
+	if !ctx.Data.Available {
+		b.WriteString("\n")
+		b.WriteString(components.ErrorState{
+			Title:       "Saved data is unavailable",
+			Summary:     "ATLAS couldn't open its database, so scanning and Activity History are turned off this session. Your settings still work.",
+			Details:     ctx.Data.StoreErr,
+			ShowDetails: ctx.Advanced(),
+			Hint:        "Check that the data folder is writable, then restart ATLAS.",
+		}.Render(t, w))
 	}
 	if ctx.LogError != "" {
 		b.WriteString("\n")

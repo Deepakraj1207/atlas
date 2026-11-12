@@ -3,6 +3,9 @@ package components
 import (
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/deepakraj1207/atlas/internal/tui/nav"
 	"github.com/deepakraj1207/atlas/internal/tui/theme"
@@ -83,5 +86,43 @@ func TestStatesRenderPlainLanguage(t *testing.T) {
 	adv := ErrorState{Title: "Oops", Summary: "It broke.", Details: "stack trace", ShowDetails: true}.Render(th, 40)
 	if !strings.Contains(adv, "stack trace") {
 		t.Error("details must be shown when requested")
+	}
+}
+
+func TestHumanTime(t *testing.T) {
+	now := time.Date(2026, 11, 12, 12, 0, 0, 0, time.UTC)
+	cases := []struct {
+		ago  time.Duration
+		want string
+	}{
+		{10 * time.Second, "just now"},
+		{time.Minute, "1 minute ago"},
+		{45 * time.Minute, "45 minutes ago"},
+		{3 * time.Hour, "3 hours ago"},
+		{30 * time.Hour, "yesterday"},
+		{4 * 24 * time.Hour, "4 days ago"},
+	}
+	for _, c := range cases {
+		if got := HumanTime(now.Add(-c.ago), now); got != c.want {
+			t.Errorf("%v ago = %q, want %q", c.ago, got, c.want)
+		}
+	}
+	if HumanTime(time.Time{}, now) != "never" {
+		t.Error("zero time should read never")
+	}
+	if got := HumanTime(now.Add(-30*24*time.Hour), now); !strings.Contains(got, "2026") {
+		t.Errorf("old dates should be absolute, got %q", got)
+	}
+}
+
+func TestTruncateAndPad(t *testing.T) {
+	if got := Truncate("Hello world", 6); got != "Hello…" {
+		t.Errorf("Truncate = %q", got)
+	}
+	if got := PadRight("ab", 5); got != "ab   " {
+		t.Errorf("PadRight = %q", got)
+	}
+	if got := PadRight("日本語テキスト", 6); lipgloss.Width(got) != 6 {
+		t.Errorf("PadRight wide = %q (width %d)", got, lipgloss.Width(got))
 	}
 }

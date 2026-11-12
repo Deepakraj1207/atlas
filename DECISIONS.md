@@ -52,3 +52,42 @@ Short, dated records of choices that shape the code.
   resolve returned commands synchronously, so persistence is asserted against
   the real config file. No snapshot tests of rendered output; only presence of
   key phrases, to avoid churn when styling changes.
+
+## 2026-11-12 — Phase 2
+
+- **D16. SQLite via modernc.org/sqlite v1.46.1.** Pure Go, so Windows builds keep
+  `CGO_ENABLED=0`. v1.46.2 and later require Go 1.25; the toolchain here is
+  1.24.7, so the version is pinned. Always build with `GOTOOLCHAIN=local` to
+  stop `go get` from silently raising the go directive.
+- **D17. Only the latest software list is kept.** Each saved scan replaces the
+  list; scan summaries and activity are kept. "What changed since last scan"
+  can add a second snapshot later without a schema rewrite.
+- **D18. Failed, cancelled and "nothing to scan" results never replace the saved
+  list.** A partial scan does replace it, and is flagged on Home, in My Software
+  and in Activity History.
+- **D19. Read files instead of running commands where possible.** dpkg status,
+  apt extended_states, Scoop manifests and Chocolatey .nuspec files are read
+  directly. That is faster and avoids version differences such as
+  `choco list` changing meaning in Chocolatey v2.
+- **D20. winget runs with `--disable-interactivity` and never accepts source
+  agreements on the user's behalf.** If winget needs attention, the scan reports
+  it as a source that couldn't be read.
+- **D21. winget table columns come from header positions measured in terminal
+  cells.** This handles localized headers and wide characters. Truncated IDs and
+  local IDs (ARP\, MSIX\) are dropped because they can't be used later.
+- **D22. Merge rule:** same normalized name and compatible version (equal, or
+  one unknown, or a truncated prefix). The same program at two versions stays
+  two entries. Earlier sources win; the registry is first on Windows.
+- **D23. Apps vs system components** is a heuristic: libraries, runtimes,
+  redistributables, apt auto-installed packages, required/important priority,
+  snap bases, flatpak runtimes. Components are hidden by default and never
+  deleted from the data. The heuristic is documented and tested.
+- **D24. "Preview read-only actions" (`confirm_actions`)** can skip the preview
+  only for actions that change nothing. Anything with `WhatChanges` always asks.
+- **D25. Screens may opt into `SelfScrolling` and `InputCapturer`.** Lists manage
+  their own cursor; the search box receives `q`, digits and `m` as text.
+- **D26. Previews and help scroll** with arrows and PgUp/PgDn and show
+  "more above/below" markers. Nothing is clipped silently.
+- **D27. Saving a scan uses a non-cancellable context.** Once results are in,
+  stopping or quitting can't leave a half-written list. SQLite transactions
+  make each save atomic either way.

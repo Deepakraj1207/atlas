@@ -39,7 +39,7 @@ func (c *ComingSoon) View(ctx Context) string {
 		Plan:    info.Plan,
 		Hint:    hint,
 	}.Render(t, ctx.Width())
-	return components.Fit(body, ctx.Width(), ctx.Height())
+	return body
 }
 
 var _ Screen = (*ComingSoon)(nil)

@@ -13,3 +13,6 @@ func stateBaseDir() (string, error) {
 	// os.UserCacheDir also resolves to %LocalAppData% on Windows.
 	return os.UserCacheDir()
 }
+
+// dataBaseDir is %LocalAppData% on Windows.
+func dataBaseDir() (string, error) { return stateBaseDir() }

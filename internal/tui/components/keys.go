@@ -40,8 +40,9 @@ type HelpGroup struct {
 	Hints []KeyHint
 }
 
-// Help renders the context-sensitive help overlay content.
-func Help(t theme.Theme, width, height int, context string, groups []HelpGroup) string {
+// Help renders the context-sensitive help overlay content. The result may
+// be taller than the screen; the caller scrolls it.
+func Help(t theme.Theme, width int, context string, groups []HelpGroup) string {
 	var b strings.Builder
 	b.WriteString(t.Title.Render("Keyboard help"))
 	if context != "" {
@@ -76,5 +77,5 @@ func Help(t theme.Theme, width, height int, context string, groups []HelpGroup) 
 	}
 	b.WriteString("\n")
 	b.WriteString(t.Subtle.Render("Press ? or Esc to close this help."))
-	return Fit(b.String(), width, height)
+	return b.String()
 }

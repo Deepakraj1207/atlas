@@ -3,6 +3,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"runtime"
@@ -10,6 +11,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/deepakraj1207/atlas/internal/config"
+	"github.com/deepakraj1207/atlas/internal/core"
+	"github.com/deepakraj1207/atlas/internal/database"
+	"github.com/deepakraj1207/atlas/internal/inventory"
 	"github.com/deepakraj1207/atlas/internal/logging"
 	"github.com/deepakraj1207/atlas/internal/platform"
 	"github.com/deepakraj1207/atlas/internal/tui"
@@ -65,12 +69,37 @@ func Run(opts Options) error {
 	for _, w := range res.Warnings {
 		logger.Warn("settings warning", "warning", w)
 	}
+	// The database is optional: if it cannot be opened, ATLAS still starts
+	// and explains in Settings why scanning is off.
+	var inv core.InventoryService
+	dbPath, storeErr := "", ""
+	if dir, err := platform.DataDir(); err != nil {
+		storeErr = "find data folder: " + err.Error()
+	} else {
+		dbPath = filepath.Join(dir, database.FileName)
+		db, err := database.Open(context.Background(), dbPath)
+		if err != nil {
+			storeErr = err.Error()
+		} else {
+			defer db.Close()
+			inv = inventory.NewService(inventory.DefaultScanners(), db, logger, inventory.DefaultTimeouts())
+		}
+	}
+	if storeErr != "" {
+		logger.Error("database unavailable", "path", dbPath, "error", storeErr)
+	} else {
+		logger.Info("database opened", "path", dbPath, "schema", database.SchemaVersion())
+	}
+
 	model := tui.New(tui.Options{
 		ConfigResult: res,
 		LogPath:      logPath,
 		LogError:     logErr,
 		Logger:       logger,
 		Version:      opts.Version,
+		Inventory:    inv,
+		StoreErr:     storeErr,
+		DBPath:       dbPath,
 	})
 	p := tea.NewProgram(model, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {

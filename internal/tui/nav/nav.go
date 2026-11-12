@@ -55,13 +55,6 @@ var infos = [sectionCount]Info{
 		Title:   "My Software",
 		Short:   "Software",
 		Summary: "Everything installed on this computer, in one searchable list.",
-		Plan: []string{
-			"Find installed applications and developer tools automatically",
-			"Show where each one came from and which version you have",
-			"Search and filter without needing to know package manager names",
-		},
-		Phase:        2,
-		Availability: ComingSoon,
 	},
 	Updates: {
 		Title:   "Updates",
@@ -125,12 +118,6 @@ var infos = [sectionCount]Info{
 		Title:   "Activity History",
 		Short:   "History",
 		Summary: "A record of everything ATLAS has done, so nothing happens silently.",
-		Plan: []string{
-			"Log every scan, update, removal and cleanup with its outcome",
-			"Let you review what changed and when",
-		},
-		Phase:        2,
-		Availability: ComingSoon,
 	},
 	Settings: {
 		Title:   "Settings",

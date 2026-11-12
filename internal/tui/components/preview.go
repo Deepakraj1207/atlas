@@ -8,9 +8,9 @@ import (
 )
 
 // ActionPreview renders a core.ActionPlan so the user sees what an action
-// would do before anything happens. In Phase 1 every plan is unavailable and
-// the preview says so explicitly.
-func ActionPreview(t theme.Theme, width, height int, p core.ActionPlan, advanced bool) string {
+// would do before anything happens. Unavailable plans say so explicitly.
+// The result may be taller than the screen; the caller scrolls it.
+func ActionPreview(t theme.Theme, width int, p core.ActionPlan, advanced bool) string {
 	var b strings.Builder
 	w := max(width-2, 10)
 	section := func(title, body string) {
@@ -23,9 +23,9 @@ func ActionPreview(t theme.Theme, width, height int, p core.ActionPlan, advanced
 	b.WriteString(t.Title.Render(p.Title))
 	b.WriteString("\n")
 	if !p.Available {
-		note := "Not available yet. Nothing has been changed on your computer."
+		note := "Not available. Nothing has been changed on your computer."
 		if p.Unavailability != "" {
-			note = "Not available yet: " + p.Unavailability + " Nothing has been changed on your computer."
+			note = "Not available: " + p.Unavailability + " Nothing has been changed on your computer."
 		}
 		b.WriteString(t.Warning.Render(Wrap(note, w)))
 		b.WriteString("\n")
@@ -35,12 +35,12 @@ func ActionPreview(t theme.Theme, width, height int, p core.ActionPlan, advanced
 	section("What will happen", p.WhatHappens)
 	section("Why", p.Why)
 	if p.ChangesSystem() {
-		b.WriteString(t.Heading.Render("What will change on your computer"))
+		b.WriteString(t.Heading.Render("What will change"))
 		b.WriteString("\n  ")
 		b.WriteString(strings.ReplaceAll(Bullets(t, w-2, p.WhatChanges), "\n", "\n  "))
 		b.WriteString("\n\n")
 	} else {
-		section("What will change on your computer", "Nothing. This only reads information.")
+		section("What will change", "Nothing on your computer changes. This only reads information.")
 	}
 	section("Is it safe?", p.Safety)
 	section("Can it be undone?", p.Reversible)
@@ -60,5 +60,5 @@ func ActionPreview(t theme.Theme, width, height int, p core.ActionPlan, advanced
 	} else {
 		b.WriteString(t.Subtle.Render("Press Esc or Enter to close."))
 	}
-	return Fit(b.String(), width, height)
+	return b.String()
 }

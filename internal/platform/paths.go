@@ -43,3 +43,18 @@ func LogDir() (string, error) {
 	}
 	return filepath.Join(base, appDirName, "logs"), nil
 }
+
+// DataDir returns the directory for ATLAS's database.
+//
+//	Windows: %LocalAppData%\atlas
+//	Linux:   $XDG_DATA_HOME/atlas or ~/.local/share/atlas
+func DataDir() (string, error) {
+	if home := os.Getenv(EnvHome); home != "" {
+		return home, nil
+	}
+	base, err := dataBaseDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(base, appDirName), nil
+}

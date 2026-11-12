@@ -18,3 +18,15 @@ func stateBaseDir() (string, error) {
 	}
 	return filepath.Join(home, ".local", "state"), nil
 }
+
+// dataBaseDir follows the XDG base directory spec for user data.
+func dataBaseDir() (string, error) {
+	if dir := os.Getenv("XDG_DATA_HOME"); dir != "" {
+		return dir, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".local", "share"), nil
+}
