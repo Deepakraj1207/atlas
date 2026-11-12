@@ -203,3 +203,81 @@ func TestDataPersistsAcrossReopen(t *testing.T) {
 		t.Errorf("data not persisted: %+v", items)
 	}
 }
+
+func TestUpdateCheckRoundTripAndRemoval(t *testing.T) {
+	db, _ := openTemp(t)
+	ctx := context.Background()
+	if _, _, ok, err := db.LatestUpdateCheck(ctx); ok || err != nil {
+		t.Fatalf("empty db: ok=%v err=%v", ok, err)
+	}
+	start := time.Date(2026, 11, 12, 10, 0, 0, 0, time.UTC)
+	check := core.UpdateCheck{
+		StartedAt: start, FinishedAt: start.Add(time.Second), Status: core.ScanPartial,
+		Sources: []core.SourceResult{{Source: "apt", Label: "APT", Status: core.SourceOK, Count: 2}, {Source: "snap", Label: "Snap", Status: core.SourceFailed, Message: "x"}},
+		Updates: []core.Update{
+			{Manager: "apt", PackageID: "zlib1g", Name: "zlib1g", CurrentVersion: "1", AvailableVersion: "2", Origin: "noble-updates", Scope: "machine", Component: true},
+			{Manager: "apt", PackageID: "curl", Name: "curl", AvailableVersion: "8.5", Held: true, Note: "held"},
+		},
+	}
+	if _, err := db.SaveUpdateCheck(ctx, check); err != nil {
+		t.Fatal(err)
+	}
+	sum, ups, ok, err := db.LatestUpdateCheck(ctx)
+	if err != nil || !ok || sum.Status != core.ScanPartial || len(sum.Sources) != 2 || len(ups) != 2 {
+		t.Fatalf("got %+v %+v %v %v", sum, ups, ok, err)
+	}
+	if ups[0].Name != "curl" || !ups[0].Held || ups[0].ID == 0 || ups[1].Origin != "noble-updates" || !ups[1].Component || ups[1].Scope != "machine" {
+		t.Errorf("updates not round-tripped: %+v", ups)
+	}
+	if err := db.RemoveUpdates(ctx, []int64{ups[1].ID}); err != nil {
+		t.Fatal(err)
+	}
+	_, ups, _, _ = db.LatestUpdateCheck(ctx)
+	if len(ups) != 1 || ups[0].Name != "curl" {
+		t.Errorf("removal failed: %+v", ups)
+	}
+
+	// A new check replaces the list and prunes old summaries.
+	if _, err := db.SaveUpdateCheck(ctx, core.UpdateCheck{StartedAt: start.Add(time.Hour), FinishedAt: start.Add(time.Hour), Status: core.ScanComplete}); err != nil {
+		t.Fatal(err)
+	}
+	sum, ups, _, _ = db.LatestUpdateCheck(ctx)
+	if sum.Status != core.ScanComplete || len(ups) != 0 {
+		t.Errorf("new check should replace list: %+v %+v", sum, ups)
+	}
+	var n int
+	db.sql.QueryRow("SELECT COUNT(*) FROM update_checks").Scan(&n)
+	if n != 1 {
+		t.Errorf("old checks should be pruned, have %d", n)
+	}
+}
+
+func TestMigratesVersion1DatabaseForward(t *testing.T) {
+	path := filepath.Join(t.TempDir(), FileName)
+	db, err := Open(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Simulate a Phase 2 database: drop v2 tables and reset the version.
+	for _, q := range []string{"DROP TABLE updates", "DROP TABLE update_check_sources", "DROP TABLE update_checks", "PRAGMA user_version = 1"} {
+		if _, err := db.sql.Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := db.SaveScan(context.Background(), testReport(time.Now(), "kept")); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+
+	db2, err := Open(context.Background(), path)
+	if err != nil {
+		t.Fatalf("migrate v1 -> v%d: %v", SchemaVersion(), err)
+	}
+	defer db2.Close()
+	if items, _ := db2.Software(context.Background()); len(items) != 1 {
+		t.Error("existing data must survive the migration")
+	}
+	if _, _, _, err := db2.LatestUpdateCheck(context.Background()); err != nil {
+		t.Errorf("v2 tables missing after migration: %v", err)
+	}
+}

@@ -17,6 +17,7 @@ import (
 	"github.com/deepakraj1207/atlas/internal/logging"
 	"github.com/deepakraj1207/atlas/internal/platform"
 	"github.com/deepakraj1207/atlas/internal/tui"
+	"github.com/deepakraj1207/atlas/internal/updates"
 )
 
 // Options come from the command line.
@@ -72,6 +73,8 @@ func Run(opts Options) error {
 	// The database is optional: if it cannot be opened, ATLAS still starts
 	// and explains in Settings why scanning is off.
 	var inv core.InventoryService
+	var upd core.UpdateService
+	elevated := platform.IsElevated()
 	dbPath, storeErr := "", ""
 	if dir, err := platform.DataDir(); err != nil {
 		storeErr = "find data folder: " + err.Error()
@@ -83,12 +86,13 @@ func Run(opts Options) error {
 		} else {
 			defer db.Close()
 			inv = inventory.NewService(inventory.DefaultScanners(), db, logger, inventory.DefaultTimeouts())
+			upd = updates.NewService(updates.DefaultManagers(elevated), db, logger, updates.DefaultTimeouts())
 		}
 	}
 	if storeErr != "" {
 		logger.Error("database unavailable", "path", dbPath, "error", storeErr)
 	} else {
-		logger.Info("database opened", "path", dbPath, "schema", database.SchemaVersion())
+		logger.Info("database opened", "path", dbPath, "schema", database.SchemaVersion(), "elevated", elevated)
 	}
 
 	model := tui.New(tui.Options{
@@ -98,6 +102,8 @@ func Run(opts Options) error {
 		Logger:       logger,
 		Version:      opts.Version,
 		Inventory:    inv,
+		Updates:      upd,
+		Elevated:     elevated,
 		StoreErr:     storeErr,
 		DBPath:       dbPath,
 	})

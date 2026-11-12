@@ -287,12 +287,13 @@ func TestHelpOverlayOpensAndCloses(t *testing.T) {
 func TestQuickActionOpensPreviewAndChangesNothing(t *testing.T) {
 	m, path := newTestModel(t)
 	m = press(t, m, "right")
+	m = press(t, m, "right")
 	m = press(t, m, "enter")
 	if !m.PreviewOpen() {
 		t.Fatal("enter on a quick action should open the preview")
 	}
 	view := m.View()
-	for _, want := range []string{"Check for Updates", "Not available: update checks arrive in Phase 3", "What will happen", "Is it safe?", "Can it be undone?"} {
+	for _, want := range []string{"Analyze My Software", "Not available: analysis arrives in Phase 4", "What will happen", "Is it safe?", "Can it be undone?"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("preview missing %q", want)
 		}

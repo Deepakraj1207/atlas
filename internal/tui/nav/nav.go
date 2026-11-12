@@ -60,13 +60,6 @@ var infos = [sectionCount]Info{
 		Title:   "Updates",
 		Short:   "Updates",
 		Summary: "See which applications have newer versions and update them safely.",
-		Plan: []string{
-			"Check all supported applications for newer versions",
-			"Explain each update before it runs and let you skip any of them",
-			"Update everything that is safe to update in one step",
-		},
-		Phase:        3,
-		Availability: ComingSoon,
 	},
 	SmartAnalysis: {
 		Title:   "Smart Analysis",

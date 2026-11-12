@@ -21,6 +21,16 @@ type ShowActionPreviewMsg struct {
 // StartScanMsg asks the root to start a scan. Only sent after a preview.
 type StartScanMsg struct{}
 
+// StartCheckMsg asks the root to check for updates. Only sent after a preview.
+type StartCheckMsg struct{}
+
+// RequestApplyMsg asks the root to plan these updates and show the preview.
+type RequestApplyMsg struct{ Updates []core.Update }
+
+// ApplyUpdatesMsg asks the root to run planned steps in the terminal. Only
+// sent after the user confirms the preview that lists them.
+type ApplyUpdatesMsg struct{ Steps []core.UpdateStep }
+
 // ClearInventoryMsg asks the root to delete the saved software list. Only
 // sent after a preview.
 type ClearInventoryMsg struct{}
@@ -50,4 +60,9 @@ func send(msg tea.Msg) tea.Cmd {
 // requestScan builds the scan preview request.
 func requestScan(ctx Context) tea.Cmd {
 	return send(ShowActionPreviewMsg{Plan: ScanPlan(ctx), Confirm: StartScanMsg{}})
+}
+
+// requestCheck builds the update-check preview request.
+func requestCheck(ctx Context) tea.Cmd {
+	return send(ShowActionPreviewMsg{Plan: CheckPlan(ctx), Confirm: StartCheckMsg{}})
 }

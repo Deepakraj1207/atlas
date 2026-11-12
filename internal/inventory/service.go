@@ -120,14 +120,42 @@ func (s *Service) RecentActivity(ctx context.Context, limit int) ([]core.Activit
 }
 
 // RunScanners runs every scanner concurrently, each with its own timeout,
-// and returns the merged report. Results keep scanner order so merging is
-// deterministic. A panicking scanner is reported as failed, not fatal.
+// and returns the merged report.
 func RunScanners(ctx context.Context, scanners []core.Scanner, timeoutFor func(string) time.Duration,
 	progress func(core.SourceEvent), now func() time.Time) core.ScanReport {
 
 	report := core.ScanReport{StartedAt: now()}
-	results := make([]core.SourceResult, len(scanners))
-	found := make([][]core.SoftwareItem, len(scanners))
+	infos := make([]core.SourceInfo, len(scanners))
+	for i, sc := range scanners {
+		infos[i] = core.SourceInfo{ID: sc.ID(), Label: sc.Label(), Detail: sc.Detail()}
+	}
+	results, found := RunAll(ctx, infos, func(ctx context.Context, i int) ([]core.SoftwareItem, error) {
+		return scanners[i].Scan(ctx)
+	}, timeoutFor, progress)
+
+	report.Sources = results
+	var all []core.SoftwareItem
+	for _, items := range found {
+		all = append(all, items...)
+	}
+	report.Items = Merge(all)
+	report.FinishedAt = now()
+	report.Status = OverallStatus(ctx, results)
+	if !report.Status.Saved() {
+		report.Items = nil
+	}
+	return report
+}
+
+// RunAll runs one read-only job per source concurrently, each with its own
+// timeout, and reports progress. Results keep source order so callers are
+// deterministic. A panicking job is reported as failed, not fatal. It is
+// shared by inventory scans and update checks.
+func RunAll[T any](ctx context.Context, sources []core.SourceInfo, job func(context.Context, int) ([]T, error),
+	timeoutFor func(string) time.Duration, progress func(core.SourceEvent)) ([]core.SourceResult, [][]T) {
+
+	results := make([]core.SourceResult, len(sources))
+	found := make([][]T, len(sources))
 	var mu sync.Mutex // serialises progress callbacks
 	emit := func(ev core.SourceEvent) {
 		mu.Lock()
@@ -136,18 +164,18 @@ func RunScanners(ctx context.Context, scanners []core.Scanner, timeoutFor func(s
 	}
 
 	var wg sync.WaitGroup
-	for i, sc := range scanners {
+	for i, src := range sources {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			emit(core.SourceEvent{Source: sc.ID()})
+			emit(core.SourceEvent{Source: src.ID})
 			start := time.Now()
-			timeout := timeoutFor(sc.ID())
+			timeout := timeoutFor(src.ID)
 			sctx, cancel := context.WithTimeout(ctx, timeout)
-			items, err := safeScan(sctx, sc)
+			items, err := safeRun(sctx, i, job)
 			cancel()
 
-			res := core.SourceResult{Source: sc.ID(), Label: sc.Label(), Duration: time.Since(start)}
+			res := core.SourceResult{Source: src.ID, Label: src.Label, Duration: time.Since(start)}
 			switch {
 			case ctx.Err() != nil:
 				res.Status, res.Message = core.SourceCancelled, "Stopped"
@@ -161,37 +189,30 @@ func RunScanners(ctx context.Context, scanners []core.Scanner, timeoutFor func(s
 				res.Message = fmt.Sprintf("Took longer than %s and was stopped", timeout.Round(time.Second))
 			default:
 				res.Status, res.Message, res.Details = core.SourceFailed, "Couldn't be read", err.Error()
+				var se *core.SourceError
+				if errors.As(err, &se) {
+					res.Message, res.Details = se.Message, se.Details
+				}
 			}
 			results[i] = res
-			emit(core.SourceEvent{Source: sc.ID(), Result: &res})
+			emit(core.SourceEvent{Source: src.ID, Result: &res})
 		}()
 	}
 	wg.Wait()
-
-	report.Sources = results
-	var all []core.SoftwareItem
-	for _, items := range found {
-		all = append(all, items...)
-	}
-	report.Items = Merge(all)
-	report.FinishedAt = now()
-	report.Status = overallStatus(ctx, results)
-	if !report.Status.Saved() {
-		report.Items = nil
-	}
-	return report
+	return results, found
 }
 
-func safeScan(ctx context.Context, sc core.Scanner) (items []core.SoftwareItem, err error) {
+func safeRun[T any](ctx context.Context, i int, job func(context.Context, int) ([]T, error)) (items []T, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			items, err = nil, fmt.Errorf("unexpected internal problem: %v", r)
 		}
 	}()
-	return sc.Scan(ctx)
+	return job(ctx, i)
 }
 
-func overallStatus(ctx context.Context, results []core.SourceResult) core.ScanStatus {
+// OverallStatus summarises per-source results.
+func OverallStatus(ctx context.Context, results []core.SourceResult) core.ScanStatus {
 	if ctx.Err() != nil {
 		return core.ScanCancelled
 	}
@@ -266,10 +287,14 @@ func SourceLine(s core.SourceResult) string {
 	case core.SourceOK:
 		return fmt.Sprintf("%s: %d found in %s", s.Label, s.Count, s.Duration.Round(10*time.Millisecond))
 	case core.SourceFailed:
-		if s.Details != "" {
-			return fmt.Sprintf("%s: couldn't be read (%s)", s.Label, s.Details)
+		msg := "couldn't be read"
+		if s.Message != "" {
+			msg = strings.ToLower(s.Message[:1]) + s.Message[1:]
 		}
-		return s.Label + ": couldn't be read"
+		if s.Details != "" {
+			return fmt.Sprintf("%s: %s (%s)", s.Label, msg, s.Details)
+		}
+		return s.Label + ": " + msg
 	default:
 		if s.Message == "" {
 			return s.Label + ": " + string(s.Status)
@@ -277,6 +302,9 @@ func SourceLine(s core.SourceResult) string {
 		return s.Label + ": " + strings.ToLower(s.Message[:1]) + s.Message[1:]
 	}
 }
+
+// Plural formats a count with a simple English plural.
+func Plural(n int, word string) string { return plural(n, word) }
 
 func plural(n int, word string) string {
 	if n == 1 {

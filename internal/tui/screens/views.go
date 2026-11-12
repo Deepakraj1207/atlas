@@ -13,11 +13,20 @@ import (
 
 // scanProgressView renders the live per-source state of a running scan.
 func scanProgressView(ctx Context, p ScanProgress) string {
+	return progressView(ctx, p, "Scanning your system", "Stopping the scan…")
+}
+
+// checkProgressView renders the live state of a running update check.
+func checkProgressView(ctx Context, p ScanProgress) string {
+	return progressView(ctx, p, "Checking for updates", "Stopping the update check…")
+}
+
+func progressView(ctx Context, p ScanProgress, running, stopping string) string {
 	t := ctx.Theme
 	var b strings.Builder
-	title := "Scanning your system " + p.Spinner
+	title := running + " " + p.Spinner
 	if p.Cancelling {
-		title = "Stopping the scan…"
+		title = stopping
 	}
 	b.WriteString(t.Heading.Render(title))
 	b.WriteString("\n")

@@ -82,6 +82,17 @@ func TestRunScannersStatuses(t *testing.T) {
 	}
 }
 
+func TestSourceErrorGivesPlainMessage(t *testing.T) {
+	r := RunScanners(context.Background(), []core.Scanner{fakeScanner{id: "x", err: &core.SourceError{Message: "No lists yet", Details: "run update"}}},
+		fixedTimeout(time.Second), func(core.SourceEvent) {}, time.Now)
+	if s := r.Sources[0]; s.Status != core.SourceFailed || s.Message != "No lists yet" || s.Details != "run update" {
+		t.Errorf("source = %+v", s)
+	}
+	if got := SourceLine(r.Sources[0]); got != "Label x: no lists yet (run update)" {
+		t.Errorf("line = %q", got)
+	}
+}
+
 func TestOverallStatus(t *testing.T) {
 	ctx := context.Background()
 	cases := []struct {

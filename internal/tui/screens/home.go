@@ -75,6 +75,10 @@ func (h *Home) View(ctx Context) string {
 		b.WriteString(scanProgressView(ctx, *p))
 		b.WriteString("\n\n")
 	}
+	if p := ctx.Data.Check; p != nil {
+		b.WriteString(checkProgressView(ctx, *p))
+		b.WriteString("\n\n")
+	}
 
 	if ctx.Layout.TwoColumn {
 		leftW := (w - 3) / 2
@@ -169,7 +173,27 @@ func (h *Home) overview(ctx Context) string {
 				[2]string{"Sources read", t.Body.Render(fmt.Sprintf("%d of %d (%d not on this computer)", read, len(s.Sources), absent))})
 		}
 	}
-	rows = append(rows, [2]string{"Updates available", muted("not checked yet")})
+	switch {
+	case !d.UpdatesAvailable || !d.Loaded || d.LoadErr != "":
+	case d.UpdateSummary == nil:
+		rows = append(rows, [2]string{"Updates available", muted("not checked yet")})
+	default:
+		apps, comps := d.PendingUpdates()
+		n := apps + comps
+		val := t.Body.Render(fmt.Sprint(n))
+		if n > 0 {
+			val = t.Accent.Render(fmt.Sprint(n))
+		}
+		if comps > 0 && ctx.Advanced() {
+			val += t.Muted.Render(fmt.Sprintf(" (%d system)", comps))
+		}
+		rows = append(rows,
+			[2]string{"Updates available", val},
+			[2]string{"Last update check", t.Body.Render(components.HumanTime(d.UpdateSummary.FinishedAt, ctx.Now))})
+		if d.UpdateSummary.Status == core.ScanPartial {
+			rows = append(rows, [2]string{"", t.Warning.Render("some managers not checked")})
+		}
+	}
 	return t.Heading.Render("Software overview") + "\n" + components.LabelValue(t, rows)
 }
 
@@ -207,6 +231,8 @@ func (h *Home) recommended(ctx Context) string {
 		items = append(items, "ATLAS can't open its saved data, so scanning is turned off. Settings (9) explains what went wrong.")
 	case d.Scan != nil:
 		items = append(items, "A scan is running. You can keep using ATLAS; results appear when it finishes.")
+	case d.Check != nil:
+		items = append(items, "An update check is running. You can keep using ATLAS; results appear in Updates (3).")
 	case d.Loaded && d.Summary == nil:
 		items = append(items, "Scan your system to see what is installed. It only reads information and takes a few seconds.")
 	case d.Summary != nil:
@@ -216,7 +242,21 @@ func (h *Home) recommended(ctx Context) string {
 		if d.Summary.Status == core.ScanPartial {
 			items = append(items, "Some sources couldn't be read in the last scan. Activity History (8) shows which, and why.")
 		}
+		if !d.LastApplied.IsZero() && d.LastApplied.After(d.Summary.FinishedAt) {
+			items = append(items, "You installed updates after your last scan. Scan again so My Software shows the new versions.")
+		}
 		items = append(items, "Browse and search everything that was found in My Software (2).")
+	}
+	if d.Loaded && d.UpdatesAvailable && !d.Busy() {
+		apps, comps := d.PendingUpdates()
+		switch {
+		case d.UpdateSummary == nil:
+			items = append(items, "Check for updates to see which of your software has newer versions. Checking only reads information.")
+		case apps+comps > 0:
+			items = append(items, fmt.Sprintf("%d updates are waiting. Review them in Updates (3); nothing installs until you confirm.", apps+comps))
+		case ctx.Now.Sub(d.UpdateSummary.FinishedAt) > staleAfter:
+			items = append(items, "Your last update check was "+components.HumanTime(d.UpdateSummary.FinishedAt, ctx.Now)+". Check again for newer versions.")
+		}
 	}
 	items = append(items, "Press ? at any time to see the keys for the screen you are on.")
 	if ctx.Advanced() {
@@ -234,6 +274,7 @@ func (h *Home) diagnostics(ctx Context) string {
 		{"Version", ctx.Version},
 		{"Platform", ctx.Platform},
 		{"Terminal", fmt.Sprintf("%d×%d (%s layout)", l.Width, l.Height, l.Breakpoint)},
+		{"Administrator", map[bool]string{true: "yes", false: "no"}[ctx.Elevated]},
 		{"Settings file", ctx.ConfigPath},
 		{"Database", ctx.DBPath},
 		{"Log file", ctx.LogPath},

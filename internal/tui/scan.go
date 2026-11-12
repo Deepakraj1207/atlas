@@ -38,6 +38,30 @@ type dataLoadedMsg struct {
 
 type inventoryClearedMsg struct{ err error }
 
+type checkEventMsg struct{ ev core.SourceEvent }
+
+type checkDoneMsg struct {
+	check core.UpdateCheck
+	err   error
+}
+
+type updatesLoadedMsg struct {
+	summary *core.UpdateCheckSummary
+	updates []core.Update
+	err     error
+}
+
+// updatesFinishedMsg arrives when the terminal job returns control.
+type updatesFinishedMsg struct {
+	results []core.StepResult
+	err     error
+}
+
+type updatesRecordedMsg struct {
+	results []core.StepResult
+	err     error
+}
+
 // listen waits for the next event from a running scan.
 func listen(ch <-chan tea.Msg) tea.Cmd {
 	return func() tea.Msg {
@@ -75,6 +99,23 @@ func loadData(inv core.InventoryService) tea.Cmd {
 	}
 }
 
+// loadUpdates reads the latest update check in the background.
+func loadUpdates(upd core.UpdateService) tea.Cmd {
+	if upd == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		sum, ups, ok, err := upd.LatestCheck(ctx)
+		out := updatesLoadedMsg{updates: ups, err: err}
+		if ok {
+			out.summary = &sum
+		}
+		return out
+	}
+}
+
 // startScan launches the scan goroutine and returns the first listen.
 func (m *Model) startScan() tea.Cmd {
 	if m.inv == nil {
@@ -82,6 +123,9 @@ func (m *Model) startScan() tea.Cmd {
 	}
 	if m.scan != nil {
 		return m.setStatus(components.Status{Text: "A scan is already running.", Kind: components.StatusWarning})
+	}
+	if m.check != nil {
+		return m.setStatus(components.Status{Text: "Wait for the update check to finish, or stop it with x.", Kind: components.StatusWarning})
 	}
 	sources := m.inv.Sources()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -102,12 +146,114 @@ func (m *Model) startScan() tea.Cmd {
 	return tea.Batch(listen(ch), m.spinner.Tick)
 }
 
-func (m *Model) applyScanEvent(ev core.SourceEvent) {
-	if m.scan == nil {
+// startCheck launches an update check in the background.
+func (m *Model) startCheck() tea.Cmd {
+	if m.upd == nil {
+		return m.setStatus(components.Status{Text: "Update checks are turned off because ATLAS can't open its saved data. See Settings.", Kind: components.StatusError})
+	}
+	if m.check != nil {
+		return m.setStatus(components.Status{Text: "An update check is already running.", Kind: components.StatusWarning})
+	}
+	if m.scan != nil {
+		return m.setStatus(components.Status{Text: "Wait for the scan to finish, or stop it with x.", Kind: components.StatusWarning})
+	}
+	managers := m.upd.Managers()
+	ctx, cancel := context.WithCancel(context.Background())
+	ch := make(chan tea.Msg, 2*len(managers)+4)
+	upd := m.upd
+	go func() {
+		defer close(ch)
+		check, err := upd.Check(ctx, func(ev core.SourceEvent) { ch <- checkEventMsg{ev: ev} })
+		ch <- checkDoneMsg{check: check, err: err}
+	}()
+	run := &scanRun{cancel: cancel, events: ch, progress: screens.ScanProgress{Started: time.Now()}}
+	for _, s := range managers {
+		run.progress.Sources = append(run.progress.Sources, screens.SourceProgress{Info: s})
+	}
+	m.check = run
+	m.log.Info("update check requested")
+	return tea.Batch(listen(ch), m.spinner.Tick)
+}
+
+// checkResultStatus explains a finished update check in one line.
+func checkResultStatus(c core.UpdateCheck, err error) components.Status {
+	if err != nil {
+		return components.Status{Text: "The check worked but its results couldn't be saved: " + err.Error(), Kind: components.StatusError}
+	}
+	n := 0
+	for _, u := range c.Updates {
+		if !u.Held {
+			n++
+		}
+	}
+	switch c.Status {
+	case core.ScanComplete:
+		if n == 0 {
+			return components.Status{Text: "Update check complete: everything checked is up to date.", Kind: components.StatusSuccess}
+		}
+		return components.Status{Text: fmt.Sprintf("Update check complete: %d updates available. Review them in Updates (3).", n), Kind: components.StatusSuccess}
+	case core.ScanPartial:
+		return components.Status{Text: fmt.Sprintf("Found %d updates, but some package managers couldn't be checked. See Updates (3).", n), Kind: components.StatusWarning}
+	case core.ScanFailed:
+		text := "The update check didn't work: no package manager could be checked."
+		for _, s := range c.Sources {
+			if s.Status == core.SourceFailed || s.Status == core.SourceTimeout {
+				text = "The update check didn't work. " + s.Label + ": " + s.Message + ". See Updates (3)."
+				break
+			}
+		}
+		return components.Status{Text: text, Kind: components.StatusError}
+	case core.ScanNothingToScan:
+		return components.Status{Text: "No package manager ATLAS supports was found on this computer.", Kind: components.StatusWarning}
+	default:
+		return components.Status{Text: "Update check stopped. Your previous results are unchanged."}
+	}
+}
+
+// applyResultStatus explains a finished update run in one line.
+func applyResultStatus(results []core.StepResult, recordErr error) components.Status {
+	count := map[core.StepStatus]int{}
+	restart := false
+	for _, r := range results {
+		count[r.Status] += len(r.Step.Updates)
+		restart = restart || (r.Status == core.StepDone && r.Restart)
+	}
+	var st components.Status
+	switch {
+	case count[core.StepDone] > 0 && count[core.StepFailed]+count[core.StepStopped] == 0:
+		st = components.Status{Text: fmt.Sprintf("Installed %d updates. Scan again to refresh version numbers in My Software.", count[core.StepDone]), Kind: components.StatusSuccess}
+	case count[core.StepDone] > 0:
+		st = components.Status{Text: fmt.Sprintf("%d updates installed, %d didn't finish. Details are in Activity History (8).", count[core.StepDone], count[core.StepFailed]+count[core.StepStopped]), Kind: components.StatusWarning}
+	case count[core.StepStopped] > 0:
+		st = components.Status{Text: "Updates stopped. Anything that didn't start was left as it was. See Activity History (8)."}
+	case count[core.StepFailed] > 0:
+		st = components.Status{Text: "The updates didn't work. The package manager's message is in Activity History (8).", Kind: components.StatusError}
+	default:
+		st = components.Status{Text: "Nothing was updated.", Kind: components.StatusWarning}
+	}
+	if restart {
+		st.Text += " Restart your computer to finish."
+	}
+	if recordErr != nil {
+		st = components.Status{Text: st.Text + " (The result couldn't be recorded: " + recordErr.Error() + ")", Kind: components.StatusError}
+	}
+	return st
+}
+
+func recordResults(upd core.UpdateService, results []core.StepResult) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		return updatesRecordedMsg{results: results, err: upd.RecordResults(ctx, results)}
+	}
+}
+
+func applyEvent(run *scanRun, ev core.SourceEvent) {
+	if run == nil {
 		return
 	}
-	for i := range m.scan.progress.Sources {
-		sp := &m.scan.progress.Sources[i]
+	for i := range run.progress.Sources {
+		sp := &run.progress.Sources[i]
 		if sp.Info.ID != ev.Source {
 			continue
 		}
@@ -120,22 +266,32 @@ func (m *Model) applyScanEvent(ev core.SourceEvent) {
 	}
 }
 
-func (m *Model) cancelScan() {
-	if m.scan == nil || m.scan.progress.Cancelling {
-		return
+// cancelTasks stops a running scan or update check.
+func (m *Model) cancelTasks() {
+	for _, run := range []*scanRun{m.scan, m.check} {
+		if run == nil || run.progress.Cancelling {
+			continue
+		}
+		run.cancel()
+		run.progress.Cancelling = true
 	}
-	m.scan.cancel()
-	m.scan.progress.Cancelling = true
-	m.log.Info("scan cancel requested")
+	m.log.Info("cancel requested")
 }
 
-// scanningStatus is the persistent status line while a scan runs.
-func (m Model) scanningStatus() components.Status {
-	p := m.scan.progress
-	if p.Cancelling {
-		return components.Status{Text: "Stopping the scan… nothing has been changed."}
+// busyStatus is the persistent status line while a scan or check runs.
+func (m Model) busyStatus() components.Status {
+	if m.scan != nil {
+		p := m.scan.progress
+		if p.Cancelling {
+			return components.Status{Text: "Stopping the scan… nothing has been changed."}
+		}
+		return components.Status{Text: fmt.Sprintf("Scanning… %d of %d sources finished. Press x to stop.", p.Finished(), len(p.Sources))}
 	}
-	return components.Status{Text: fmt.Sprintf("Scanning… %d of %d sources finished. Press x to stop.", p.Finished(), len(p.Sources))}
+	p := m.check.progress
+	if p.Cancelling {
+		return components.Status{Text: "Stopping the update check… nothing has been changed."}
+	}
+	return components.Status{Text: fmt.Sprintf("Checking for updates… %d of %d package managers finished. Press x to stop.", p.Finished(), len(p.Sources))}
 }
 
 // scanResultStatus explains a finished scan in one line.

@@ -58,3 +58,8 @@ func DataDir() (string, error) {
 	}
 	return filepath.Join(base, appDirName), nil
 }
+
+// IsElevated reports whether ATLAS is running with administrator (Windows)
+// or root (Unix) rights. It is used only to explain and plan updates; ATLAS
+// never requests elevation for itself.
+func IsElevated() bool { return isElevated() }

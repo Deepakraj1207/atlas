@@ -41,11 +41,14 @@ func (s wingetScanner) Scan(ctx context.Context) ([]core.SoftwareItem, error) {
 
 var errNoTable = errors.New("winget output did not contain a package table")
 
-// parseWingetList parses winget's fixed-width table. Column positions come
-// from the header line above the dashed rule, so localized header words
-// still work. Widths are measured in terminal cells so wide characters line
-// up the way winget printed them.
-func parseWingetList(out string) ([]core.SoftwareItem, error) {
+// WingetRow is one row of a winget table. Available is empty for
+// "winget list" rows that have no upgrade.
+type WingetRow struct {
+	Name, ID, Version, Available, Source string
+}
+
+// cleanWingetLines removes spinner frames, ANSI codes and backspaces.
+func cleanWingetLines(out string) []string {
 	raw := strings.Split(out, "\n")
 	lines := make([]string, 0, len(raw))
 	for _, l := range raw {
@@ -64,67 +67,99 @@ func parseWingetList(out string) ([]core.SoftwareItem, error) {
 		l = strings.ReplaceAll(ansi.Strip(l), "\b", "")
 		lines = append(lines, strings.TrimRight(l, " \t"))
 	}
+	return lines
+}
 
-	rule := -1
-	for i, l := range lines {
-		t := strings.TrimSpace(l)
-		if len(t) >= 10 && strings.Trim(t, "-") == "" && i > 0 {
-			rule = i
-			break
+// ParseWingetTables parses every fixed-width table in winget output.
+// "winget upgrade" can print two: normal upgrades, then packages that
+// "require explicit targeting". Column positions come from the header line
+// above each dashed rule, so localized header words still work. Widths are
+// measured in terminal cells so wide characters line up as winget printed.
+func ParseWingetTables(out string) ([][]WingetRow, error) {
+	lines := cleanWingetLines(out)
+	var tables [][]WingetRow
+	for i := 1; i < len(lines); i++ {
+		t := strings.TrimSpace(lines[i])
+		if len(t) < 10 || strings.Trim(t, "-") != "" {
+			continue
 		}
+		starts := columnStarts(lines[i-1])
+		if len(starts) < 3 {
+			continue
+		}
+		availCol, sourceCol := -1, -1
+		switch {
+		case len(starts) >= 5:
+			availCol, sourceCol = 3, 4
+		case len(starts) == 4:
+			sourceCol = 3
+		}
+		var rows []WingetRow
+		j := i + 1
+		for ; j < len(lines); j++ {
+			l := lines[j]
+			if strings.TrimSpace(l) == "" {
+				break
+			}
+			if runewidth.StringWidth(l) <= starts[1] {
+				continue // footer such as "3 upgrades available."
+			}
+			cols := cutColumns(l, starts)
+			if cols[0] == "" {
+				continue
+			}
+			r := WingetRow{Name: cols[0], ID: cols[1], Version: cols[2]}
+			if availCol >= 0 {
+				r.Available = cols[availCol]
+			}
+			if sourceCol >= 0 {
+				r.Source = cols[sourceCol]
+			}
+			rows = append(rows, r)
+		}
+		tables = append(tables, rows)
+		i = j
 	}
-	if rule < 0 {
+	if len(tables) == 0 {
 		if strings.TrimSpace(strings.Join(lines, "")) == "" {
 			return nil, nil
 		}
 		return nil, errNoTable
 	}
-	header := lines[rule-1]
-	starts := columnStarts(header)
-	if len(starts) < 3 {
-		return nil, errNoTable
-	}
-	sourceCol := -1
-	switch {
-	case len(starts) >= 5:
-		sourceCol = 4
-	case len(starts) == 4:
-		sourceCol = 3
-	}
+	return tables, nil
+}
 
+// parseWingetList maps "winget list" rows to inventory items.
+func parseWingetList(out string) ([]core.SoftwareItem, error) {
+	tables, err := ParseWingetTables(out)
+	if err != nil {
+		return nil, err
+	}
 	var items []core.SoftwareItem
-	for _, l := range lines[rule+1:] {
-		if strings.TrimSpace(l) == "" || runewidth.StringWidth(l) <= starts[1] {
-			continue
+	for _, rows := range tables {
+		for _, r := range rows {
+			it := core.SoftwareItem{
+				Name:    r.Name,
+				Version: strings.TrimPrefix(strings.TrimPrefix(r.Version, "< "), "> "),
+				Source:  SourceWinget,
+				Kind:    classifyWindowsName(r.Name),
+			}
+			// IDs only help later when they map to an installable package.
+			// Local IDs (ARP\..., MSIX\...) and truncated IDs are dropped.
+			if r.Source != "" && !truncated(r.ID) {
+				it.PackageID = r.ID
+			}
+			if strings.HasPrefix(r.ID, "MSIX\\") && it.Kind == core.KindApp && strings.HasPrefix(r.Name, "Microsoft.") {
+				it.Kind = core.KindComponent
+			}
+			items = append(items, it)
 		}
-		cols := cutColumns(l, starts)
-		name := cols[0]
-		if name == "" {
-			continue
-		}
-		src := ""
-		if sourceCol >= 0 {
-			src = cols[sourceCol]
-		}
-		it := core.SoftwareItem{
-			Name:    name,
-			Version: strings.TrimPrefix(strings.TrimPrefix(cols[2], "< "), "> "),
-			Source:  SourceWinget,
-			Kind:    classifyWindowsName(name),
-		}
-		id := cols[1]
-		// IDs only help later when they map to an installable package.
-		// Local IDs (ARP\..., MSIX\...) and truncated IDs are dropped.
-		if src != "" && !truncated(id) {
-			it.PackageID = id
-		}
-		if strings.HasPrefix(id, "MSIX\\") && it.Kind == core.KindApp && strings.HasPrefix(name, "Microsoft.") {
-			it.Kind = core.KindComponent
-		}
-		items = append(items, it)
 	}
 	return items, nil
 }
+
+// Truncated reports whether winget shortened a value with an ellipsis.
+func Truncated(s string) bool { return truncated(s) }
 
 // columnStarts returns the cell offsets where header words begin.
 func columnStarts(header string) []int {

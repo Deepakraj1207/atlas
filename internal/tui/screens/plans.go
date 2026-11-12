@@ -2,6 +2,7 @@ package screens
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/deepakraj1207/atlas/internal/core"
 )
@@ -36,8 +37,123 @@ func ScanPlan(ctx Context) core.ActionPlan {
 	case ctx.Data.Scan != nil:
 		p.Available = false
 		p.Unavailability = "a scan is already running."
+	case ctx.Data.Check != nil:
+		p.Available = false
+		p.Unavailability = "an update check is running. Wait for it to finish, or stop it with x."
 	}
 	return p
+}
+
+// CheckPlan describes "Check for Updates".
+func CheckPlan(ctx Context) core.ActionPlan {
+	p := core.ActionPlan{
+		Title:       "Check for Updates",
+		WhatHappens: "ATLAS will ask each package manager on this computer which installed software has a newer version, and save the answer so you can review it in Updates.",
+		Why:         "Newer versions fix bugs and security problems.",
+		Safety:      "Safe. Checking only reads version information; nothing is downloaded or installed. Some package managers contact their online catalogue to answer.",
+		Reversible:  "There is nothing to undo. Installing an update is a separate step that always shows you exactly what it will do first.",
+		Available:   true,
+	}
+	for _, m := range ctx.Managers {
+		p.Technical = append(p.Technical, m.Label+": "+m.Detail)
+	}
+	p.Technical = append(p.Technical,
+		"APT and DNF use the package information your system last downloaded. Scoop compares with its local bucket copies.",
+		"Each package manager has a time limit. One that fails is reported and left out.")
+	switch {
+	case !ctx.Data.UpdatesAvailable:
+		p.Available, p.Unavailability = false, "ATLAS can't open its saved data. See Settings for details."
+	case ctx.Data.Check != nil:
+		p.Available, p.Unavailability = false, "an update check is already running."
+	case ctx.Data.Scan != nil:
+		p.Available, p.Unavailability = false, "a scan is running. Wait for it to finish, or stop it with x."
+	}
+	return p
+}
+
+// ApplyPlan describes installing the planned update steps. It lists every
+// change, how permission will be asked for, and how to go back.
+func ApplyPlan(ctx Context, steps []core.UpdateStep) core.ActionPlan {
+	var runnable []core.Update
+	var changes, blocked, technical []string
+	elevations := map[core.Elevation]bool{}
+	var rollbacks []string
+	seenRollback := map[string]bool{}
+	for _, st := range steps {
+		if st.Blocked != "" {
+			for _, u := range st.Updates {
+				blocked = append(blocked, "Not included: "+u.Name+". "+st.Blocked)
+			}
+			continue
+		}
+		elevations[st.Elevation] = true
+		for _, u := range st.Updates {
+			runnable = append(runnable, u)
+			changes = append(changes, updateLine(u)+" · "+st.Label)
+		}
+		for _, c := range st.Commands {
+			technical = append(technical, c.String())
+		}
+		if st.Rollback != "" && !seenRollback[st.Label] {
+			seenRollback[st.Label] = true
+			rollbacks = append(rollbacks, st.Label+": "+strings.TrimSuffix(st.Rollback, ".")+".")
+		}
+	}
+
+	const maxLines = 12
+	if len(changes) > maxLines {
+		more := len(changes) - maxLines
+		changes = append(changes[:maxLines], fmt.Sprintf("…and %d more", more))
+	}
+	title := fmt.Sprintf("Install %d updates", len(runnable))
+	if len(runnable) == 1 {
+		title = "Update " + runnable[0].Name
+	}
+
+	safety := []string{"Updates come from the same place the software was installed from. An installer may close an app while it updates, so save your work first."}
+	if elevations[core.ElevationSudo] {
+		safety = append(safety, "Some steps run through sudo, which will ask for your password in the terminal. ATLAS never sees or stores it.")
+	}
+	if elevations[core.ElevationInstaller] {
+		safety = append(safety, "Windows may ask for permission (a User Account Control prompt) if an installer needs it. Approve only what you expect.")
+	}
+	if elevations[core.ElevationPolkit] {
+		safety = append(safety, "Flatpak may ask for your password to update apps installed for everyone.")
+	}
+	if elevations[core.ElevationAdmin] {
+		safety = append(safety, "ATLAS is running with administrator rights, so these updates run with full rights.")
+	}
+	safety = append(safety, "Each package manager shows its own messages and asks its own questions. Press Ctrl+C to stop; nothing further starts after that.")
+
+	p := core.ActionPlan{
+		Title:       title,
+		WhatHappens: "ATLAS will hand this terminal to each package manager in turn, so you see exactly what it does and can answer its questions. When it's finished, you'll come back here and the result is recorded in Activity History.",
+		Why:         "Updates fix bugs and security problems.",
+		WhatChanges: append(changes, blocked...),
+		Safety:      strings.Join(safety, " "),
+		Reversible:  "Not automatically. " + strings.Join(rollbacks, " "),
+		Technical:   technical,
+		Available:   len(runnable) > 0,
+	}
+	switch {
+	case len(runnable) == 0 && len(blocked) > 0:
+		p.Unavailability = "none of these updates can be installed from here (see below)."
+	case len(runnable) == 0:
+		p.Unavailability = "there is nothing to update."
+	case ctx.Data.Busy():
+		p.Available = false
+		p.Unavailability = "a scan or update check is running. Wait for it to finish, or stop it with x."
+	}
+	return p
+}
+
+func updateLine(u core.Update) string {
+	switch {
+	case u.CurrentVersion != "":
+		return u.Name + ": " + u.CurrentVersion + " → " + u.AvailableVersion
+	default:
+		return u.Name + ": → " + u.AvailableVersion
+	}
 }
 
 // ClearPlan describes clearing the saved software list.
@@ -59,34 +175,20 @@ func ClearPlan(ctx Context) core.ActionPlan {
 	switch {
 	case !ctx.Data.Available:
 		p.Available, p.Unavailability = false, "ATLAS can't open its saved data. See Settings for details."
-	case ctx.Data.Scan != nil:
-		p.Available, p.Unavailability = false, "a scan is running. Wait for it to finish or stop it with x."
+	case ctx.Data.Busy():
+		p.Available, p.Unavailability = false, "a scan or update check is running. Wait for it to finish or stop it with x."
 	case ctx.Data.Summary == nil:
 		p.Available, p.Unavailability = false, "there is no saved list to clear."
 	}
 	return p
 }
 
-// quickActions are the Home buttons. Only scanning is available in Phase 2;
-// the others explain what they will do and when they arrive.
+// quickActions are the Home buttons. Scanning and checking for updates
+// work; the others explain what they will do and when they arrive.
 func quickActions(ctx Context) []QuickAction {
 	return []QuickAction{
 		{Label: "Scan My System", Plan: ScanPlan(ctx), Confirm: StartScanMsg{}},
-		{
-			Label: "Check for Updates",
-			Plan: core.ActionPlan{
-				Title:       "Check for Updates",
-				WhatHappens: "ATLAS will ask each supported package source whether newer versions exist for the software it found.",
-				Why:         "Newer versions fix bugs and security problems.",
-				Safety:      "Safe. Checking only reads version information. Installing an update is a separate step that always asks first.",
-				Reversible:  "There is nothing to undo; no update is installed by this action.",
-				Technical: []string{
-					"winget upgrade --list, scoop status, choco outdated",
-					"apt list --upgradable, snap refresh --list, flatpak remote-ls --updates",
-				},
-				Unavailability: "update checks arrive in Phase 3.",
-			},
-		},
+		{Label: "Check for Updates", Plan: CheckPlan(ctx), Confirm: StartCheckMsg{}},
 		{
 			Label: "Analyze My Software",
 			Plan: core.ActionPlan{

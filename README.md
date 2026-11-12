@@ -11,11 +11,16 @@ What works today:
   reads dpkg/apt, RPM, Snap and Flatpak.
 - **My Software** lists what was found, with search, details, and a filter that
   hides libraries and runtimes unless you ask for them.
+- **Updates** checks winget, Chocolatey and Scoop on Windows, and APT, DNF, Snap
+  and Flatpak on Linux. Install everything with one key, or pick what to update.
 - **Activity History** records every scan and change, so nothing happens silently.
 - Simple and Advanced modes, dark and light themes, and help on every screen.
 
-ATLAS never installs, updates or removes software yet. Every action shows a
-preview of what it will do first.
+Installing updates is the only change ATLAS makes, and only after you confirm a
+preview listing every change. ATLAS then hands the terminal to the package
+manager, so you see its real output and answer its own prompts, such as your sudo
+password or a Windows permission dialog. ATLAS never answers for you, and it
+never removes software.
 
 ## Build and run
 
@@ -45,7 +50,9 @@ version. Setting `ATLAS_HOME` keeps settings and logs in one folder (portable us
 | `t` | Dark / light theme (remembered) |
 | `pgup` / `pgdn` | Scroll when a screen does not fit |
 | `/`, `f`, `s` | In My Software: search, show system components, scan |
-| `x` | Stop a running scan |
+| `c`, `u`, `space`, `enter` | In Updates: check, update all, select, update selected |
+| `x` | Stop a running scan or update check |
+| `Ctrl+C` | While updates run: stop; nothing further starts |
 | `q` | Quit |
 
 ## Where files live

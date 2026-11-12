@@ -30,3 +30,5 @@ func dataBaseDir() (string, error) {
 	}
 	return filepath.Join(home, ".local", "share"), nil
 }
+
+func isElevated() bool { return os.Geteuid() == 0 }

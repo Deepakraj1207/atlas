@@ -13,6 +13,16 @@ import (
 // DefaultScanners returns the Windows sources, highest priority first:
 // the registry provides the richest metadata, package managers add IDs.
 func DefaultScanners() []core.Scanner {
+	return []core.Scanner{
+		NewRegistryScanner(),
+		NewWingetScanner(ExecRunner),
+		NewChocolateyScanner(ChocolateyRoot()),
+		NewScoopScanner(ScoopRoots()),
+	}
+}
+
+// ScoopRoots returns the user and global Scoop folders.
+func ScoopRoots() []ScoopRoot {
 	var scoopRoots []ScoopRoot
 	if dir := os.Getenv("SCOOP"); dir != "" {
 		scoopRoots = append(scoopRoots, ScoopRoot{Dir: dir, Scope: "user"})
@@ -25,19 +35,18 @@ func DefaultScanners() []core.Scanner {
 		scoopRoots = append(scoopRoots, ScoopRoot{Dir: filepath.Join(pd, "scoop"), Scope: "machine"})
 	}
 
-	chocoRoot := os.Getenv("ChocolateyInstall")
-	if chocoRoot == "" {
-		if pd := os.Getenv("ProgramData"); pd != "" {
-			chocoRoot = filepath.Join(pd, "chocolatey")
-		}
-	}
+	return scoopRoots
+}
 
-	return []core.Scanner{
-		NewRegistryScanner(),
-		NewWingetScanner(ExecRunner),
-		NewChocolateyScanner(chocoRoot),
-		NewScoopScanner(scoopRoots),
+// ChocolateyRoot returns the Chocolatey install folder.
+func ChocolateyRoot() string {
+	if root := os.Getenv("ChocolateyInstall"); root != "" {
+		return root
 	}
+	if pd := os.Getenv("ProgramData"); pd != "" {
+		return filepath.Join(pd, "chocolatey")
+	}
+	return ""
 }
 
 // DefaultTimeouts gives slow sources more time. winget can take a while

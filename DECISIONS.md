@@ -91,3 +91,34 @@ Short, dated records of choices that shape the code.
 - **D27. Saving a scan uses a non-cancellable context.** Once results are in,
   stopping or quitting can't leave a half-written list. SQLite transactions
   make each save atomic either way.
+
+## 2026-11-12 — Phase 3
+
+- **D28. Updates run in the user's terminal.** ATLAS hands the terminal to each package
+  manager with Bubble Tea's exec support. The package manager prints its own output
+  and asks its own questions. That is the only faithful way to support sudo
+  passwords, Windows UAC, winget licence agreements and apt's own confirmation.
+  ATLAS records exit codes and durations, not the output itself.
+- **D29. ATLAS never answers for the user.** No `-y`, `--accept-package-agreements`
+  or `--accept-source-agreements`. Package managers ask, and the user answers.
+- **D30. Elevation is explained, never requested by ATLAS for itself.** On Linux,
+  privileged commands are wrapped in `sudo` unless ATLAS already runs as root. On
+  Windows, winget installers may show UAC. Chocolatey and global Scoop updates are
+  blocked, with a reason and the command, unless ATLAS runs as administrator.
+- **D31. Held packages are shown but never updated.** That covers winget pins and
+  explicit-target packages, `choco pin`, `scoop hold` and `apt-mark hold`.
+- **D32. Checks use each manager's existing metadata.** APT and DNF don't refresh
+  their lists during a check because that needs root. Scoop compares with local
+  buckets. If APT has never downloaded lists, the check fails with an explanation
+  instead of reporting "up to date".
+- **D33. `core.SourceError`** lets a source fail with a plain message and a technical
+  detail, for example "No package information downloaded yet" with "run sudo apt update".
+- **D34. Only the latest update check is kept.** Applied updates are removed from it.
+  Failed and cancelled checks don't replace it; a failed check is kept in memory for
+  the session so the Updates screen can explain what went wrong.
+- **D35. Ctrl+C during updates** reaches the package manager as usual. ATLAS catches
+  the signal, lets that command stop, starts nothing further, and records "stopped".
+- **D36. Scans and update checks are mutually exclusive.** Only one background task
+  runs at a time, and `x` stops it.
+- **D37. Rollback is stated honestly per manager.** Snap and Scoop can revert. winget,
+  Chocolatey, APT and DNF need a specific older version, if the source still has it.

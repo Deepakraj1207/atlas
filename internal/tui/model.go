@@ -31,11 +31,14 @@ type Options struct {
 	Logger       *slog.Logger
 	Version      string
 
-	// Inventory is nil when the database could not be opened; StoreErr
-	// then explains why.
+	// Inventory and Updates are nil when the database could not be opened;
+	// StoreErr then explains why.
 	Inventory core.InventoryService
+	Updates   core.UpdateService
 	StoreErr  string
 	DBPath    string
+	// Elevated is true when ATLAS runs as administrator or root.
+	Elevated bool
 }
 
 // Model is the root Bubble Tea model.
@@ -53,6 +56,11 @@ type Model struct {
 	screens map[nav.Section]screens.Screen
 
 	inv      core.InventoryService
+	upd      core.UpdateService
+	elevated bool
+	check    *scanRun
+	// exec hands the terminal to a job; replaced in tests.
+	exec     func(core.TerminalJob, tea.ExecCallback) tea.Cmd
 	storeErr string
 	dbPath   string
 	data     screens.DataView
@@ -93,12 +101,16 @@ func New(opts Options) Model {
 		screens:  map[nav.Section]screens.Screen{},
 		scroll:   map[nav.Section]int{},
 		inv:      opts.Inventory,
+		upd:      opts.Updates,
+		elevated: opts.Elevated,
+		exec:     func(j core.TerminalJob, cb tea.ExecCallback) tea.Cmd { return tea.Exec(j, cb) },
 		storeErr: opts.StoreErr,
 		dbPath:   opts.DBPath,
 		now:      time.Now,
 		spinner:  spinner.New(spinner.WithSpinner(spinner.Line)),
 	}
 	m.data.Available = m.inv != nil
+	m.data.UpdatesAvailable = m.upd != nil
 	m.data.StoreErr = m.storeErr
 	if m.inv == nil && m.storeErr == "" {
 		m.data.StoreErr = "no database was configured"
@@ -110,6 +122,8 @@ func New(opts Options) Model {
 			m.screens[s] = screens.NewHome()
 		case nav.MySoftware:
 			m.screens[s] = screens.NewMySoftware()
+		case nav.Updates:
+			m.screens[s] = screens.NewUpdates()
 		case nav.ActivityHistory:
 			m.screens[s] = screens.NewActivityHistory()
 		case nav.Settings:
@@ -155,7 +169,7 @@ type configSavedMsg struct {
 
 // Init starts the status-clear timer and loads saved data.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(m.scheduleStatusClear(), loadData(m.inv))
+	return tea.Batch(m.scheduleStatusClear(), loadData(m.inv), loadUpdates(m.upd))
 }
 
 // Accessors used by tests.
@@ -181,6 +195,9 @@ func (m Model) Data() screens.DataView { return m.dataView() }
 // Scanning reports whether a scan is running.
 func (m Model) Scanning() bool { return m.scan != nil }
 
+// Checking reports whether an update check is running.
+func (m Model) Checking() bool { return m.check != nil }
+
 // Screen returns the screen for a section (for tests).
 func (m Model) Screen(s nav.Section) screens.Screen { return m.screens[s] }
 
@@ -200,13 +217,27 @@ func (m Model) dataView() screens.DataView {
 		p.Spinner = m.spinner.View()
 		d.Scan = &p
 	}
+	if m.check != nil {
+		p := m.check.progress
+		p.Spinner = m.spinner.View()
+		d.Check = &p
+	}
+	for _, a := range d.Activity {
+		if a.Kind == "updates.apply" {
+			d.LastApplied = a.At
+			break
+		}
+	}
 	return d
 }
 
 func (m Model) ctx() screens.Context {
-	var sources []core.SourceInfo
+	var sources, managers []core.SourceInfo
 	if m.inv != nil {
 		sources = m.inv.Sources()
+	}
+	if m.upd != nil {
+		managers = m.upd.Managers()
 	}
 	return screens.Context{
 		Theme:        m.theme,
@@ -221,6 +252,8 @@ func (m Model) ctx() screens.Context {
 		Version:      m.version,
 		Platform:     runtime.GOOS + "/" + runtime.GOARCH,
 		Sources:      sources,
+		Managers:     managers,
+		Elevated:     m.elevated,
 		Data:         m.dataView(),
 	}
 }
@@ -273,6 +306,72 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case screens.StartScanMsg:
 		return m, m.startScan()
 
+	case screens.StartCheckMsg:
+		return m, m.startCheck()
+
+	case screens.RequestApplyMsg:
+		if m.upd == nil {
+			return m, m.setStatus(components.Status{Text: "Updates are unavailable because ATLAS can't open its saved data.", Kind: components.StatusError})
+		}
+		steps := m.upd.Plan(msg.Updates)
+		plan := screens.ApplyPlan(m.ctx(), steps)
+		return m.Update(screens.ShowActionPreviewMsg{Plan: plan, Confirm: screens.ApplyUpdatesMsg{Steps: steps}})
+
+	case screens.ApplyUpdatesMsg:
+		if m.upd == nil || m.scan != nil || m.check != nil {
+			return m, m.setStatus(components.Status{Text: "Updates can't start right now. Nothing was changed.", Kind: components.StatusWarning})
+		}
+		job := m.upd.NewJob(msg.Steps)
+		m.log.Info("handing terminal to update job", "steps", len(msg.Steps))
+		return m, m.exec(job, func(err error) tea.Msg {
+			return updatesFinishedMsg{results: job.Results(), err: err}
+		})
+
+	case updatesFinishedMsg:
+		if msg.err != nil {
+			m.log.Error("update job", "error", msg.err)
+		}
+		if len(msg.results) == 0 {
+			text := "The updates couldn't start. Nothing was changed."
+			if msg.err != nil {
+				text += " (" + msg.err.Error() + ")"
+			}
+			return m, tea.Batch(m.setStatus(components.Status{Text: text, Kind: components.StatusError}), tea.ClearScreen)
+		}
+		return m, tea.Batch(recordResults(m.upd, msg.results), tea.ClearScreen)
+
+	case updatesRecordedMsg:
+		if msg.err != nil {
+			m.log.Error("record update results", "error", msg.err)
+		}
+		return m, tea.Batch(m.setStatus(applyResultStatus(msg.results, msg.err)), loadData(m.inv), loadUpdates(m.upd))
+
+	case checkEventMsg:
+		applyEvent(m.check, msg.ev)
+		if m.check == nil {
+			return m, nil
+		}
+		return m, listen(m.check.events)
+
+	case checkDoneMsg:
+		m.check = nil
+		switch msg.check.Status {
+		case core.ScanFailed, core.ScanNothingToScan:
+			c := msg.check
+			m.data.FailedCheck = &c
+		case core.ScanComplete, core.ScanPartial:
+			m.data.FailedCheck = nil
+		}
+		return m, tea.Batch(m.setStatus(checkResultStatus(msg.check, msg.err)), loadData(m.inv), loadUpdates(m.upd))
+
+	case updatesLoadedMsg:
+		if msg.err != nil {
+			m.log.Error("load updates", "error", msg.err)
+			m.data.LoadErr = msg.err.Error()
+		}
+		m.data.UpdateSummary, m.data.Updates = msg.summary, msg.updates
+		return m, nil
+
 	case screens.ClearInventoryMsg:
 		if m.inv == nil || m.scan != nil || m.data.Summary == nil {
 			return m, m.setStatus(components.Status{Text: "There is no saved list to clear right now.", Kind: components.StatusWarning})
@@ -280,7 +379,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, clearInventory(m.inv)
 
 	case scanEventMsg:
-		m.applyScanEvent(msg.ev)
+		applyEvent(m.scan, msg.ev)
 		if m.scan == nil {
 			return m, nil
 		}
@@ -309,7 +408,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case spinner.TickMsg:
-		if m.scan == nil {
+		if m.scan == nil && m.check == nil {
 			return m, nil
 		}
 		var cmd tea.Cmd
@@ -411,8 +510,8 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "q":
 		return m.quit()
 	case "x":
-		if m.scan != nil {
-			m.cancelScan()
+		if m.scan != nil || m.check != nil {
+			m.cancelTasks()
 			return m, nil
 		}
 	case "?":
@@ -451,9 +550,7 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) quit() (tea.Model, tea.Cmd) {
-	if m.scan != nil {
-		m.cancelScan()
-	}
+	m.cancelTasks()
 	m.log.Info("quit requested")
 	return m, tea.Quit
 }
@@ -557,8 +654,8 @@ func (m Model) View() string {
 		right = modeBadge + " " + right
 	}
 	status := m.status
-	if m.scan != nil && (status.Text == "" || status.Kind == components.StatusInfo) {
-		status = m.scanningStatus()
+	if (m.scan != nil || m.check != nil) && (status.Text == "" || status.Kind == components.StatusInfo) {
+		status = m.busyStatus()
 	}
 	b.WriteString(components.StatusBar(t, l.Width, status, right, m.hints(), l.ShowHints && m.cfg.UI.ShowHints))
 	return b.String()
@@ -610,8 +707,11 @@ func (m Model) hints() []components.KeyHint {
 		return screenHints
 	}
 	var out []components.KeyHint
-	if m.scan != nil {
+	switch {
+	case m.scan != nil:
 		out = append(out, components.KeyHint{Key: "x", Desc: "stop scan"})
+	case m.check != nil:
+		out = append(out, components.KeyHint{Key: "x", Desc: "stop check"})
 	}
 	out = append(out, screenHints...)
 	return append(out, globalHints...)

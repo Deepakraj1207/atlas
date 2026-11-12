@@ -3,6 +3,9 @@ package core
 import (
 	"context"
 	"errors"
+	"io"
+	"slices"
+	"strings"
 	"time"
 )
 
@@ -42,6 +45,22 @@ type SoftwareItem struct {
 // on this computer (for example, winget is not installed). It is not an error
 // from the user's point of view.
 var ErrSourceUnavailable = errors.New("source not available on this computer")
+
+// SourceError lets a scanner or package manager fail with a plain-language
+// explanation instead of a generic "couldn't be read".
+type SourceError struct {
+	// Message is shown to everyone, e.g. "No package information downloaded yet".
+	Message string
+	// Details is technical, for Advanced mode.
+	Details string
+}
+
+func (e *SourceError) Error() string {
+	if e.Details != "" {
+		return e.Message + ": " + e.Details
+	}
+	return e.Message
+}
 
 // Scanner discovers installed software without modifying the system.
 // Implementations live in internal/inventory.
@@ -173,12 +192,20 @@ type Activity struct {
 	Details string
 }
 
-// Store persists scans and activity. Implemented by internal/database.
+// Store persists scans, update checks and activity. Implemented by
+// internal/database.
 type Store interface {
 	SaveScan(ctx context.Context, r ScanReport) (int64, error)
 	LatestScan(ctx context.Context) (ScanSummary, bool, error)
 	Software(ctx context.Context) ([]SoftwareItem, error)
 	ClearInventory(ctx context.Context) error
+
+	SaveUpdateCheck(ctx context.Context, c UpdateCheck) (int64, error)
+	// LatestUpdateCheck returns the latest check and its remaining updates.
+	LatestUpdateCheck(ctx context.Context) (UpdateCheckSummary, []Update, bool, error)
+	// RemoveUpdates drops updates that have been applied.
+	RemoveUpdates(ctx context.Context, ids []int64) error
+
 	AddActivity(ctx context.Context, a Activity) (int64, error)
 	RecentActivity(ctx context.Context, limit int) ([]Activity, error)
 }
@@ -198,12 +225,183 @@ type InventoryService interface {
 	RecentActivity(ctx context.Context, limit int) ([]Activity, error)
 }
 
-// PackageManager is the port for a package manager adapter (winget, scoop,
-// chocolatey, apt, snap, flatpak, ...). Defined for Phase 3; no adapter
-// exists yet and nothing calls it.
+// Update is one newer version offered by a package manager.
+type Update struct {
+	// ID is assigned by the store; zero until saved.
+	ID int64
+	// Manager is the package manager's source ID, e.g. "winget" or "apt".
+	Manager   string
+	PackageID string
+	Name      string
+	// CurrentVersion may be empty when the manager does not report it and
+	// the saved software list has no match.
+	CurrentVersion   string
+	AvailableVersion string
+	// Origin is the repository or source, e.g. "winget", "noble-updates".
+	Origin string
+	// Held is true when the user or the manager has pinned the package.
+	// "Update all" never includes held packages.
+	Held bool
+	// Note is a short plain-language remark, e.g. why it is held.
+	Note string
+	// Scope is "machine" or "user" when it matters for applying.
+	Scope string
+	// Component is true for libraries, runtimes and other supporting parts
+	// (from the saved software list). They are updated with everything else
+	// but listed separately.
+	Component bool
+}
+
+// UpdateCheck is the result of asking every package manager for updates.
+type UpdateCheck struct {
+	StartedAt  time.Time
+	FinishedAt time.Time
+	Status     ScanStatus
+	Sources    []SourceResult
+	Updates    []Update
+}
+
+// UpdateCheckSummary is what the store remembers about the latest check.
+type UpdateCheckSummary struct {
+	ID         int64
+	StartedAt  time.Time
+	FinishedAt time.Time
+	Status     ScanStatus
+	Sources    []SourceResult
+}
+
+// Elevation describes how an update step gets the rights it needs.
+type Elevation string
+
+const (
+	// ElevationNone: runs with the user's normal rights.
+	ElevationNone Elevation = "none"
+	// ElevationSudo: the command runs through sudo, which asks for the
+	// user's password in the terminal.
+	ElevationSudo Elevation = "sudo"
+	// ElevationInstaller: an installer may ask Windows for permission
+	// (a User Account Control prompt) while it runs.
+	ElevationInstaller Elevation = "installer"
+	// ElevationPolkit: the package manager may ask the system for the
+	// user's password through PolicyKit.
+	ElevationPolkit Elevation = "polkit"
+	// ElevationAdmin: ATLAS is already running with administrator rights.
+	ElevationAdmin Elevation = "admin"
+)
+
+// Command is one program invocation, shown to the user before it runs.
+type Command struct {
+	Program string
+	Args    []string
+	// OKCodes are exit codes that mean success. Empty means just 0.
+	OKCodes []int
+	// RestartCodes are exit codes that mean success but a restart is needed.
+	RestartCodes []int
+}
+
+// String renders the command the way a user would type it.
+func (c Command) String() string {
+	parts := []string{c.Program}
+	for _, a := range c.Args {
+		if a == "" || strings.ContainsAny(a, " \t\"'") {
+			a = `"` + strings.ReplaceAll(a, `"`, `\"`) + `"`
+		}
+		parts = append(parts, a)
+	}
+	return strings.Join(parts, " ")
+}
+
+// Interpret classifies an exit code.
+func (c Command) Interpret(code int) (ok, restart bool) {
+	if slices.Contains(c.RestartCodes, code) {
+		return true, true
+	}
+	if len(c.OKCodes) == 0 {
+		return code == 0, false
+	}
+	return slices.Contains(c.OKCodes, code), false
+}
+
+// UpdateStep is one unit of work in an update run: the commands one package
+// manager needs to update some packages. Nothing in a step runs until the
+// user confirms the preview that lists it.
+type UpdateStep struct {
+	Manager  string
+	Label    string
+	Updates  []Update
+	Commands []Command
+	Elevation
+	// Blocked explains why this step can't run from here. Blocked steps are
+	// shown in the preview and skipped.
+	Blocked string
+	// Rollback says, in plain language, how to go back if needed.
+	Rollback string
+}
+
+// StepStatus is the outcome of one step.
+type StepStatus string
+
+const (
+	StepDone    StepStatus = "done"
+	StepFailed  StepStatus = "failed"
+	StepSkipped StepStatus = "skipped"
+	StepStopped StepStatus = "stopped"
+)
+
+// StepResult reports what happened to one step.
+type StepResult struct {
+	Step     UpdateStep
+	Status   StepStatus
+	ExitCode int
+	Duration time.Duration
+	// Command is the command that finished last (or failed).
+	Command string
+	// Note is plain language, e.g. "Restart needed" or why it was skipped.
+	Note string
+	// Restart is true when the package manager asked for a restart.
+	Restart bool
+}
+
+// TerminalJob runs update steps attached to the user's terminal so the
+// package managers' own output and prompts (passwords, permission dialogs,
+// confirmations) are shown directly. Its method set matches Bubble Tea's
+// ExecCommand so the TUI can hand the terminal over and take it back.
+type TerminalJob interface {
+	Run() error
+	SetStdin(io.Reader)
+	SetStdout(io.Writer)
+	SetStderr(io.Writer)
+	Results() []StepResult
+}
+
+// PackageManager is the port for a package manager adapter.
 type PackageManager interface {
 	ID() string
-	DisplayName() string
-	Available(ctx context.Context) (bool, error)
-	PlanUpdateAll(ctx context.Context) (ActionPlan, error)
+	Label() string
+	// Detail says technically how updates are checked (Advanced mode).
+	Detail() string
+	// CheckUpdates lists available updates. It must be read-only and return
+	// ErrSourceUnavailable when the manager is not installed.
+	CheckUpdates(ctx context.Context) ([]Update, error)
+	// PlanUpdates returns the steps that would apply these updates (all from
+	// this manager). It runs nothing.
+	PlanUpdates(updates []Update) []UpdateStep
+}
+
+// UpdateService is the port the TUI uses for updates. Implemented by
+// internal/updates.Service.
+type UpdateService interface {
+	Managers() []SourceInfo
+	// Check asks every manager for updates, saves the result when
+	// appropriate, records the activity and returns it. The error is
+	// non-nil only when saving failed.
+	Check(ctx context.Context, progress func(SourceEvent)) (UpdateCheck, error)
+	LatestCheck(ctx context.Context) (UpdateCheckSummary, []Update, bool, error)
+	// Plan groups updates into steps. Held updates are left out.
+	Plan(updates []Update) []UpdateStep
+	// NewJob prepares a terminal job for the steps. It runs nothing yet.
+	NewJob(steps []UpdateStep) TerminalJob
+	// RecordResults records the outcome in Activity History and removes
+	// applied updates from the saved list.
+	RecordResults(ctx context.Context, results []StepResult) error
 }

@@ -34,7 +34,11 @@ type Context struct {
 
 	// Sources are the scanners available on this platform, in priority order.
 	Sources []core.SourceInfo
-	Data    DataView
+	// Managers are the package managers ATLAS can check for updates.
+	Managers []core.SourceInfo
+	// Elevated is true when ATLAS runs as administrator or root.
+	Elevated bool
+	Data     DataView
 }
 
 // DataView is the root model's read-only snapshot of saved data.
@@ -52,6 +56,38 @@ type DataView struct {
 
 	// Scan is non-nil while a scan is running.
 	Scan *ScanProgress
+
+	// UpdatesAvailable is false when update checking is unavailable.
+	UpdatesAvailable bool
+	// UpdateSummary is nil until an update check has been saved.
+	UpdateSummary *core.UpdateCheckSummary
+	// Updates are the pending updates from the latest check.
+	Updates []core.Update
+	// Check is non-nil while an update check is running.
+	Check *ScanProgress
+	// LastApplied is when updates were last installed (zero if never).
+	LastApplied time.Time
+	// FailedCheck is this session's most recent update check if it could
+	// not produce results (failed or nothing to check). It isn't saved, so
+	// it is kept here to explain what went wrong.
+	FailedCheck *core.UpdateCheck
+}
+
+// Busy reports whether a scan or update check is running.
+func (d DataView) Busy() bool { return d.Scan != nil || d.Check != nil }
+
+// PendingUpdates counts updates that "update all" would include.
+func (d DataView) PendingUpdates() (apps, components int) {
+	for _, u := range d.Updates {
+		switch {
+		case u.Held:
+		case u.Component:
+			components++
+		default:
+			apps++
+		}
+	}
+	return apps, components
 }
 
 // ScanProgress is the live state of a running scan.
@@ -94,6 +130,16 @@ func (c Context) SourceLabel(id string) string {
 	for _, s := range c.Sources {
 		if s.ID == id {
 			return s.Label
+		}
+	}
+	return id
+}
+
+// ManagerLabel returns the plain-language name for a package manager ID.
+func (c Context) ManagerLabel(id string) string {
+	for _, m := range c.Managers {
+		if m.ID == id {
+			return m.Label
 		}
 	}
 	return id

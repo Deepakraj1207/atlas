@@ -2,7 +2,11 @@
 
 package platform
 
-import "os"
+import (
+	"os"
+
+	"golang.org/x/sys/windows"
+)
 
 // stateBaseDir returns %LocalAppData%, the conventional home for per-user
 // machine-local data on Windows.
@@ -16,3 +20,7 @@ func stateBaseDir() (string, error) {
 
 // dataBaseDir is %LocalAppData% on Windows.
 func dataBaseDir() (string, error) { return stateBaseDir() }
+
+func isElevated() bool {
+	return windows.GetCurrentProcessToken().IsElevated()
+}

@@ -109,6 +109,40 @@ var migrations = []string{
 		details TEXT NOT NULL DEFAULT ''
 	);
 	CREATE INDEX activity_at ON activity(at);`,
+
+	// v2: update checks (Phase 3).
+	`CREATE TABLE update_checks (
+		id          INTEGER PRIMARY KEY,
+		started_at  TEXT NOT NULL,
+		finished_at TEXT NOT NULL,
+		status      TEXT NOT NULL
+	);
+	CREATE TABLE update_check_sources (
+		check_id    INTEGER NOT NULL REFERENCES update_checks(id) ON DELETE CASCADE,
+		source      TEXT    NOT NULL,
+		label       TEXT    NOT NULL,
+		status      TEXT    NOT NULL,
+		item_count  INTEGER NOT NULL,
+		duration_ms INTEGER NOT NULL,
+		message     TEXT    NOT NULL DEFAULT '',
+		details     TEXT    NOT NULL DEFAULT ''
+	);
+	CREATE INDEX update_check_sources_check ON update_check_sources(check_id);
+	CREATE TABLE updates (
+		id                INTEGER PRIMARY KEY,
+		check_id          INTEGER NOT NULL REFERENCES update_checks(id) ON DELETE CASCADE,
+		manager           TEXT    NOT NULL,
+		package_id        TEXT    NOT NULL DEFAULT '',
+		name              TEXT    NOT NULL,
+		current_version   TEXT    NOT NULL DEFAULT '',
+		available_version TEXT    NOT NULL,
+		origin            TEXT    NOT NULL DEFAULT '',
+		held              INTEGER NOT NULL DEFAULT 0,
+		note              TEXT    NOT NULL DEFAULT '',
+		scope             TEXT    NOT NULL DEFAULT '',
+		component         INTEGER NOT NULL DEFAULT 0
+	);
+	CREATE INDEX updates_check ON updates(check_id);`,
 }
 
 // SchemaVersion is the version this build migrates to.
@@ -324,4 +358,128 @@ func (d *DB) RecentActivity(ctx context.Context, limit int) ([]core.Activity, er
 		out = append(out, a)
 	}
 	return out, rows.Err()
+}
+
+func boolInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+// SaveUpdateCheck stores a check and replaces the saved update list.
+func (d *DB) SaveUpdateCheck(ctx context.Context, c core.UpdateCheck) (int64, error) {
+	tx, err := d.sql.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	res, err := tx.ExecContext(ctx, `INSERT INTO update_checks (started_at, finished_at, status) VALUES (?, ?, ?)`,
+		fmtTime(c.StartedAt), fmtTime(c.FinishedAt), string(c.Status))
+	if err != nil {
+		return 0, fmt.Errorf("save update check: %w", err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("save update check: %w", err)
+	}
+	for _, s := range c.Sources {
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO update_check_sources (check_id, source, label, status, item_count, duration_ms, message, details) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			id, s.Source, s.Label, string(s.Status), s.Count, s.Duration.Milliseconds(), s.Message, s.Details); err != nil {
+			return 0, fmt.Errorf("save update check sources: %w", err)
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM updates`); err != nil {
+		return 0, fmt.Errorf("replace update list: %w", err)
+	}
+	for _, u := range c.Updates {
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO updates (check_id, manager, package_id, name, current_version, available_version, origin, held, note, scope, component) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			id, u.Manager, u.PackageID, u.Name, u.CurrentVersion, u.AvailableVersion, u.Origin, boolInt(u.Held), u.Note, u.Scope, boolInt(u.Component)); err != nil {
+			return 0, fmt.Errorf("save updates: %w", err)
+		}
+	}
+	// Keep only the latest check's source summary to bound growth.
+	if _, err := tx.ExecContext(ctx, `DELETE FROM update_checks WHERE id <> ?`, id); err != nil {
+		return 0, fmt.Errorf("prune old checks: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("save update check: %w", err)
+	}
+	return id, nil
+}
+
+// LatestUpdateCheck returns the latest check and the updates still pending.
+func (d *DB) LatestUpdateCheck(ctx context.Context) (core.UpdateCheckSummary, []core.Update, bool, error) {
+	var s core.UpdateCheckSummary
+	var started, finished, status string
+	err := d.sql.QueryRowContext(ctx, `SELECT id, started_at, finished_at, status FROM update_checks ORDER BY id DESC LIMIT 1`).
+		Scan(&s.ID, &started, &finished, &status)
+	if errors.Is(err, sql.ErrNoRows) {
+		return core.UpdateCheckSummary{}, nil, false, nil
+	}
+	if err != nil {
+		return core.UpdateCheckSummary{}, nil, false, fmt.Errorf("read latest update check: %w", err)
+	}
+	s.StartedAt, s.FinishedAt, s.Status = parseTime(started), parseTime(finished), core.ScanStatus(status)
+
+	rows, err := d.sql.QueryContext(ctx,
+		`SELECT source, label, status, item_count, duration_ms, message, details FROM update_check_sources WHERE check_id = ? ORDER BY rowid`, s.ID)
+	if err != nil {
+		return core.UpdateCheckSummary{}, nil, false, fmt.Errorf("read update check sources: %w", err)
+	}
+	for rows.Next() {
+		var r core.SourceResult
+		var st string
+		var ms int64
+		if err := rows.Scan(&r.Source, &r.Label, &st, &r.Count, &ms, &r.Message, &r.Details); err != nil {
+			rows.Close()
+			return core.UpdateCheckSummary{}, nil, false, fmt.Errorf("read update check sources: %w", err)
+		}
+		r.Status = core.SourceStatus(st)
+		r.Duration = time.Duration(ms) * time.Millisecond
+		s.Sources = append(s.Sources, r)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return core.UpdateCheckSummary{}, nil, false, err
+	}
+
+	urows, err := d.sql.QueryContext(ctx,
+		`SELECT id, manager, package_id, name, current_version, available_version, origin, held, note, scope, component
+		 FROM updates WHERE check_id = ? ORDER BY name COLLATE NOCASE, manager`, s.ID)
+	if err != nil {
+		return core.UpdateCheckSummary{}, nil, false, fmt.Errorf("read updates: %w", err)
+	}
+	defer urows.Close()
+	var ups []core.Update
+	for urows.Next() {
+		var u core.Update
+		var held, comp int
+		if err := urows.Scan(&u.ID, &u.Manager, &u.PackageID, &u.Name, &u.CurrentVersion, &u.AvailableVersion, &u.Origin, &held, &u.Note, &u.Scope, &comp); err != nil {
+			return core.UpdateCheckSummary{}, nil, false, fmt.Errorf("read updates: %w", err)
+		}
+		u.Held, u.Component = held == 1, comp == 1
+		ups = append(ups, u)
+	}
+	return s, ups, true, urows.Err()
+}
+
+// RemoveUpdates deletes applied updates from the saved list.
+func (d *DB) RemoveUpdates(ctx context.Context, ids []int64) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	tx, err := d.sql.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for _, id := range ids {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM updates WHERE id = ?`, id); err != nil {
+			return fmt.Errorf("remove applied updates: %w", err)
+		}
+	}
+	return tx.Commit()
 }

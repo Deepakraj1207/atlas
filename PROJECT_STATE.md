@@ -6,13 +6,14 @@ Windows 11. Linux stays compatible.
 
 ## Current phase
 
-**Phase 2 — Inventory: complete.** Awaiting approval to start Phase 3.
+**Phase 3 — Updates: complete.** Awaiting approval to start Phase 4.
 
 | Phase | Status |
 |-------|--------|
 | 1. Go bootstrap and TUI foundation | done |
 | 2. Inventory: read-only scanning, SQLite, My Software, Activity History | done |
-| 3. Updates | not started |
+| 3. Updates: check, review, install through the package managers | done |
+| 4. Smart Analysis and Dependencies | not started |
 
 ## What exists now
 
@@ -33,12 +34,19 @@ Windows 11. Linux stays compatible.
 | **Activity History** | done | Every scan and clear recorded with outcome; details in Advanced mode |
 | **Home** | done | Real counts, last scan time, partial-scan warning, recent activity, state-aware recommendations |
 | **Clear saved list** | done | Settings → preview → confirm; never touches installed software; recorded |
-| Smart Analysis, Dependencies, Cleanup, Discover Apps, Updates | empty states | Honest "arrives in Phase N" screens |
-| Package management, installs, updates, removals | not started | Phase 3+ |
+| **Update checks** | done | winget, Chocolatey, Scoop (Windows); APT, DNF, Snap, Flatpak (Linux). Read-only, parallel, timeouts, cancellable |
+| **Updates screen** | done | Apps listed, system components behind `f`, held packages shown but never selected; select, update selected, update all |
+| **Installing updates** | done | Preview lists every change, permission prompts, rollback per manager, exact commands (Advanced). Then ATLAS hands the terminal to each package manager |
+| **Elevation** | done | sudo on Linux (password asked by sudo), Windows installers may show UAC, Chocolatey and global Scoop blocked with an explanation unless ATLAS runs as administrator |
+| **Results** | done | Per-step outcome, exit codes and restart notices in Activity History; applied updates leave the list; Home suggests a rescan |
+| Smart Analysis, Dependencies, Cleanup, Discover Apps | empty states | Honest "arrives in Phase N" screens |
+| Removals, cleanup actions | not started | Phase 5 |
 
 ## Guarantees still held
 
-- No install, update, removal, or privilege request anywhere.
-- No sample inventory data in shipped code. Test fixtures live only in `_test.go` files.
-- Nothing runs without a preview, except read-only scans when the user turns previews off.
-- Every scan and clear is recorded in Activity History.
+- Updates are the only system change ATLAS can make, and only after a preview the user confirms.
+- ATLAS never answers a package manager's prompt, accepts an agreement, or handles a password.
+  The package manager asks the user directly in the terminal.
+- ATLAS never asks for elevation for itself. It explains when sudo, UAC or PolicyKit may ask.
+- No removals. No sample data in shipped code; test fixtures live only in `_test.go` files.
+- Every scan, check, clear and update run is recorded in Activity History.
