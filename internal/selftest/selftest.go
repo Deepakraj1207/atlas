@@ -173,7 +173,7 @@ func Run(ctx context.Context, w io.Writer, version string) (Result, error) {
 	if len(check.Updates) > 0 {
 		steps := upd.Plan(check.Updates[:1])
 		for _, st := range steps {
-			r.printf("\nPlanned (not run) for the first update: `%s` — elevation %s%s\n", commands(st), st.Elevation, blocked(st))
+			r.printf("\nPlanned (not run) for the first update: `%s` — %s%s\n", commands(st), elevationPhrase(st.Elevation), blocked(st))
 		}
 	}
 
@@ -233,10 +233,13 @@ func Run(ctx context.Context, w io.Writer, version string) (Result, error) {
 		for _, u := range st.Updates {
 			names = append(names, u.Name)
 		}
-		if st.Blocked != "" {
+		switch {
+		case st.Blocked != "":
 			r.printf("- %s: blocked — %s\n", strings.Join(names, ", "), st.Blocked)
-		} else {
+		case len(names) > 1:
 			r.printf("- %s: allowed, removed together in one step — `%s`\n", strings.Join(names, ", "), commands(st))
+		default:
+			r.printf("- %s: allowed — `%s`\n", strings.Join(names, ", "), commands(st))
 		}
 	}
 
@@ -326,4 +329,20 @@ func viaPhrase(via map[string]int) string {
 		parts = append(parts, fmt.Sprintf("%d via %s", via[k], k))
 	}
 	return " (" + strings.Join(parts, ", ") + ")"
+}
+
+// elevationPhrase says in plain words how a step gets the rights it needs.
+func elevationPhrase(e core.Elevation) string {
+	switch e {
+	case core.ElevationSudo:
+		return "runs through sudo, which asks for your password"
+	case core.ElevationInstaller:
+		return "Windows may ask for permission if the installer needs it"
+	case core.ElevationPolkit:
+		return "your system may ask for your password"
+	case core.ElevationAdmin:
+		return "ATLAS is running as administrator"
+	default:
+		return "runs with your normal rights"
+	}
 }

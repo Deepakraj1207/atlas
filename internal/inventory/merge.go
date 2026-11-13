@@ -156,6 +156,40 @@ func numericParts(v string) ([]int, bool) {
 	return out, true
 }
 
+// joinWingetReadsOfRegistry joins a winget entry with the Windows
+// "installed programs" entry it was read from. For desktop programs (IDs
+// not starting with MSIX\), winget list reads those same entries but shows
+// the version from its own catalogue: PyCharm's "262.10315.174" becomes
+// "2026.2.2", "9.4.0.129" becomes "9.4.0", "3.10.2.920" becomes "< 3.10.3".
+// So versions are not compared. To avoid joining two real installs, the
+// name must belong to exactly one unjoined entry on each side.
+func joinWingetReadsOfRegistry(items []core.SoftwareItem, used []bool) {
+	isWingetARP := func(it core.SoftwareItem) bool {
+		return it.Source == SourceWinget && !strings.HasPrefix(strings.ToUpper(it.PackageID), `MSIX\`)
+	}
+	for i := range items {
+		if used[i] || items[i].Source != SourceRegistry || len(normName(items[i].Name)) < 3 {
+			continue
+		}
+		var regs, wgs []int
+		for j := range items {
+			if used[j] || !namesMatch(items[i], items[j]) {
+				continue
+			}
+			switch {
+			case items[j].Source == SourceRegistry:
+				regs = append(regs, j)
+			case isWingetARP(items[j]):
+				wgs = append(wgs, j)
+			}
+		}
+		if len(regs) == 1 && len(wgs) == 1 {
+			mergeInto(&items[i], items[wgs[0]])
+			used[wgs[0]] = true
+		}
+	}
+}
+
 // mergeInstallerRecords joins a Windows "installed programs" entry with the
 // Chocolatey or winget record of the same install. Those tools run normal
 // installers, so one program appears in both places, often with a
@@ -186,6 +220,7 @@ func mergeInstallerRecords(items []core.SoftwareItem) []core.SoftwareItem {
 			}
 		}
 	}
+	joinWingetReadsOfRegistry(items, used)
 	out := items[:0:0]
 	for i, it := range items {
 		if !used[i] {

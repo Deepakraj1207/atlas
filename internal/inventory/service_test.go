@@ -270,6 +270,48 @@ func TestMergeJoinsInstallerRecordsWithEquivalentVersions(t *testing.T) {
 	}
 }
 
+// Seen on a real Windows 11 PC: winget list reads desktop programs from the
+// same Windows entries but shows its catalogue's version.
+func TestMergeJoinsWingetReadOfTheSameWindowsEntry(t *testing.T) {
+	reg := func(name, v string) core.SoftwareItem {
+		return core.SoftwareItem{Name: name, Version: v, Source: SourceRegistry, Kind: core.KindApp}
+	}
+	wg := func(name, v, id string) core.SoftwareItem {
+		return core.SoftwareItem{Name: name, Version: v, PackageID: id, Source: SourceWinget, Kind: core.KindApp}
+	}
+	in := []core.SoftwareItem{
+		reg("PyCharm 2026.2.2", "262.10315.174"),
+		reg("ONLYOFFICE 9.4.0 (x64)", "9.4.0.129"),
+		reg("Safe Exam Browser", "3.10.2.920"),
+		reg("Microsoft Edge", "157.0.4341.46"),
+		// Two real installs under one name must stay apart.
+		reg("Tool", "1.0"), reg("Tool", "2.0"),
+		wg("PyCharm 2026.2.2", "2026.2.2", "JetBrains.PyCharm"),
+		wg("ONLYOFFICE 9.4.0 (x64)", "9.4.0", "ONLYOFFICE.DesktopEditors"),
+		wg("Safe Exam Browser", "< 3.10.3", "ETHZurich.SafeExamBrowser"),
+		wg("Microsoft Edge", "157.0.4341.46", "Microsoft.Edge"),
+		// Windows' packaged copy of Edge is a separate package.
+		wg("Microsoft Edge", "152.0.4191.66", `MSIX\Microsoft.MicrosoftEdge.Stable_152.0.4191.66_neutral__8wekyb3d8bbwe`),
+		wg("Tool", "3.0", "Vendor.Tool"),
+	}
+	out := Merge(in)
+	count := map[string]int{}
+	for _, it := range out {
+		count[it.Name]++
+		if it.Name == "PyCharm 2026.2.2" && (it.Version != "262.10315.174" || it.PackageID != "JetBrains.PyCharm") {
+			t.Errorf("keep Windows' version and gain winget's ID: %+v", it)
+		}
+	}
+	for name, want := range map[string]int{
+		"PyCharm 2026.2.2": 1, "ONLYOFFICE 9.4.0 (x64)": 1, "Safe Exam Browser": 1,
+		"Microsoft Edge": 2, "Tool": 3,
+	} {
+		if count[name] != want {
+			t.Errorf("%s: want %d entries, got %d", name, want, count[name])
+		}
+	}
+}
+
 func TestVersionsEquivalentAndProductKey(t *testing.T) {
 	for _, c := range []struct {
 		a, b string
