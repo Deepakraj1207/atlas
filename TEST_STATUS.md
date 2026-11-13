@@ -31,6 +31,44 @@ found a real timing bug (D46), which is now fixed and has a regression test.
 | `GOOS=windows GOARCH=arm64 CGO_ENABLED=0 go build ./cmd/atlas` | pass (~14.0 MB) |
 | Linux build | pass |
 
+## Real Windows (GitHub Actions: Windows Server 2025 and 2022)
+
+Workflow `.github/workflows/windows.yml` runs `go vet`, the full test suite and
+`atlas -selftest` on both images. Scoop is installed first, with `jq` and `fd`, so
+its code paths see real data. Both images use the same Windows APIs as Windows 11,
+but they aren't an interactive desktop.
+
+Windows-only tests (all pass on both images):
+
+| Test | What it proves |
+|------|----------------|
+| TestRegistryScanReadsThisComputer | real Uninstall keys read: 59 programs, machine and user scopes, dates as YYYY-MM-DD |
+| TestDefaultScannersRunOnWindows | registry, winget, Chocolatey (44 packages) and Scoop scanners run together |
+| TestExecRunnerOnWindows | real commands, output and exit codes |
+| TestExecStarterExitCodesOnWindows, TestExecStarterRunsCmdShimsFromPath, TestExecStarterMissingProgram | the terminal handover runs `.cmd` shims through PATH (as Scoop and Chocolatey install them) and reports exit codes and missing programs |
+| TestUserAssistReadsThisComputer | Windows' usage records decoded with plausible timestamps |
+| TestWindowsFolders | settings in %AppData%\atlas, data and logs in %LocalAppData%\atlas |
+
+Problems the first run found, all now fixed and covered by tests:
+
+1. **Chocolatey and Windows listed the same program twice** ("7-Zip (Install)" 26.5.0
+   and "7-Zip 26.05 (x64)"). That produced 7–9 false "installed more than once"
+   findings per image, and would have planned two removals for one program. They are
+   now joined when the product name matches and versions are equivalent. Remaining
+   pairs with different versions say "listed twice … record may be out of date".
+2. **winget failures showed only "exit code 2316632134".** That is `0x8A150046`:
+   source agreements haven't been accepted on the 2025 image. ATLAS now says
+   "Windows Package Manager is waiting for you to accept its source agreements" and
+   how to do it. It never accepts them itself.
+3. Analysis sources always reported "1 found"; they now report packages and records.
+4. "Support for Node.js 22 ends in 30 Apr 2027" now reads "ends on".
+
+Self-test on the 2025 image after the fixes: 81 apps, 16 components; 11 Chocolatey
+updates with friendly names; .NET 10 and Node.js 22 detected; the removal check
+routes 7-Zip to `choco uninstall` and blocks .NET and Visual C++ runtimes; Discover
+recognises 7-Zip, Firefox, Git, GitHub CLI, Node.js and jq. The only failures are
+winget, for the reason above.
+
 ## End-to-end runs in a pseudo-terminal
 
 **Phase 6, real binary.** Scan, then Home's "Find New Tools", which opened Discover Apps
@@ -90,6 +128,11 @@ checkbox column, a doubled period in rollback text, and Home counting apps while
 the recommendation counted everything.
 
 ## Not verified in this environment
+
+- **An interactive Windows 11 desktop.** The plan is in `docs/WINDOWS_TEST_PLAN.md`:
+  UAC prompts from installers, Windows Terminal and conhost rendering, Ctrl+C during a
+  real install, and a real install and removal of `jq`. The user's PC
+  (DESKTOP-41IVS1K) was offline in Desktop Commander during this session.
 
 - That every catalogue package ID resolves today. That needs network access to each
   package source. IDs are believed correct as of 2026-11, and a wrong one fails with

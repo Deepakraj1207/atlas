@@ -120,5 +120,7 @@ Changes from the plan:
   ID still resolves (run manually with network, never at runtime).
 - Optional AI explanations, off by default and clearly labelled.
 - Packaging and release: Windows installer or winget manifest, signed binaries, Linux packages.
-- Verification on real Windows 11 hardware: registry, winget, UserAssist, Chocolatey,
-  Scoop, UAC handover, Windows Terminal and conhost rendering.
+- Verification on real Windows 11 hardware. Windows CI (Server 2025/2022) now covers
+  the registry, winget, UserAssist, Chocolatey, Scoop and console processes. Still
+  open: interactive UAC handover and Windows Terminal/conhost rendering, per
+  `docs/WINDOWS_TEST_PLAN.md`.

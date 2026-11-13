@@ -6,8 +6,12 @@ Windows 11. Linux stays compatible.
 
 ## Current phase
 
-**Phase 6 — Discover Apps: complete.** All nine sections are now real. Awaiting
-direction for what comes next (see IMPLEMENTATION_PLAN.md, Phase 7+).
+**Phase 6 — Discover Apps: complete.** All nine sections are now real.
+
+**Windows verification: in progress.** CI on Windows Server 2025 and 2022 passes,
+including Windows-only tests against the real registry, consoles and UserAssist. Four
+issues it found are fixed. The interactive Windows 11 checks in
+`docs/WINDOWS_TEST_PLAN.md` are waiting for the user's PC.
 
 | Phase | Status |
 |-------|--------|

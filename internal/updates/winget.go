@@ -35,7 +35,7 @@ func (w winget) CheckUpdates(ctx context.Context) ([]core.Update, error) {
 		return ups, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, inventory.WingetError(err)
 	}
 	return nil, perr
 }

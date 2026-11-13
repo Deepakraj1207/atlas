@@ -34,7 +34,7 @@ func (s wingetScanner) Scan(ctx context.Context) ([]core.SoftwareItem, error) {
 		return items, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, WingetError(err)
 	}
 	return items, perr
 }
@@ -194,4 +194,21 @@ func cutColumns(line string, starts []int) []string {
 		out[i] = strings.TrimSpace(cols[i].String())
 	}
 	return out
+}
+
+// wingetAgreementsPending is winget's exit code when a source's terms have
+// not been accepted (APPINSTALLER_CLI_ERROR_SOURCE_AGREEMENTS_NOT_AGREED_TO).
+const wingetAgreementsPending = 0x8A150046
+
+// WingetError turns winget's own failures into plain explanations. ATLAS
+// never accepts agreements on the user's behalf, so it says how to do it.
+func WingetError(err error) error {
+	var ce *CommandError
+	if errors.As(err, &ce) && uint32(ce.ExitCode) == wingetAgreementsPending {
+		return &core.SourceError{
+			Message: "Windows Package Manager is waiting for you to accept its source agreements",
+			Details: "open a terminal, run 'winget list' once and answer the question; ATLAS never accepts agreements for you (winget exit code 0x8A150046)",
+		}
+	}
+	return err
 }

@@ -43,7 +43,7 @@ Run `.\atlas.exe` in Windows Terminal. For each row, note **OK** or what you saw
 | 2.5 | Home → Enter on **Scan My System** → Enter | Preview, then live progress; "Scan complete"; the count of apps looks right |
 | 2.6 | `2` (My Software), `/`, type `7-zip` (or any app you know), Enter | It's listed with the right version; Enter shows details, including Publisher |
 | 2.7 | `m` (Advanced mode) | Package IDs appear (e.g. `7zip.7zip` if winget knows it) |
-| 2.8 | Home → **Check for Updates** → Enter | winget is checked. If winget asks about source agreements, the check should report winget as "couldn't be read" with the reason, **not** hang |
+| 2.8 | Home → **Check for Updates** → Enter | winget is checked. If you've never accepted winget's source agreements, it should say "Windows Package Manager is waiting for you to accept its source agreements" with how to do it, **not** hang. Run `winget list` once, accept, and check again |
 | 2.9 | `3` (Updates) | Updates listed with installed → new versions; held apps marked |
 | 2.10 | Home → **Analyze My Software** → Enter | Smart Analysis lists findings. Under "What ATLAS checked", "Apps not opened in over a year" is **checked** (Windows records usage) |
 | 2.11 | `5` (Dependencies) | Visual C++ and .NET runtimes say "not recorded … treat it as needed" |

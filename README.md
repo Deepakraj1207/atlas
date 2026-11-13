@@ -50,7 +50,9 @@ go build -o atlas.exe ./cmd/atlas
 ```
 
 Flags: `-config <path>` to use a specific settings file, `-version` to print the
-version. Setting `ATLAS_HOME` keeps settings and logs in one folder (portable use).
+version, and `-selftest [-report file.md]` to check ATLAS against this computer and
+write a report. The self-test is read-only and doesn't touch your ATLAS data.
+Setting `ATLAS_HOME` keeps settings and logs in one folder (portable use).
 
 ## Keys
 

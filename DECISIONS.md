@@ -214,3 +214,22 @@ Short, dated records of choices that shape the code.
   updates: installing isn't a deletion.
 - **D62. Installed tools are remembered for the session** until the next scan adds them
   to My Software, so Discover doesn't offer them again.
+
+## 2026-11-13 — Windows verification
+
+- **D63. `atlas -selftest`** runs every read-only part of ATLAS against the real
+  computer and writes a Markdown report. It uses a throwaway database in a temporary
+  folder, so the user's ATLAS data is never touched, and it plans but never runs
+  removals and installs. It's how ATLAS is verified on machines no one can drive
+  interactively.
+- **D64. Windows CI on windows-2025 and windows-2022.** Windows-only tests use the real
+  registry, console processes and UserAssist. CI installs Scoop so those paths see real
+  data, and publishes the tested `atlas.exe`.
+- **D65. Programs installed through Chocolatey or winget appear twice on Windows** (the
+  manager's record and Windows' own entry). They are joined when the product key matches
+  and the versions are numerically equivalent (26.05 = 26.5.0). Different versions are
+  not joined, because the evidence is ambiguous, and are reported as "listed twice …
+  record may be out of date". Scoop apps are portable and never joined this way.
+- **D66. Windows HRESULT exit codes are shown in hex,** and when a tool prints its error
+  to stdout (winget does), that message is used. winget's pending source agreements
+  (0x8A150046) get a plain explanation and instructions; ATLAS still never accepts them.

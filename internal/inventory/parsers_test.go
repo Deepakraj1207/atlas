@@ -5,6 +5,7 @@ package inventory
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -309,5 +310,17 @@ func TestExecRunnerMissingProgramIsUnavailable(t *testing.T) {
 	}
 	if !isUnavailable(err) {
 		t.Error("missing program should wrap ErrSourceUnavailable")
+	}
+}
+
+func TestWingetAgreementsPendingIsExplained(t *testing.T) {
+	run := func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		return []byte("One or more of the source agreements were not agreed to. Operation cancelled.\n"),
+			&CommandError{Command: "winget", ExitCode: 2316632134}
+	}
+	_, err := NewWingetScanner(run).Scan(context.Background())
+	var se *core.SourceError
+	if !errors.As(err, &se) || !strings.Contains(se.Message, "accept its source agreements") || !strings.Contains(se.Details, "winget list") {
+		t.Errorf("agreements error should explain what to do: %v", err)
 	}
 }
