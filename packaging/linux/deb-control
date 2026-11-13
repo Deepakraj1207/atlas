@@ -1,0 +1,16 @@
+Package: atlas-lifecycle
+Version: @VERSION@
+Section: utils
+Priority: optional
+Architecture: @ARCH@
+Installed-Size: @SIZE@
+Maintainer: Deepakraj1207 <Deepakraj1207@users.noreply.github.com>
+Homepage: https://github.com/Deepakraj1207/atlas
+Description: understand, update and tidy installed software (ATLAS)
+ ATLAS is a terminal app that shows what is installed on your computer and
+ helps you keep it tidy and up to date, in plain language. On Linux it reads
+ dpkg, RPM, Snap and Flatpak, checks for updates, points out runtimes that no
+ longer get security fixes, and installs or removes software through your own
+ package managers. Nothing happens without a preview you confirm.
+ .
+ The command is "atlas".

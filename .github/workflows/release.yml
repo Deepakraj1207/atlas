@@ -1,0 +1,142 @@
+name: release
+
+# A version tag (v0.1.0) builds, checks and creates a DRAFT GitHub release;
+# a person reviews and publishes it. Changes to the packaging run the same
+# build and checks as a dry run that publishes nothing.
+on:
+  push:
+    tags: ['v*']
+    branches: ['**']
+    paths:
+      - 'packaging/**'
+      - 'tools/release/**'
+      - '.github/workflows/release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GOTOOLCHAIN: local
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-2025]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go vet ./...
+      - run: go test -count=1 ./...
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Version
+        id: version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="0.0.0-dev.$(git rev-parse --short=7 HEAD)"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Version: $version"
+      - name: Install rpmbuild (Ubuntu's rpm package)
+        run: sudo apt-get update -q && sudo apt-get install -y -q rpm
+      - name: Build release files
+        run: packaging/build-release.sh "${{ steps.version.outputs.version }}" dist
+      - name: Bundle the winget manifests
+        run: cd dist/winget && zip -q -r ../winget-manifests.zip manifests
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-files
+          path: dist/
+          if-no-files-found: error
+
+  check-windows:
+    needs: build
+    runs-on: windows-2025
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-files
+          path: dist
+      - name: The zip runs and reports its version
+        shell: pwsh
+        run: |
+          $v = '${{ needs.build.outputs.version }}'
+          Expand-Archive "dist/atlas_${v}_windows_amd64.zip" -DestinationPath zipcheck
+          $line = & ./zipcheck/atlas.exe -version
+          $line
+          if ($line -notlike "atlas $v (commit *") { throw "unexpected version line" }
+          ./zipcheck/atlas.exe -selftest -report selftest.md
+          Get-Content selftest.md -TotalCount 30
+      - name: winget accepts the manifests
+        shell: pwsh
+        run: |
+          $dir = Get-ChildItem dist/winget/manifests -Recurse -Filter '*.installer.yaml' | Select-Object -First 1 | Split-Path
+          Get-ChildItem $dir | ForEach-Object { "== $($_.Name)"; Get-Content $_.FullName }
+          winget validate --manifest $dir --disable-interactivity
+          if ($LASTEXITCODE -ne 0) { throw "winget validate failed ($LASTEXITCODE)" }
+
+  check-linux:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-files
+          path: dist
+      - name: Checksums match
+        run: cd dist && sha256sum -c SHA256SUMS
+      - name: The .deb installs, runs and removes cleanly
+        run: |
+          v='${{ needs.build.outputs.version }}'
+          sudo apt-get install -y -q ./dist/atlas-lifecycle_*_amd64.deb
+          atlas -version | tee line.txt
+          grep -q "^atlas $v (commit " line.txt
+          dpkg -L atlas-lifecycle
+          sudo apt-get remove -y -q atlas-lifecycle
+          ! command -v atlas
+      - name: The .rpm installs, runs and removes cleanly (Fedora)
+        run: |
+          v='${{ needs.build.outputs.version }}'
+          docker run --rm -v "$PWD/dist:/dist:ro" fedora:41 bash -euc "
+            rpm -i /dist/atlas-lifecycle-*.x86_64.rpm
+            atlas -version | grep -q '^atlas $v (commit '
+            rpm -ql atlas-lifecycle
+            rpm -e atlas-lifecycle
+            ! command -v atlas"
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build, check-windows, check-linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-files
+          path: dist
+      - name: Create a draft release (a person publishes it)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v='${{ needs.build.outputs.version }}'
+          gh release create "$GITHUB_REF_NAME" --draft --verify-tag \
+            --title "ATLAS $v" --notes-file packaging/release-notes.md \
+            dist/*.zip dist/*.tar.gz dist/*.deb dist/*.rpm dist/SHA256SUMS
