@@ -128,9 +128,29 @@ is accurate: Windows keeps an older Edge app package (152) beside Edge itself (1
 run on windows-2025 and windows-2022 on every push. On 2025, winget hasn't accepted its
 agreements, so scans finish "with gaps"; the scripts accept either outcome.
 
-Not done on the PC yet, because they change the computer or need a person: a real
-winget install and removal of jq (2.14–2.16), a UAC prompt (2.17) and Ctrl+C during an
-install (2.18).
+**Changing checks on the PC, with the owner's agreement and the owner at the PC:**
+
+- **jq install and removal (2.13–2.16), driven by conharness.** Discover's preview
+  showed `winget install --id jqlang.jq --exact --source winget` with no agreement
+  flags; the terminal was handed to winget (download, hash check, "Successfully
+  installed"); ATLAS said "Installed 1". After a rescan, the removal preview showed
+  `winget uninstall --id jqlang.jq --exact`; Enter only said "press r"; `r` removed it;
+  "Cleanup finished"; a rescan found no jq, and winget agrees.
+- **UAC (2.17) with Notepad++, three times.** The installer asked Windows for
+  permission (consent.exe ran); ATLAS never asked for it itself.
+  - Declined: MSI 1602, winget 0x8A15010C. ATLAS then said "Installs didn't work (exit
+    code 2316632332)". Fixed: hex codes everywhere, and declining is recorded as
+    cancelled by you (Discover says "Install cancelled"). Covered by unit tests; not yet
+    re-declined live.
+  - Approved: "Installed 1", Discover marks it installed, Activity records the command.
+  - Removal approved: "Windows may ask for permission if the uninstaller needs it",
+    "Successfully uninstalled", "Cleanup finished". Notepad++ is gone again.
+- Also fixed from these runs: each handover starts with a timestamped rule (the second
+  handover appeared under the first one's output), "uninstaller" wording for removals,
+  and "Scan again to add it" for one app.
+
+Not done: Ctrl+C during a real install (2.18, not agreed), re-declining UAC with the
+new build, and a visual check in the legacy conhost window (section 3).
 
 ## End-to-end runs in a pseudo-terminal
 
