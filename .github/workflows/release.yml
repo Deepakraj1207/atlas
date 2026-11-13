@@ -86,7 +86,7 @@ jobs:
       - name: winget accepts the manifests
         shell: pwsh
         run: |
-          $dir = Get-ChildItem dist/winget/manifests -Recurse -Filter '*.installer.yaml' | Select-Object -First 1 | Split-Path
+          $dir = (Get-ChildItem dist/winget/manifests -Recurse -Filter '*.installer.yaml' | Select-Object -First 1).DirectoryName
           Get-ChildItem $dir | ForEach-Object { "== $($_.Name)"; Get-Content $_.FullName }
           winget validate --manifest $dir --disable-interactivity
           if ($LASTEXITCODE -ne 0) { throw "winget validate failed ($LASTEXITCODE)" }

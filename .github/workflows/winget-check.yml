@@ -29,7 +29,7 @@ jobs:
         run: |
           gh release download $env:TAG --repo $env:GITHUB_REPOSITORY --pattern winget-manifests.zip
           Expand-Archive winget-manifests.zip -DestinationPath m
-          $dir = Get-ChildItem m -Recurse -Filter '*.installer.yaml' | Select-Object -First 1 | Split-Path
+          $dir = (Get-ChildItem m -Recurse -Filter '*.installer.yaml' | Select-Object -First 1).DirectoryName
           "MANIFEST_DIR=$dir" >> $env:GITHUB_ENV
           Get-ChildItem $dir | ForEach-Object { "== $($_.Name)"; Get-Content $_.FullName }
       - name: Validate
