@@ -1,0 +1,69 @@
+name: catalog-check
+
+# Started by hand: confirms every Discover Apps package ID still exists in its
+# package manager. Lookups only; nothing is installed. (On these CI machines
+# the job accepts winget's source agreements itself; ATLAS never does that on
+# a user's computer.)
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GOTOOLCHAIN: local
+
+jobs:
+  windows:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Scoop and the buckets the catalogue uses
+        shell: pwsh
+        run: |
+          iex "& {$(irm get.scoop.sh)} -RunAsAdmin"
+          "$env:USERPROFILE\scoop\shims" | Out-File -FilePath $env:GITHUB_PATH -Append
+          $env:PATH = "$env:USERPROFILE\scoop\shims;$env:PATH"
+          foreach ($b in (go run ./tools/catalogcheck -list-scoop-buckets).Split(' ')) { if ($b -ne 'main') { scoop bucket add $b } }
+      - name: Check winget, Scoop and Chocolatey IDs
+        shell: pwsh
+        run: |
+          go run ./tools/catalogcheck -managers winget,scoop,chocolatey | Tee-Object catalog-windows.md
+          $code = $LASTEXITCODE
+          Get-Content catalog-windows.md | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          exit $code
+
+  ubuntu:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: sudo apt-get update -q
+      - name: Check APT, Snap and Flathub IDs
+        run: |
+          set -o pipefail
+          code=0
+          go run ./tools/catalogcheck -managers apt,snap,flatpak | tee catalog-ubuntu.md || code=$?
+          cat catalog-ubuntu.md >> "$GITHUB_STEP_SUMMARY"
+          exit $code
+
+  fedora:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: CGO_ENABLED=0 go build -o catalogcheck ./tools/catalogcheck
+      - name: Check DNF IDs
+        run: |
+          set -o pipefail
+          code=0
+          docker run --rm -v "$PWD:/w:ro" fedora:41 /w/catalogcheck -managers dnf | tee catalog-fedora.md || code=$?
+          cat catalog-fedora.md >> "$GITHUB_STEP_SUMMARY"
+          exit $code
