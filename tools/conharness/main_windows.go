@@ -11,8 +11,13 @@
 //	keys <k> <k> ...         enter esc tab up down left right space bs ctrl+c, or one character
 //	type <text>              literal text
 //	snap <label>             record the screen
+//	expect <text>            the screen must contain text now
+//	absent <text>            the screen must not contain text now
 //	resize <cols> <rows>
 //	# comment
+//
+// With -strict, a timeout, a failed expect/absent or a non-zero exit code
+// from the program makes conharness exit with 1.
 package main
 
 import (
@@ -43,6 +48,7 @@ func main() {
 	outPath := flag.String("out", "screens.txt", "")
 	rawPath := flag.String("raw", "", "")
 	exitWait := flag.Int("exitwait", 10, "seconds to wait for exit after the script")
+	strict := flag.Bool("strict", false, "exit 1 on any timeout, failed check or non-zero exit code")
 	flag.Parse()
 	args := flag.Args()
 	if len(args) == 0 {
@@ -56,10 +62,20 @@ func main() {
 	if *rawPath != "" {
 		raw, _ = os.Create(*rawPath)
 	}
+	failures := 0
 	logf := func(format string, a ...any) {
 		s := fmt.Sprintf(format, a...)
+		if strings.HasPrefix(s, "!! ") {
+			failures++
+		}
 		fmt.Fprintln(out, s)
 		fmt.Println(s)
+	}
+	finish := func() {
+		if *strict && failures > 0 {
+			fmt.Printf("conharness: %d problem(s)\n", failures)
+			os.Exit(1)
+		}
 	}
 
 	var inR, inW, outR, outW windows.Handle
@@ -186,6 +202,14 @@ func main() {
 		case "snap":
 			time.Sleep(300 * time.Millisecond)
 			snap(rest)
+		case "expect", "absent":
+			has := strings.Contains(screen(), rest)
+			if (cmd == "expect") != has {
+				logf("!! FAILED %s %q", cmd, rest)
+				snap("failed check")
+			} else {
+				logf("-- %s %q ok", cmd, rest)
+			}
 		case "resize":
 			f := strings.Fields(rest)
 			c, _ := strconv.Atoi(f[0])
@@ -202,18 +226,24 @@ func main() {
 	deadline := time.Now().Add(time.Duration(*exitWait) * time.Second)
 	for time.Now().Before(deadline) {
 		if done, code := exited(); done {
-			logf("-- program exited with code %d", code)
+			if code != 0 {
+				logf("!! program exited with code %d", code)
+			} else {
+				logf("-- program exited with code 0")
+			}
 			time.Sleep(300 * time.Millisecond)
 			snap("after exit")
 			windows.ClosePseudoConsole(hpc)
+			finish()
 			return
 		}
 		time.Sleep(200 * time.Millisecond)
 	}
-	logf("-- program still running after script; stopping it")
+	logf("!! program still running after script; stopping it")
 	snap("final")
 	windows.TerminateProcess(pi.Process, 1)
 	windows.ClosePseudoConsole(hpc)
+	finish()
 }
 
 func makeCmdLine(args []string) string {

@@ -83,12 +83,30 @@ jobs:
           ./atlas.exe -selftest -report selftest-${{ matrix.os }}.md
           Get-Content selftest-${{ matrix.os }}.md
 
+      # Drives the real interface in a Windows pseudo-console (ConPTY, as Windows
+      # Terminal does): keystrokes in, screens out, with checks. Read-only; ATLAS
+      # uses a scratch data folder.
+      - name: Interface checks in a Windows pseudo-console
+        shell: pwsh
+        run: |
+          Push-Location tools/conharness; go build -o ../../conharness.exe .; Pop-Location
+          $env:ATLAS_HOME = Join-Path $env:RUNNER_TEMP 'atlas-home'
+          $failed = $false
+          foreach ($s in 'ui-basics', 'readonly-flow') {
+            "::group::$s"
+            ./conharness.exe -strict -cols 120 -rows 36 -exitwait 15 -script "tools/conharness/scripts/$s.txt" -out "screens-$s-${{ matrix.os }}.txt" -- ./atlas.exe
+            if ($LASTEXITCODE -ne 0) { $failed = $true; "::error::$s found problems (see the screens above)" }
+            "::endgroup::"
+          }
+          if ($failed) { exit 1 }
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: selftest-${{ matrix.os }}
           path: |
             selftest-*.md
+            screens-*.txt
             test-output.txt
 
       - uses: actions/upload-artifact@v4

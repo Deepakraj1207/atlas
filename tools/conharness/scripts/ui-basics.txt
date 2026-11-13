@@ -1,0 +1,31 @@
+# Start-up, theme, help, resizing and quit (test plan 2.1-2.4, 2.20).
+until 20 Press ? for help
+expect Welcome to ATLAS
+expect │
+snap start
+keys t
+until 5 Light theme (saved)
+keys t
+until 5 Dark theme (saved)
+keys ?
+until 10 Navigation
+expect Quit ATLAS
+snap help
+keys esc
+gone 10 Keyboard help
+resize 72 24
+until 10 1 Home
+snap narrow 72x24
+resize 40 12
+wait 800
+absent ATLAS needs a terminal
+snap compact 40x12
+resize 39 9
+until 10 ATLAS needs a terminal
+# The message must wrap, not be cut off at the edge (seen on Windows 11).
+expect 40×10.
+expect quit.
+snap too small 39x9
+resize 120 36
+until 10 Welcome to ATLAS
+keys q

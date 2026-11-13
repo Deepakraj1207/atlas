@@ -30,6 +30,22 @@ In **Windows Terminal** (PowerShell), in the folder with `atlas.exe`:
 It changes nothing and doesn't touch your ATLAS data. Send `selftest-win11.md` back.
 It lists program names and versions found on your PC, so read it first if that matters to you.
 
+## 1b. Automatic interface checks (read-only, about 2 minutes)
+
+`tools/conharness` runs ATLAS in a real Windows console (ConPTY, as Windows Terminal
+does), presses keys from a script and checks the screens. The two scripts cover most
+of section 2 without changing anything; ATLAS uses a scratch data folder.
+
+```powershell
+Push-Location tools\conharness; go build -o ..\..\conharness.exe .; Pop-Location
+$env:ATLAS_HOME = "$env:TEMP\atlas-check"
+.\conharness.exe -strict -script tools\conharness\scripts\ui-basics.txt -out screens-ui.txt -- .\atlas.exe
+.\conharness.exe -strict -script tools\conharness\scripts\readonly-flow.txt -out screens-flow.txt -- .\atlas.exe
+```
+
+Exit code 0 means every check passed; the screens are in the `-out` files. CI runs the
+same scripts on every push.
+
 ## 2. Interactive checks
 
 Run `.\atlas.exe` in Windows Terminal. For each row, note **OK** or what you saw.
