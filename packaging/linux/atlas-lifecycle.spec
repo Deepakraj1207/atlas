@@ -11,7 +11,6 @@ Release:        %{atlas_release}
 Summary:        Understand, update and tidy installed software (ATLAS)
 License:        MIT
 URL:            https://github.com/Deepakraj1207/atlas
-BuildArch:      %{atlas_arch}
 # A static Go binary: no automatic library dependencies to find.
 AutoReqProv:    no
 
