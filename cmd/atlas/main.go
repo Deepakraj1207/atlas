@@ -13,8 +13,16 @@ import (
 	"github.com/deepakraj1207/atlas/internal/selftest"
 )
 
-// version is set at build time: -ldflags "-X main.version=1.2.3".
-var version = "dev"
+// Set at build time by release builds:
+//
+//	-ldflags "-X main.version=0.1.0 -X main.commit=1a2b3c4 -X main.date=2026-11-13"
+//
+// Other builds fall back to the Git details Go records (see versionLine).
+var (
+	version = "dev"
+	commit  = ""
+	date    = ""
+)
 
 func main() {
 	configPath := flag.String("config", "", "path to the settings file (default: per-user config folder)")
@@ -30,7 +38,7 @@ func main() {
 	flag.Parse()
 
 	if *showVersion {
-		fmt.Println("atlas", version)
+		fmt.Println(versionLine(version, commit, date, buildSettings()))
 		return
 	}
 
