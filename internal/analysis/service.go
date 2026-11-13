@@ -143,7 +143,7 @@ func (s *Service) Analyze(ctx context.Context, progress func(core.SourceEvent)) 
 
 	in.Now = s.now()
 	res.Findings, res.Runtimes, res.Checks = Analyze(in)
-	res.BasedOnScan = scan.FinishedAt
+	res.BasedOnScan, res.BasedOnScanID = scan.FinishedAt, scan.ID
 	res.FinishedAt = s.now()
 
 	var saveErr error

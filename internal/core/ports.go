@@ -517,6 +517,9 @@ type AnalysisResult struct {
 	Checks   []CheckSummary
 	// BasedOnScan is when the analysed software list was scanned.
 	BasedOnScan time.Time
+	// BasedOnScanID identifies that scan. Staleness is decided by identity,
+	// not by comparing timestamps, which can tie on coarse clocks.
+	BasedOnScanID int64
 	// SupportDataAsOf is the date of ATLAS's built-in support table.
 	SupportDataAsOf string
 }

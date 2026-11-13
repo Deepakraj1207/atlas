@@ -258,19 +258,29 @@ func (m Model) dataView() screens.DataView {
 		p.Spinner = m.spinner.View()
 		d.Tidying = &p
 	}
-	for _, a := range d.Activity {
-		if a.Kind == "cleanup.run" && (a.Outcome == core.OutcomeSuccess || a.Outcome == core.OutcomePartial) {
-			d.LastRemoved = a.At
-			break
-		}
+	// Activity is newest first, with ties broken by insertion order, so
+	// "did X happen after Y" is answered by which comes first in the list,
+	// never by comparing timestamps (Windows clocks can tie).
+	removed := func(a core.Activity) bool {
+		return a.Kind == "cleanup.run" && (a.Outcome == core.OutcomeSuccess || a.Outcome == core.OutcomePartial)
 	}
-	for _, a := range d.Activity {
-		if a.Kind == "updates.apply" {
-			d.LastApplied = a.At
-			break
-		}
-	}
+	d.UpdatesSinceScan = happenedBefore(d.Activity, func(a core.Activity) bool { return a.Kind == "updates.apply" }, func(a core.Activity) bool { return a.Kind == "scan" })
+	d.RemovedSinceAnalysis = happenedBefore(d.Activity, removed, func(a core.Activity) bool { return a.Kind == "analysis" })
 	return d
+}
+
+// happenedBefore reports whether an entry matching later appears in the
+// newest-first list before any entry matching earlier.
+func happenedBefore(newestFirst []core.Activity, later, earlier func(core.Activity) bool) bool {
+	for _, a := range newestFirst {
+		switch {
+		case later(a):
+			return true
+		case earlier(a):
+			return false
+		}
+	}
+	return false
 }
 
 func (m Model) ctx() screens.Context {

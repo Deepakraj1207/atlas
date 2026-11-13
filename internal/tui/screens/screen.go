@@ -69,8 +69,8 @@ type DataView struct {
 	Updates []core.Update
 	// Check is non-nil while an update check is running.
 	Check *ScanProgress
-	// LastApplied is when updates were last installed (zero if never).
-	LastApplied time.Time
+	// UpdatesSinceScan is true when updates were installed after the latest scan.
+	UpdatesSinceScan bool
 	// FailedCheck is this session's most recent update check if it could
 	// not produce results (failed or nothing to check). It isn't saved, so
 	// it is kept here to explain what went wrong.
@@ -89,8 +89,9 @@ type DataView struct {
 	Tidy *core.TidyReport
 	// Tidying is non-nil while that search runs.
 	Tidying *ScanProgress
-	// LastRemoved is when software was last removed (zero if never).
-	LastRemoved time.Time
+	// RemovedSinceAnalysis is true when software was removed after the
+	// latest analysis.
+	RemovedSinceAnalysis bool
 
 	// DiscoverAvailable is false when Discover Apps is unavailable.
 	DiscoverAvailable bool
@@ -111,10 +112,13 @@ func (d DataView) AnalysisStale() bool {
 	if d.Analysis == nil {
 		return false
 	}
-	if d.Summary != nil && d.Summary.FinishedAt.After(d.Analysis.BasedOnScan) {
+	if d.Summary != nil && d.Analysis.BasedOnScanID != 0 && d.Summary.ID != d.Analysis.BasedOnScanID {
 		return true
 	}
-	return d.LastRemoved.After(d.Analysis.FinishedAt)
+	if d.Summary != nil && d.Analysis.BasedOnScanID == 0 && d.Summary.FinishedAt.After(d.Analysis.BasedOnScan) {
+		return true // analyses saved before scan IDs were recorded
+	}
+	return d.RemovedSinceAnalysis
 }
 
 // PendingUpdates counts updates that "update all" would include.

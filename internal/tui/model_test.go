@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
@@ -424,5 +425,22 @@ func TestViewNeverExceedsTerminalHeight(t *testing.T) {
 				t.Errorf("%dx%d %s: view has %d lines", size[0], size[1], section.Title(), lines)
 			}
 		}
+	}
+}
+
+func TestHappenedBeforeUsesListOrderNotTimestamps(t *testing.T) {
+	at := time.Date(2026, 11, 13, 2, 0, 0, 0, time.UTC)
+	// Newest first, all with the same timestamp.
+	acts := []core.Activity{{Kind: "updates.apply", At: at}, {Kind: "scan", At: at}}
+	isApply := func(a core.Activity) bool { return a.Kind == "updates.apply" }
+	isScan := func(a core.Activity) bool { return a.Kind == "scan" }
+	if !happenedBefore(acts, isApply, isScan) {
+		t.Error("updates listed before the scan happened after it")
+	}
+	if happenedBefore([]core.Activity{{Kind: "scan", At: at}, {Kind: "updates.apply", At: at}}, isApply, isScan) {
+		t.Error("updates listed after the scan happened before it")
+	}
+	if happenedBefore(nil, isApply, isScan) {
+		t.Error("no activity means nothing happened")
 	}
 }

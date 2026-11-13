@@ -267,7 +267,7 @@ func (h *Home) recommended(ctx Context) string {
 		if d.Summary.Status == core.ScanPartial {
 			items = append(items, "Some sources couldn't be read in the last scan. Activity History (8) shows which, and why.")
 		}
-		if !d.LastApplied.IsZero() && d.LastApplied.After(d.Summary.FinishedAt) {
+		if d.UpdatesSinceScan {
 			items = append(items, "You installed updates after your last scan. Scan again so My Software shows the new versions.")
 		}
 		items = append(items, "Browse and search everything that was found in My Software (2).")
