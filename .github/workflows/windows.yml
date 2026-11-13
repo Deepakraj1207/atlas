@@ -77,3 +77,9 @@ jobs:
           path: |
             selftest-*.md
             test-output.txt
+
+      - uses: actions/upload-artifact@v4
+        if: matrix.os == 'windows-2025'
+        with:
+          name: atlas-windows-amd64
+          path: atlas.exe
