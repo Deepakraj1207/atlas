@@ -233,3 +233,13 @@ Short, dated records of choices that shape the code.
 - **D66. Windows HRESULT exit codes are shown in hex,** and when a tool prints its error
   to stdout (winget does), that message is used. winget's pending source agreements
   (0x8A150046) get a plain explanation and instructions; ATLAS still never accepts them.
+- **D67. winget's read of a Windows entry is joined regardless of version.** For
+  desktop programs, `winget list` reads Windows' installed-programs entries and shows
+  its catalogue's version, so a version mismatch says nothing. The join needs the name to
+  belong to exactly one Windows entry and one winget entry, and skips MSIX and Store
+  records. Items carry an `Origin` for this; it isn't saved.
+- **D68. Scoop metadata is read under both names** (`scoop-manifest.json`, and
+  `manifest.json` from older Scoop), and an installed app whose metadata can't be read
+  is listed with the version folder's name instead of being skipped.
+- **D69. `tools/conharness`** drives ATLAS in a real Windows pseudo-console. It's a
+  separate module, so ATLAS doesn't depend on it.

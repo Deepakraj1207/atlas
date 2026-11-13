@@ -1,8 +1,8 @@
 # ATLAS — Test Status
 
-Last run: 2026-11-12, end of Phase 6, Go 1.24.7 (`GOTOOLCHAIN=local`) on linux/amd64.
+Last run: 2026-11-13, Windows verification, Go 1.24.7 (`GOTOOLCHAIN=local`) on linux/amd64.
 
-## Unit tests (`go test ./...`) — all passing, 163 tests in 16 packages
+## Unit tests (`go test ./...`) — all passing, 176 tests in 17 packages (plus Windows-only tests)
 
 | Package | Tests | Covers |
 |---------|-------|--------|
@@ -78,6 +78,49 @@ routes 7-Zip to `choco uninstall` and blocks .NET and Visual C++ runtimes; Disco
 recognises 7-Zip, Firefox, Git, GitHub CLI, Node.js and jq. The only failures are
 winget, for the reason above (16 passed, 2 failed: the scan and the update check).
 
+## Real Windows 11 PC (DESKTOP-41IVS1K, Windows 11 Home build 26300, not administrator)
+
+Reached through Desktop Commander. ATLAS was built on the PC with a portable Go in
+`%USERPROFILE%\atlas-test` (Go's module mirrors are blocked on that network, so modules
+were fetched from their repositories; `go.sum` still verified them). The interface was
+driven by `tools/conharness`, which runs ATLAS in a real Windows pseudo-console (ConPTY,
+as Windows Terminal does), sends keys and records the screen. ATLAS used a separate data
+folder (`ATLAS_HOME`), so the user's own ATLAS data wasn't touched.
+
+- **Self-test: 15 passed, 0 failed.** 67 Windows entries, 158 winget entries, Scoop;
+  130 apps after merging; 28 winget updates; 188 UserAssist records; Discover recognised
+  10 installed tools. winget's agreements are accepted here, so winget worked (CI can't
+  show that).
+- **Interface (checks 2.1–2.13 preview only, 2.19, 2.20): all screens work.**
+  Box-drawing characters and `›`, `•`, `→`, `✓` render; theme toggle, help, Tab bar at
+  72×24, compact layout at 40×12, scan (125 apps in 4.7 s), search, Advanced mode
+  (package IDs), update check (13 s), Updates list, analysis, Dependencies, Cleanup
+  search, Discover, Activity History; `q` exits with code 0 and leaves the window clean.
+
+Problems found there, all fixed and covered by tests:
+
+1. **Scoop found 1 of 3 apps.** Newer Scoop names its files `scoop-manifest.json` and
+   `scoop-install.json`; ATLAS only read the old names and skipped the rest silently.
+   So 7-Zip (installed with Scoop) was missing, and Discover offered to install it. All
+   four Scoop readers accept both names and a byte-order mark now, and an app whose
+   metadata can't be read is still listed.
+2. **Five false "listed twice with different versions".** winget list reads desktop
+   programs from the same Windows entries but shows its catalogue's version (PyCharm
+   262.10315.174 vs 2026.2.2). These are joined now when the name is unique on each side.
+   Windows app packages (MSIX) and Store entries are not joined this way.
+3. **.NET Native Framework packages were treated as apps,** flagged as "several
+   versions" and offered for removal in Cleanup. They're system components now.
+4. **"Safe Exam Browser 3.10.3 → 3.10.3".** winget's `< 3.10.3` means "older than its
+   catalogue"; the exact version now comes from the saved list, with a note.
+5. **"Antigravity 2.29.0 2.29.0".** A version the name already ends with isn't repeated.
+6. **The too-small message was cut off at 39×9;** it wraps now. Also "Found 1 things",
+   and the Updates hint now says `u` includes the hidden system components.
+
+Not done on the PC yet: re-running the flow after these fixes (the PC stopped
+responding), and the steps that change the computer or need a person: a real winget
+install and removal of jq (2.14–2.16), a UAC prompt (2.17) and Ctrl+C during an
+install (2.18).
+
 ## End-to-end runs in a pseudo-terminal
 
 **Phase 6, real binary.** Scan, then Home's "Find New Tools", which opened Discover Apps
@@ -138,10 +181,9 @@ the recommendation counted everything.
 
 ## Not verified in this environment
 
-- **An interactive Windows 11 desktop.** The plan is in `docs/WINDOWS_TEST_PLAN.md`:
-  UAC prompts from installers, Windows Terminal and conhost rendering, Ctrl+C during a
-  real install, and a real install and removal of `jq`. The user's PC
-  (DESKTOP-41IVS1K) was offline in Desktop Commander during this session.
+- **Changing steps on Windows 11.** The read-only checks ran on the user's PC (see above).
+  Still to do there: UAC prompts from installers, Ctrl+C during a real install, a real
+  winget install and removal of `jq`, and legacy conhost.
 
 - That every catalogue package ID resolves today. That needs network access to each
   package source. IDs are believed correct as of 2026-11, and a wrong one fails with
