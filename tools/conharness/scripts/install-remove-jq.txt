@@ -1,0 +1,70 @@
+# CHANGES THE COMPUTER: installs jq with winget, then removes it again
+# (test plan 2.13-2.16, 2.19). Run only with the owner's agreement. jq is a
+# small portable tool; it needs no administrator permission.
+until 20 Press ? for help
+keys m
+until 5 Advanced mode
+# 2.13 Discover → jq → install preview
+keys 7
+until 10 Discover Apps
+seek down 60 › [ ] jq ·
+keys enter
+until 10 What will happen
+expect winget install --id jqlang.jq --exact --source winget
+absent accept-source-agreements
+absent accept-package-agreements
+snap install preview
+# 2.14 Enter hands the terminal to winget
+keys enter
+until 300 Press Enter to return to ATLAS
+snap winget install output
+keys enter
+until 20 Installed 1 || install didn't finish
+expect Installed 1
+snap installed
+# rescan, then find jq in My Software
+keys 2
+keys s
+until 10 What will happen
+keys enter
+until 180 Scan complete || Scan finished with gaps
+keys /
+type jq
+keys enter
+wait 800
+expect jqlang.jq
+snap jq in my software
+# 2.15 removal preview: Enter must not confirm
+keys r
+until 30 Press r to go ahead
+expect winget uninstall --id jqlang.jq --exact
+snap removal preview
+keys enter
+until 5 To go ahead, press r
+snap enter refused
+# 2.16 r removes it in the terminal
+keys r
+until 300 Press Enter to return to ATLAS
+snap winget uninstall output
+keys enter
+until 30 Cleanup finished || Cleanup didn't work || Cleanup partly finished
+expect Cleanup finished
+# rescan and check jq is gone
+keys 2
+keys esc
+keys s
+until 10 What will happen
+keys enter
+until 180 Scan complete || Scan finished with gaps
+keys /
+type jq
+keys enter
+wait 800
+expect No apps match
+snap jq gone
+# 2.19 Activity History shows both, with commands and exit codes
+keys 8
+until 10 Activity History
+snap activity
+keys m
+keys q

@@ -9,6 +9,7 @@
 //	until [seconds] <text>   wait until the screen contains text (default 60 s)
 //	gone [seconds] <text>    wait until the screen no longer contains text
 //	keys <k> <k> ...         enter esc tab up down left right space bs ctrl+c, or one character
+//	seek <key> <max> <text>  press key until the screen contains text, at most max times
 //	type <text>              literal text
 //	snap <label>             record the screen
 //	expect <text>            the screen must contain text now
@@ -197,6 +198,31 @@ func main() {
 					send(k)
 				}
 				time.Sleep(250 * time.Millisecond)
+			}
+		case "seek":
+			f := strings.SplitN(rest, " ", 3)
+			if len(f) < 3 {
+				logf("!! bad seek line: %s", line)
+				break
+			}
+			key, ok := keyMap[f[0]]
+			if !ok {
+				key = f[0]
+			}
+			limit, _ := strconv.Atoi(f[1])
+			found := false
+			for i := 0; i <= limit; i++ {
+				if containsAny(screen(), f[2]) {
+					logf("-- seek %q ok after %d presses", f[2], i)
+					found = true
+					break
+				}
+				send(key)
+				time.Sleep(300 * time.Millisecond)
+			}
+			if !found {
+				logf("!! NOT FOUND seek %q", f[2])
+				snap("seek failed")
 			}
 		case "type":
 			for _, r := range rest {
