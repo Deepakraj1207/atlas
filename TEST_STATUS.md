@@ -116,9 +116,20 @@ Problems found there, all fixed and covered by tests:
 6. **The too-small message was cut off at 39×9;** it wraps now. Also "Found 1 things",
    and the Updates hint now says `u` includes the hidden system components.
 
-Not done on the PC yet: re-running the flow after these fixes (the PC stopped
-responding), and the steps that change the computer or need a person: a real winget
-install and removal of jq (2.14–2.16), a UAC prompt (2.17) and Ctrl+C during an
+**Re-checked on the PC after the fixes (commit 60ac12b):** `go test ./...` passes on
+Windows 11; self-test 15 passed, 0 failed; both conharness scripts pass in strict mode.
+Scoop now finds 3 apps (7-Zip recognised as installed in Discover); no false "listed
+twice" findings and no framework findings remain; Safe Exam Browser reads 3.10.2.920 →
+3.10.3; "Antigravity 2.29.0 → 2.31.2"; "Press u to update all 28: 25 apps and 3 system
+components"; "Found 1 thing". The one remaining note, "Microsoft Edge is listed twice",
+is accurate: Windows keeps an older Edge app package (152) beside Edge itself (157).
+
+**Interface checks on CI.** The same two conharness scripts (`tools/conharness/scripts`)
+run on windows-2025 and windows-2022 on every push. On 2025, winget hasn't accepted its
+agreements, so scans finish "with gaps"; the scripts accept either outcome.
+
+Not done on the PC yet, because they change the computer or need a person: a real
+winget install and removal of jq (2.14–2.16), a UAC prompt (2.17) and Ctrl+C during an
 install (2.18).
 
 ## End-to-end runs in a pseudo-terminal
