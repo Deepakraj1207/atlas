@@ -2,7 +2,6 @@ package cleanup
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"io/fs"
 	"os"
@@ -312,8 +311,7 @@ func (s scoopOld) Find(ctx context.Context) ([]core.UpdateStep, error) {
 			var m struct {
 				Version string `json:"version"`
 			}
-			data, err := os.ReadFile(filepath.Join(apps, e.Name(), "current", "manifest.json"))
-			if err != nil || json.Unmarshal(data, &m) != nil || m.Version == "" {
+			if !inventory.ReadScoopJSON(inventory.ScoopFile(filepath.Join(apps, e.Name(), "current"), "manifest.json"), &m) || m.Version == "" {
 				continue
 			}
 			vers, _ := os.ReadDir(filepath.Join(apps, e.Name()))

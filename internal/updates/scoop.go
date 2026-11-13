@@ -27,7 +27,7 @@ func NewScoop(roots []inventory.ScoopRoot, elevated bool) core.PackageManager {
 func (scoop) ID() string    { return ManagerScoop }
 func (scoop) Label() string { return "Scoop" }
 func (scoop) Detail() string {
-	return "Compares <scoop>\\apps\\*\\current\\manifest.json with <scoop>\\buckets\\<bucket>\\bucket\\<app>.json"
+	return "Compares <scoop>\\apps\\*\\current\\scoop-manifest.json (or manifest.json) with <scoop>\\buckets\\<bucket>\\bucket\\<app>.json"
 }
 
 type scoopVersion struct {
@@ -63,7 +63,7 @@ func (s scoop) CheckUpdates(ctx context.Context) ([]core.Update, error) {
 			current := filepath.Join(apps, name, "current")
 			var cur scoopVersion
 			var info scoopInstallInfo
-			if !readJSON(filepath.Join(current, "manifest.json"), &cur) || !readJSON(filepath.Join(current, "install.json"), &info) || info.Bucket == "" {
+			if !inventory.ReadScoopJSON(inventory.ScoopFile(current, "manifest.json"), &cur) || !inventory.ReadScoopJSON(inventory.ScoopFile(current, "install.json"), &info) || info.Bucket == "" {
 				continue // broken install, or installed from a URL with no bucket
 			}
 			var latest scoopVersion

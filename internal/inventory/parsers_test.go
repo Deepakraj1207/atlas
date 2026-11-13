@@ -139,14 +139,36 @@ func TestScoopScanner(t *testing.T) {
 	write("apps/ripgrep/current/manifest.json", `{"version":"14.1.0","description":"Fast search"}`)
 	write("apps/ripgrep/current/install.json", `{"bucket":"main"}`)
 	write("apps/scoop/current/manifest.json", `{"version":"0.4"}`)
-	os.MkdirAll(filepath.Join(root, "apps", "broken"), 0o755)
+	os.MkdirAll(filepath.Join(root, "apps", "broken"), 0o755) // no current folder: not installed
+	// Newer Scoop names the files scoop-manifest.json / scoop-install.json
+	// (seen on a real Windows 11 PC); one written with a byte-order mark.
+	write("apps/7zip/current/scoop-manifest.json", "\uFEFF"+`{"version":"26.06","description":"Archiver"}`)
+	write("apps/7zip/current/scoop-install.json", `{"bucket":"main"}`)
+	// Metadata unreadable, but installed: the version comes from the folder
+	// "current" links to.
+	os.MkdirAll(filepath.Join(root, "apps", "fastfetch", "2.71.0"), 0o755)
+	linked := os.Symlink(filepath.Join(root, "apps", "fastfetch", "2.71.0"), filepath.Join(root, "apps", "fastfetch", "current")) == nil
 
 	items, err := NewScoopScanner([]ScoopRoot{{Dir: root, Scope: "user"}, {Dir: filepath.Join(root, "missing"), Scope: "machine"}}).Scan(context.Background())
-	if err != nil || len(items) != 1 {
+	want := 2
+	if linked {
+		want = 3
+	}
+	if err != nil || len(items) != want {
 		t.Fatalf("got %+v, %v", items, err)
 	}
-	if it := items[0]; it.Name != "ripgrep" || it.Version != "14.1.0" || it.PackageID != "main/ripgrep" || it.Scope != "user" {
+	byName := map[string]core.SoftwareItem{}
+	for _, it := range items {
+		byName[it.Name] = it
+	}
+	if it := byName["ripgrep"]; it.Version != "14.1.0" || it.PackageID != "main/ripgrep" || it.Scope != "user" {
 		t.Errorf("ripgrep = %+v", it)
+	}
+	if it := byName["7zip"]; it.Version != "26.06" || it.PackageID != "main/7zip" || it.Description != "Archiver" {
+		t.Errorf("7zip (new file names, BOM) = %+v", it)
+	}
+	if it, ok := byName["fastfetch"]; linked && (!ok || it.Version != "2.71.0") {
+		t.Errorf("fastfetch (no metadata) = %+v", it)
 	}
 
 	if _, err := NewScoopScanner([]ScoopRoot{{Dir: filepath.Join(root, "nope")}}).Scan(context.Background()); err != core.ErrSourceUnavailable {

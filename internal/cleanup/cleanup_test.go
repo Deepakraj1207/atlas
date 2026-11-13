@@ -263,7 +263,8 @@ func TestSnapOldRevisions(t *testing.T) {
 
 func TestScoopTidiers(t *testing.T) {
 	root := t.TempDir()
-	writeFile(t, filepath.Join(root, "apps", "git", "current", "manifest.json"), `{"version":"2.45.1"}`)
+	// Newer Scoop names the file scoop-manifest.json.
+	writeFile(t, filepath.Join(root, "apps", "git", "current", "scoop-manifest.json"), `{"version":"2.45.1"}`)
 	writeFile(t, filepath.Join(root, "apps", "git", "2.45.1", "git.exe"), "new")
 	writeFile(t, filepath.Join(root, "apps", "git", "2.44.0", "git.exe"), "old-old")
 	writeFile(t, filepath.Join(root, "apps", "fd", "current", "manifest.json"), `{"version":"9"}`)

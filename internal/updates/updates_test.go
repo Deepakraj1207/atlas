@@ -118,11 +118,18 @@ func TestScoop(t *testing.T) {
 	write("apps/same/current/manifest.json", `{"version":"1.0"}`)
 	write("apps/same/current/install.json", `{"bucket":"extras"}`)
 	write("buckets/extras/same.json", `{"version":"1.0"}`)
+	// Newer Scoop names its files scoop-manifest.json / scoop-install.json.
+	write("apps/zoxide/current/scoop-manifest.json", `{"version":"0.9.4"}`)
+	write("apps/zoxide/current/scoop-install.json", `{"bucket":"main"}`)
+	write("buckets/main/bucket/zoxide.json", `{"version":"0.9.6"}`)
 
 	m := NewScoop([]inventory.ScoopRoot{{Dir: root, Scope: "user"}}, false)
 	ups, err := m.CheckUpdates(context.Background())
-	if err != nil || len(ups) != 2 {
+	if err != nil || len(ups) != 3 {
 		t.Fatalf("got %+v, %v", ups, err)
+	}
+	if z := ups[2]; z.PackageID != "zoxide" || z.CurrentVersion != "0.9.4" || z.AvailableVersion != "0.9.6" {
+		t.Errorf("zoxide (new file names) = %+v", z)
 	}
 	if !ups[0].Held || ups[1].PackageID != "ripgrep" || ups[1].AvailableVersion != "14.1.0" || ups[1].Origin != "main" {
 		t.Errorf("updates = %+v", ups)

@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/deepakraj1207/atlas/internal/core"
 )
@@ -26,7 +27,44 @@ func NewScoopScanner(roots []ScoopRoot) core.Scanner { return scoopScanner{roots
 func (scoopScanner) ID() string    { return SourceScoop }
 func (scoopScanner) Label() string { return "Scoop" }
 func (s scoopScanner) Detail() string {
-	return "Reads <scoop>\\apps\\*\\current\\manifest.json and install.json"
+	return "Reads <scoop>\\apps\\*\\current\\scoop-manifest.json and scoop-install.json (manifest.json and install.json in older Scoop)"
+}
+
+// ScoopFile returns the path of one of Scoop's metadata files in an app's
+// "current" folder. Newer Scoop names them scoop-manifest.json and
+// scoop-install.json; older Scoop used manifest.json and install.json, and
+// apps installed back then keep the old names. name is the old name.
+func ScoopFile(currentDir, name string) string {
+	p := filepath.Join(currentDir, "scoop-"+name)
+	if _, err := os.Stat(p); err == nil {
+		return p
+	}
+	return filepath.Join(currentDir, name)
+}
+
+// ReadScoopJSON reads a Scoop metadata file, accepting a leading UTF-8
+// byte-order mark (Windows PowerShell 5.1 can write one).
+func ReadScoopJSON(path string, v any) bool {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	data = []byte(strings.TrimPrefix(string(data), "\uFEFF"))
+	return json.Unmarshal(data, v) == nil
+}
+
+// scoopLinkedVersion is the version folder "current" points to
+// (apps\7zip\current -> apps\7zip\26.06), or "" if it isn't a link.
+func scoopLinkedVersion(currentDir string) string {
+	target, err := os.Readlink(currentDir)
+	if err != nil {
+		return ""
+	}
+	v := filepath.Base(target)
+	if v == "current" || v == "." {
+		return ""
+	}
+	return v
 }
 
 type scoopManifest struct {
@@ -59,12 +97,17 @@ func (s scoopScanner) Scan(ctx context.Context) ([]core.SoftwareItem, error) {
 				continue
 			}
 			current := filepath.Join(appsDir, e.Name(), "current")
+			if _, err := os.Stat(current); err != nil {
+				continue // not installed (no current version)
+			}
 			var m scoopManifest
-			if !readJSON(filepath.Join(current, "manifest.json"), &m) {
-				continue // incomplete or broken install
+			if !ReadScoopJSON(ScoopFile(current, "manifest.json"), &m) {
+				// Still list it: the app is installed even if its metadata
+				// can't be read. The version folder names the version.
+				m.Version = scoopLinkedVersion(current)
 			}
 			var inst scoopInstall
-			readJSON(filepath.Join(current, "install.json"), &inst)
+			ReadScoopJSON(ScoopFile(current, "install.json"), &inst)
 			id := e.Name()
 			if inst.Bucket != "" {
 				id = inst.Bucket + "/" + e.Name()
@@ -85,12 +128,4 @@ func (s scoopScanner) Scan(ctx context.Context) ([]core.SoftwareItem, error) {
 		return nil, core.ErrSourceUnavailable
 	}
 	return items, nil
-}
-
-func readJSON(path string, v any) bool {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return false
-	}
-	return json.Unmarshal(data, v) == nil
 }

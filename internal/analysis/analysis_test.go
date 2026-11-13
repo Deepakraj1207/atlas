@@ -191,7 +191,7 @@ func TestChocolateyAndScoopDependencies(t *testing.T) {
 	}
 
 	write("scoop/apps/app1/current/manifest.json", `{"depends":"main/python"}`)
-	write("scoop/apps/app2/current/manifest.json", `{"depends":["python","7zip"]}`)
+	write("scoop/apps/app2/current/scoop-manifest.json", "\uFEFF"+`{"depends":["python","7zip"]}`) // newer Scoop name, with a byte-order mark
 	write("scoop/apps/python/current/manifest.json", `{"version":"3.12.3"}`)
 	in, err = NewScoopDeps([]inventory.ScoopRoot{{Dir: filepath.Join(root, "scoop")}}).Read(context.Background())
 	if err != nil {

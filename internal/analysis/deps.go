@@ -1,6 +1,7 @@
 package analysis
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"encoding/xml"
@@ -259,7 +260,7 @@ func NewScoopDeps(roots []inventory.ScoopRoot) Source { return scoopDeps{roots: 
 func (scoopDeps) ID() string    { return "deps-scoop" }
 func (scoopDeps) Label() string { return "Package dependencies (Scoop)" }
 func (scoopDeps) Detail() string {
-	return "Reads \"depends\" in <scoop>\\apps\\*\\current\\manifest.json"
+	return "Reads \"depends\" in <scoop>\\apps\\*\\current\\scoop-manifest.json (or manifest.json)"
 }
 
 func (d scoopDeps) Read(ctx context.Context) (Input, error) {
@@ -276,7 +277,7 @@ func (d scoopDeps) Read(ctx context.Context) (Input, error) {
 			if err := ctx.Err(); err != nil {
 				return Input{}, err
 			}
-			data, err := os.ReadFile(filepath.Join(apps, e.Name(), "current", "manifest.json"))
+			data, err := os.ReadFile(inventory.ScoopFile(filepath.Join(apps, e.Name(), "current"), "manifest.json"))
 			if err != nil {
 				continue
 			}
@@ -300,6 +301,7 @@ func scoopDepends(data []byte) []string {
 	var m struct {
 		Depends json.RawMessage `json:"depends"`
 	}
+	data = bytes.TrimPrefix(data, []byte("\uFEFF"))
 	if json.Unmarshal(data, &m) != nil || len(m.Depends) == 0 {
 		return nil
 	}
