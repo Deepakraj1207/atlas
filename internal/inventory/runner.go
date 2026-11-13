@@ -28,11 +28,20 @@ type CommandError struct {
 }
 
 func (e *CommandError) Error() string {
-	msg := fmt.Sprintf("%s exited with code %d", e.Command, e.ExitCode)
+	msg := fmt.Sprintf("%s exited with code %s", e.Command, FormatExitCode(e.ExitCode))
 	if e.Stderr != "" {
 		msg += ": " + e.Stderr
 	}
 	return msg
+}
+
+// FormatExitCode shows Windows HRESULT-style codes (such as winget's
+// 0x8A15xxxx errors) in hexadecimal, the form their documentation uses.
+func FormatExitCode(code int) string {
+	if code > 0xFFFF || code < -0xFFFF {
+		return fmt.Sprintf("0x%08X", uint32(code))
+	}
+	return fmt.Sprint(code)
 }
 
 func (e *CommandError) Unwrap() error { return e.Err }
@@ -60,7 +69,12 @@ func ExecRunner(ctx context.Context, name string, args ...string) ([]byte, error
 	if ctx.Err() != nil {
 		return stdout.Bytes(), ctx.Err()
 	}
-	ce := &CommandError{Command: name, ExitCode: -1, Stderr: lastLine(stderr.String()), Err: err}
+	// Some tools (winget among them) print their error to stdout.
+	msg := lastLine(stderr.String())
+	if msg == "" {
+		msg = lastLine(stdout.String())
+	}
+	ce := &CommandError{Command: name, ExitCode: -1, Stderr: msg, Err: err}
 	var exitErr *exec.ExitError
 	if errors.As(err, &exitErr) {
 		ce.ExitCode = exitErr.ExitCode()
@@ -70,8 +84,20 @@ func ExecRunner(ctx context.Context, name string, args ...string) ([]byte, error
 
 // lastLine returns the last non-empty line, trimmed to a reasonable length.
 func lastLine(s string) string {
-	lines := strings.Split(strings.TrimSpace(s), "\n")
-	l := strings.TrimSpace(lines[len(lines)-1])
+	// Drop spinner frames drawn with carriage returns.
+	var lines []string
+	for _, l := range strings.Split(s, "\n") {
+		if i := strings.LastIndex(strings.TrimRight(l, "\r "), "\r"); i >= 0 {
+			l = l[i+1:]
+		}
+		if t := strings.Trim(strings.TrimSpace(l), `-\|/`); t != "" {
+			lines = append(lines, strings.TrimSpace(l))
+		}
+	}
+	if len(lines) == 0 {
+		return ""
+	}
+	l := lines[len(lines)-1]
 	if len(l) > 200 {
 		l = l[:200] + "…"
 	}

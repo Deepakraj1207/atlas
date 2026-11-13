@@ -94,6 +94,17 @@ func (s *Service) Analyze(ctx context.Context, progress func(core.SourceEvent)) 
 		}
 		return []Input{in}, nil
 	}, func(string) time.Duration { return DefaultTimeout }, progress)
+	// Report what each source actually found, not how many inputs it gave.
+	for i := range results {
+		if len(found[i]) == 0 {
+			continue
+		}
+		if f := found[i][0]; f.IsUsage {
+			results[i].Count = len(f.Usage)
+		} else {
+			results[i].Count = len(f.Graph.Nodes)
+		}
+	}
 	res.Sources = results
 
 	in.UsageNote = "Linux doesn't keep a record of when programs are opened."

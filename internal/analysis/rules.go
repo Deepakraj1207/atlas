@@ -201,7 +201,7 @@ func supportFindings(runtimes []core.Runtime, now time.Time) (ended, ending, vc 
 		case g.support.State == "ending":
 			ending = append(ending, core.Finding{
 				Key: "ending:" + key(label), Kind: "support", Severity: core.SeverityInfo,
-				Title:      fmt.Sprintf("Support for %s ends in %s", label, when),
+				Title:      fmt.Sprintf("Support for %s ends %s", label, EndPhrase(g.support.EndDate)),
 				Summary:    fmt.Sprintf("After %s, %s stops receiving fixes, including security fixes.", when, label),
 				Why:        "Planning a move to a newer version now avoids a rush later.",
 				Suggestion: "When convenient, install a newer supported version. Dependencies (5) shows what uses this one.",
@@ -211,7 +211,7 @@ func supportFindings(runtimes []core.Runtime, now time.Time) (ended, ending, vc 
 			ended = append(ended, core.Finding{
 				Key: "eol-distro:" + key(label), Kind: "support", Severity: core.SeverityInfo,
 				Title:      fmt.Sprintf("%s is past its upstream end of support", label),
-				Summary:    fmt.Sprintf("The %s project stopped supporting %s in %s. Your Linux distribution may still provide security fixes for its package.", g.family, g.branch, when),
+				Summary:    fmt.Sprintf("The %s project stopped supporting %s %s. Your Linux distribution may still provide security fixes for its package.", g.family, g.branch, EndPhrase(g.support.EndDate)),
 				Why:        "Distribution maintainers often keep patching older versions for the life of the release, but not always.",
 				Suggestion: "Check your distribution's support policy. Upgrading the distribution moves you to newer versions.",
 				Items:      g.items, Details: details, Reference: g.support.Reference,
@@ -220,7 +220,7 @@ func supportFindings(runtimes []core.Runtime, now time.Time) (ended, ending, vc 
 			ended = append(ended, core.Finding{
 				Key: "eol:" + key(label), Kind: "support", Severity: core.SeverityAttention,
 				Title:      fmt.Sprintf("%s no longer gets security fixes", label),
-				Summary:    fmt.Sprintf("Support for %s ended on %s.", label, when),
+				Summary:    fmt.Sprintf("Support for %s ended %s.", label, EndPhrase(g.support.EndDate)),
 				Why:        "Software that no longer gets fixes can have known security problems that will never be patched.",
 				Suggestion: "Install a supported version (the newest is usually best). Before removing this one, check Dependencies (5) for anything that still needs it; Cleanup (6) checks again before removing anything.",
 				Items:      g.items, Details: details, Reference: g.support.Reference,
@@ -304,6 +304,22 @@ func duplicateFindings(items []core.SoftwareItem) (dups, versions []core.Finding
 			details = append(details, fmt.Sprintf("%s %s from %s (%s)", it.Name, it.Version, it.Source, loc))
 		}
 		name := g[0].Name
+		installerPair := len(g) == 2 && sources[inventory.SourceRegistry] && (sources[inventory.SourceChocolatey] || sources[inventory.SourceWinget])
+		if installerPair {
+			other := "Chocolatey"
+			if sources[inventory.SourceWinget] {
+				other = "Windows Package Manager"
+			}
+			dups = append(dups, core.Finding{
+				Key: "duplicate:" + k, Kind: "duplicate", Severity: core.SeverityInfo,
+				Title:      fmt.Sprintf("%s is listed twice with different versions", name),
+				Summary:    fmt.Sprintf("Windows and %s each list it, with versions %s and %s. It may be installed twice, or %s's record may be out of date.", other, g[0].Version, g[1].Version, other),
+				Why:        "If it's installed twice, the copies are updated separately. If the record is out of date, updates through that tool may not work as expected.",
+				Suggestion: "Check Windows Settings › Apps to see whether it appears twice. If it does, you can remove the copy you don't use from Cleanup (6).",
+				Items:      refs, Details: details,
+			})
+			continue
+		}
 		if len(sources) >= 2 {
 			dups = append(dups, core.Finding{
 				Key: "duplicate:" + k, Kind: "duplicate", Severity: core.SeverityInfo,

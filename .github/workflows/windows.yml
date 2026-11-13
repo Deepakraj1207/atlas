@@ -50,10 +50,23 @@ jobs:
             if ($cmd) { "$c -> $($cmd.Source)" } else { "$c -> not installed" }
           }
           choco --version
+          if (Get-Command winget -ErrorAction SilentlyContinue) {
+            "--- winget --version"; winget --version
+            "--- winget list --disable-interactivity (first 25 lines)"
+            winget list --disable-interactivity 2>&1 | Select-Object -First 25
+            "exit code: $LASTEXITCODE"
+            "--- winget source list"; winget source list 2>&1
+          }
 
       - name: Test
         run: go test -count=1 -v ./... 2>&1 | Tee-Object -FilePath test-output.txt
         shell: pwsh
+
+      - name: Windows-only test results
+        shell: pwsh
+        run: |
+          Select-String -Path test-output.txt -Pattern '^\s*(--- (PASS|FAIL|SKIP)): (TestRegistryScanReadsThisComputer|TestExecRunnerOnWindows|TestDefaultScannersRunOnWindows|TestExecStarter\w*|TestUserAssistReadsThisComputer|TestWindowsFolders)' | ForEach-Object { $_.Line.Trim() }
+          Select-String -Path test-output.txt -Pattern '(registry_live_windows_test|usage_live_windows_test|paths_windows_test)\.go:\d+:' | ForEach-Object { $_.Line.Trim() }
 
       - name: Fail if any test failed
         shell: pwsh

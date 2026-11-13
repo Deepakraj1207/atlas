@@ -1,7 +1,9 @@
 package inventory
 
 import (
+	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/deepakraj1207/atlas/internal/core"
@@ -66,6 +68,7 @@ func Merge(items []core.SoftwareItem) []core.SoftwareItem {
 		}
 		mergeInto(&out[idx], it)
 	}
+	out = mergeInstallerRecords(out)
 	slices.SortStableFunc(out, func(a, b core.SoftwareItem) int {
 		if c := strings.Compare(normName(a.Name), normName(b.Name)); c != 0 {
 			return c
@@ -101,4 +104,93 @@ func mergeInto(dst *core.SoftwareItem, src core.SoftwareItem) {
 			dst.AlsoFoundIn = append(dst.AlsoFoundIn, s)
 		}
 	}
+}
+
+var (
+	reParens   = regexp.MustCompile(`\([^)]*\)`)
+	reVersions = regexp.MustCompile(`\b[vV]?\d+(?:[._]\d+)+\b|(?:^|\s)[vV]?\d+(?:\s|$)`)
+	reArchWord = regexp.MustCompile(`(?i)\b(x64|x86|arm64|amd64|64-bit|32-bit)\b`)
+	reNonAlnum = regexp.MustCompile(`[^a-z0-9]+`)
+)
+
+// ProductKey reduces a display name to the product it names: "7-Zip 26.05
+// (x64)" and "7-Zip (Install)" both become "7zip".
+func ProductKey(name string) string {
+	s := strings.ReplaceAll(strings.ToLower(name), "+", "plus")
+	s = reParens.ReplaceAllString(s, " ")
+	s = reArchWord.ReplaceAllString(s, " ")
+	s = reVersions.ReplaceAllString(s, " ")
+	return reNonAlnum.ReplaceAllString(s, "")
+}
+
+// VersionsEquivalent reports whether two versions are the same release
+// written differently: "26.05" and "26.5.0", or "2.39.3" and "2.39.3.0".
+func VersionsEquivalent(a, b string) bool {
+	pa, oka := numericParts(a)
+	pb, okb := numericParts(b)
+	if !oka || !okb {
+		return false
+	}
+	for len(pa) < len(pb) {
+		pa = append(pa, 0)
+	}
+	for len(pb) < len(pa) {
+		pb = append(pb, 0)
+	}
+	return slices.Equal(pa, pb)
+}
+
+func numericParts(v string) ([]int, bool) {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return nil, false
+	}
+	var out []int
+	for _, p := range strings.Split(v, ".") {
+		n, err := strconv.Atoi(p)
+		if err != nil {
+			return nil, false
+		}
+		out = append(out, n)
+	}
+	return out, true
+}
+
+// mergeInstallerRecords joins a Windows "installed programs" entry with the
+// Chocolatey or winget record of the same install. Those tools run normal
+// installers, so one program appears in both places, often with a
+// different display name ("7-Zip (Install)") and version format ("26.5.0"
+// vs "26.05"). Scoop apps are portable copies and are never joined this way.
+func mergeInstallerRecords(items []core.SoftwareItem) []core.SoftwareItem {
+	used := make([]bool, len(items))
+	for i := range items {
+		if items[i].Source != SourceRegistry {
+			continue
+		}
+		key := ProductKey(items[i].Name)
+		if len(key) < 3 {
+			continue
+		}
+		for j := range items {
+			if used[j] || i == j {
+				continue
+			}
+			b := items[j]
+			if b.Source != SourceChocolatey && b.Source != SourceWinget {
+				continue
+			}
+			if ProductKey(b.Name) == key && VersionsEquivalent(items[i].Version, b.Version) {
+				mergeInto(&items[i], b)
+				used[j] = true
+				break
+			}
+		}
+	}
+	out := items[:0:0]
+	for i, it := range items {
+		if !used[i] {
+			out = append(out, it)
+		}
+	}
+	return out
 }

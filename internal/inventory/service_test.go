@@ -236,3 +236,63 @@ func TestScanActivityTexts(t *testing.T) {
 		t.Error("empty message should fall back to status")
 	}
 }
+
+func TestMergeJoinsInstallerRecordsWithEquivalentVersions(t *testing.T) {
+	reg := core.SoftwareItem{Name: "7-Zip 26.05 (x64)", Version: "26.05", Publisher: "Igor Pavlov", Source: SourceRegistry, Kind: core.KindApp}
+	choco := core.SoftwareItem{Name: "7-Zip (Install)", Version: "26.5.0", PackageID: "7zip.install", Source: SourceChocolatey, Kind: core.KindApp}
+	aws := core.SoftwareItem{Name: "AWS Command Line Interface v2", Version: "2.39.3.0", Source: SourceRegistry, Kind: core.KindApp}
+	awsChoco := core.SoftwareItem{Name: "AWS Command Line Interface v2 (Install)", Version: "2.39.3", PackageID: "awscli", Source: SourceChocolatey, Kind: core.KindApp}
+	cmake := core.SoftwareItem{Name: "CMake", Version: "4.4.5", Source: SourceRegistry, Kind: core.KindApp}
+	cmakeChoco := core.SoftwareItem{Name: "CMake (Install)", Version: "3.31.6", PackageID: "cmake.install", Source: SourceChocolatey, Kind: core.KindApp}
+	scoopJq := core.SoftwareItem{Name: "jq", Version: "1.7.1", Source: SourceScoop, Kind: core.KindApp}
+	regJq := core.SoftwareItem{Name: "jq", Version: "1.7.1.0", Source: SourceRegistry, Kind: core.KindApp}
+
+	out := Merge([]core.SoftwareItem{reg, aws, cmake, regJq, choco, awsChoco, cmakeChoco, scoopJq})
+	byName := map[string]core.SoftwareItem{}
+	for _, it := range out {
+		byName[it.Name+"|"+it.Source] = it
+	}
+	z := byName["7-Zip 26.05 (x64)|"+SourceRegistry]
+	if z.PackageID != "7zip.install" || len(z.AlsoFoundIn) != 1 || z.AlsoFoundIn[0] != SourceChocolatey || z.Publisher != "Igor Pavlov" {
+		t.Errorf("7-Zip records should be joined: %+v", z)
+	}
+	if a := byName["AWS Command Line Interface v2|"+SourceRegistry]; a.PackageID != "awscli" {
+		t.Errorf("AWS CLI records should be joined: %+v", a)
+	}
+	if _, ok := byName["CMake (Install)|"+SourceChocolatey]; !ok {
+		t.Error("different versions must stay separate (can't tell if it's one install)")
+	}
+	if _, ok := byName["jq|"+SourceScoop]; !ok {
+		t.Error("Scoop apps are separate portable copies and are never joined with Windows entries")
+	}
+	if len(out) != 6 {
+		t.Errorf("want 6 items, got %d: %+v", len(out), out)
+	}
+}
+
+func TestVersionsEquivalentAndProductKey(t *testing.T) {
+	for _, c := range []struct {
+		a, b string
+		want bool
+	}{{"26.05", "26.5.0", true}, {"2.39.3", "2.39.3.0", true}, {"1.10", "1.1", false}, {"4.4.5", "3.31.6", false}, {"1.0-beta", "1.0", false}, {"", "1", false}} {
+		if got := VersionsEquivalent(c.a, c.b); got != c.want {
+			t.Errorf("VersionsEquivalent(%q, %q) = %v", c.a, c.b, got)
+		}
+	}
+	if ProductKey("7-Zip (Install)") != "7zip" || ProductKey("AWS Command Line Interface v2") != "awscommandlineinterface" {
+		t.Errorf("product keys: %q %q", ProductKey("7-Zip (Install)"), ProductKey("AWS Command Line Interface v2"))
+	}
+}
+
+func TestCommandErrorFormatting(t *testing.T) {
+	e := &CommandError{Command: "winget", ExitCode: -1978335162, Stderr: "Failed in attempting to update the source"}
+	if got := e.Error(); got != "winget exited with code 0x8A150046: Failed in attempting to update the source" {
+		t.Errorf("Error() = %q", got)
+	}
+	if FormatExitCode(3) != "3" || FormatExitCode(2316632134) != "0x8A150046" {
+		t.Errorf("FormatExitCode: %s %s", FormatExitCode(3), FormatExitCode(2316632134))
+	}
+	if got := lastLine("   - \r   \\ \rSearching...\nFailed when searching source: msstore\n\n"); got != "Failed when searching source: msstore" {
+		t.Errorf("lastLine = %q", got)
+	}
+}

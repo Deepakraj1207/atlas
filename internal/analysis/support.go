@@ -67,6 +67,15 @@ func FormatEnd(s string) string {
 	return s
 }
 
+// EndPhrase is FormatEnd with the right preposition: "on 7 Oct 2024" or
+// "in Oct 2026".
+func EndPhrase(s string) string {
+	if _, err := time.Parse("2006-01-02", s); err == nil {
+		return "on " + FormatEnd(s)
+	}
+	return "in " + FormatEnd(s)
+}
+
 // LookupSupport returns the support status of a runtime branch at now.
 func LookupSupport(family, branch string, distro bool, now time.Time) core.Support {
 	s := core.Support{State: "unknown", Reference: supportRefs[family], DistroManaged: distro}

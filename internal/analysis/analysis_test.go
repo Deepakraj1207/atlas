@@ -50,7 +50,7 @@ func TestLookupSupport(t *testing.T) {
 	if s := LookupSupport("Node.js", "22", false, time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)); s.State != "ending" {
 		t.Errorf("Node 22 four months before EOL should be ending, got %s", s.State)
 	}
-	if FormatEnd("2024-10-07") != "7 Oct 2024" || FormatEnd("2026-10") != "Oct 2026" {
+	if FormatEnd("2024-10-07") != "7 Oct 2024" || FormatEnd("2026-10") != "Oct 2026" || EndPhrase("2026-10") != "in Oct 2026" || EndPhrase("2024-10-07") != "on 7 Oct 2024" {
 		t.Error("FormatEnd")
 	}
 }
@@ -283,7 +283,7 @@ func TestSupportRules(t *testing.T) {
 	if distro == nil || distro.Severity != core.SeverityInfo || !strings.Contains(distro.Summary, "distribution may still provide") {
 		t.Errorf("distro-managed EOL must be info and say so: %+v", distro)
 	}
-	if f := findKey(fs, "ending:node"); f == nil || !strings.Contains(f.Title, "Apr 2027") {
+	if f := findKey(fs, "ending:node"); f == nil || !strings.Contains(f.Title, "ends on 30 Apr 2027") {
 		t.Errorf("node ending finding = %+v", f)
 	}
 	vc := findKey(fs, "eol:visual-c++")
@@ -469,6 +469,15 @@ func TestServiceAnalyzeSavesAndRecords(t *testing.T) {
 		t.Errorf("activity = %+v", acts[0])
 	}
 
+	graph := newGraph()
+	graph.addNode("a")
+	graph.addNode("b")
+	counted := NewService([]Source{fakeSource{id: "g", in: Input{GraphFor: "dpkg", Graph: graph}}, fakeSource{id: "u", in: Input{IsUsage: true, Usage: []UsageRecord{{Path: "x", LastRun: now}}}}}, db, nil, true)
+	res, _ = counted.Analyze(ctx, nil)
+	if res.Sources[0].Count != 2 || res.Sources[1].Count != 1 {
+		t.Errorf("source counts should be packages and records: %+v", res.Sources)
+	}
+
 	failing := NewService([]Source{fakeSource{id: "y", err: errors.New("boom")}}, db, nil, false)
 	res, _ = failing.Analyze(ctx, nil)
 	if res.Status != core.ScanPartial || len(res.Findings) == 0 {
@@ -495,5 +504,18 @@ func TestCancelBeforeStartIsReportedAsCancelled(t *testing.T) {
 	acts, _ := db.RecentActivity(context.Background(), 1)
 	if len(acts) != 1 || acts[0].Outcome != core.OutcomeCancelled {
 		t.Errorf("cancel should be recorded: %+v", acts)
+	}
+}
+
+func TestInstallerPairWithDifferentVersionsIsWordedCarefully(t *testing.T) {
+	in := baseInputs()
+	in.Items = []core.SoftwareItem{
+		{Name: "CMake", Version: "4.4.5", Source: inventory.SourceRegistry, Kind: core.KindApp},
+		{Name: "CMake (Install)", Version: "3.31.6", Source: inventory.SourceChocolatey, Kind: core.KindApp},
+	}
+	fs, _, _ := Analyze(in)
+	f := findKey(fs, "duplicate:cmake")
+	if f == nil || !strings.Contains(f.Title, "listed twice") || !strings.Contains(f.Summary, "record may be out of date") {
+		t.Errorf("finding = %+v", f)
 	}
 }
