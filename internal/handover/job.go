@@ -114,7 +114,10 @@ func (j *Job) Run() error {
 		}()
 	}
 
-	j.printf("\nATLAS is handing this terminal to your package managers.\n")
+	// A rule marks where this handover starts: the terminal still shows
+	// any earlier handover's output above it (seen on Windows 11).
+	j.printf("\n──── %s ────\n", time.Now().Format("15:04:05"))
+	j.printf("ATLAS is handing this terminal to your package managers.\n")
 	j.printf("You'll see their own messages below. Answer any questions they ask; ATLAS never answers for you.\n")
 	j.printf("Press Ctrl+C to stop. Nothing further will start after that.\n")
 
@@ -145,7 +148,11 @@ func (j *Job) Run() error {
 		case core.ElevationSudo:
 			j.printf("      sudo may ask for your password. ATLAS never sees or stores it.\n")
 		case core.ElevationInstaller:
-			j.printf("      Windows may ask for permission if the installer needs it.\n")
+			if st.Action == core.ActionRemove || st.Action == core.ActionClean {
+				j.printf("      Windows may ask for permission if the uninstaller needs it.\n")
+			} else {
+				j.printf("      Windows may ask for permission if the installer needs it.\n")
+			}
 		case core.ElevationPolkit:
 			j.printf("      Your system may ask for your password.\n")
 		}

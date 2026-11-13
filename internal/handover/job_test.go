@@ -87,12 +87,22 @@ func TestVerbsFollowTheStepAction(t *testing.T) {
 	var out bytes.Buffer
 	j := New([]core.UpdateStep{
 		{Label: "APT", Action: core.ActionRemove, Updates: []core.Update{{Name: "meld", CurrentVersion: "3.22"}}, Commands: []core.Command{{Program: "x"}}},
+		{Label: "Windows Package Manager", Action: core.ActionRemove, Elevation: core.ElevationInstaller, Updates: []core.Update{{Name: "jq"}}, Commands: []core.Command{{Program: "x"}}},
 	}, start, func() (<-chan os.Signal, func()) { return make(chan os.Signal), func() {} })
 	j.SetStdin(strings.NewReader("\n"))
 	j.SetStdout(&out)
 	j.Run()
-	if !strings.Contains(out.String(), "APT: removing meld") || !strings.Contains(out.String(), "Finished: 1 removed.") {
+	if !strings.Contains(out.String(), "APT: removing meld") || !strings.Contains(out.String(), "Finished: 2 removed.") {
 		t.Errorf("output = %s", out.String())
+	}
+	// Seen on Windows 11: a removal said "if the installer needs it".
+	if !strings.Contains(out.String(), "if the uninstaller needs it") || strings.Contains(out.String(), "if the installer needs it") {
+		t.Errorf("removal should mention the uninstaller: %s", out.String())
+	}
+	// Each handover starts with a rule, so it can't be confused with the
+	// previous handover's output still on screen.
+	if !strings.HasPrefix(out.String(), "\n──── ") {
+		t.Errorf("handover should start with a rule: %q", out.String()[:min(40, len(out.String()))])
 	}
 	if Summary([]core.StepResult{{Step: core.UpdateStep{Action: core.ActionClean}, Status: core.StepDone}}) != "Finished: 1 cleaned up." {
 		t.Error("clean-up summary wording")
