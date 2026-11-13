@@ -1,4 +1,10 @@
 # Built by packaging/linux/build-rpm.sh from an already compiled binary.
+# The binary is already stripped (-s -w) and may be for another
+# architecture than the build machine, so skip rpmbuild's strip and
+# debug-info steps, which would run the build machine's tools on it.
+%global debug_package %{nil}
+%global _build_id_links none
+%global __os_install_post %{nil}
 Name:           atlas-lifecycle
 Version:        %{atlas_version}
 Release:        %{atlas_release}

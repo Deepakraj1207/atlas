@@ -15,6 +15,19 @@ commit="$(git rev-parse HEAD)"
 date="$(git show -s --format=%cs HEAD)"
 ldflags="-s -w -X main.version=$version -X main.commit=$commit -X main.date=$date"
 
+# quiet runs a command and shows its output only if it fails.
+quiet() {
+  local log
+  log="$(mktemp)"
+  if ! "$@" >"$log" 2>&1; then
+    echo "FAILED: $*" >&2
+    cat "$log" >&2
+    rm -f "$log"
+    return 1
+  fi
+  rm -f "$log"
+}
+
 rm -rf "$out"
 mkdir -p "$out"
 work="$(mktemp -d)"
@@ -34,9 +47,9 @@ for target in windows/amd64 windows/arm64 linux/amd64 linux/arm64; do
     (cd "$dir" && zip -q -X "$root/$out/$name.zip" "$exe" LICENSE README.md)
   else
     tar -C "$work" --owner=0 --group=0 --sort=name --mtime="$date" -czf "$out/$name.tar.gz" "$name"
-    packaging/linux/build-deb.sh "$version" "$arch" "$dir/$exe" "$out" >/dev/null
+    quiet packaging/linux/build-deb.sh "$version" "$arch" "$dir/$exe" "$out"
     if command -v rpmbuild >/dev/null; then
-      packaging/linux/build-rpm.sh "$version" "$arch" "$dir/$exe" "$out" >/dev/null 2>&1
+      quiet packaging/linux/build-rpm.sh "$version" "$arch" "$dir/$exe" "$out"
     else
       echo "  note: rpmbuild isn't installed, so no .rpm for $arch"
     fi
