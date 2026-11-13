@@ -288,4 +288,8 @@ func TestRecordResults(t *testing.T) {
 	if a.Kind != "discover.install" || a.Outcome != core.OutcomePartial || !strings.Contains(a.Summary, "Installed: VLC media player") || !strings.Contains(a.Details, "exit code 100") {
 		t.Errorf("activity = %+v", a)
 	}
+	// One app installed: "it", not "them" (seen on Windows 11).
+	if !strings.Contains(a.Summary, "Scan again to add it to My Software.") {
+		t.Errorf("summary = %q", a.Summary)
+	}
 }

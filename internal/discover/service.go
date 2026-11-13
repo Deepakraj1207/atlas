@@ -270,7 +270,10 @@ func (s *Service) RecordResults(ctx context.Context, results []core.StepResult) 
 			parts = append(parts, p.label+": "+strings.Join(p.names, ", ")+".")
 		}
 	}
-	if len(done) > 0 {
+	switch {
+	case len(done) == 1:
+		parts = append(parts, "Scan again to add it to My Software.")
+	case len(done) > 1:
 		parts = append(parts, "Scan again to add them to My Software.")
 	}
 	if restart {
