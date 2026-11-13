@@ -1,0 +1,79 @@
+# Runs ATLAS's tests and read-only self-test on real Windows.
+# GitHub's runners are Windows Server; the Windows APIs ATLAS uses (registry,
+# console, winget, Chocolatey, Scoop) are the same as on Windows 11.
+name: windows
+
+on:
+  push:
+    branches: [claude/nice-ptolemy-rlg34q]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2025, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Install Scoop and two small apps (so the Scoop code paths see real data)
+        shell: pwsh
+        run: |
+          iex "& {$(irm get.scoop.sh)} -RunAsAdmin"
+          $shims = Join-Path $env:USERPROFILE 'scoop\shims'
+          $env:PATH = "$shims;$env:PATH"
+          Add-Content $env:GITHUB_PATH $shims
+          scoop install main/jq main/fd
+          scoop list
+
+      - name: Show available package managers
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          foreach ($c in 'winget','choco','scoop') {
+            $cmd = Get-Command $c -ErrorAction SilentlyContinue
+            if ($cmd) { "$c -> $($cmd.Source)" } else { "$c -> not installed" }
+          }
+          choco --version
+
+      - name: Test
+        run: go test -count=1 -v ./... 2>&1 | Tee-Object -FilePath test-output.txt
+        shell: pwsh
+
+      - name: Fail if any test failed
+        shell: pwsh
+        run: |
+          if (Select-String -Path test-output.txt -Pattern '^(--- FAIL|FAIL\s|panic:)' -Quiet) { Select-String -Path test-output.txt -Pattern '^(--- FAIL|FAIL\s|panic:)' ; exit 1 }
+
+      - name: Build
+        run: go build -o atlas.exe ./cmd/atlas
+
+      - name: Self-test (read-only)
+        shell: pwsh
+        run: |
+          ./atlas.exe -version
+          ./atlas.exe -selftest -report selftest-${{ matrix.os }}.md
+          Get-Content selftest-${{ matrix.os }}.md
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: selftest-${{ matrix.os }}
+          path: |
+            selftest-*.md
+            test-output.txt
