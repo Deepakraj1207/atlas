@@ -2,7 +2,7 @@
 
 Last run: 2026-11-13, Phase 7, Go 1.27.4 on linux/amd64.
 
-## Unit tests (`go test ./...`) — all passing, 204 tests in 21 packages (plus Windows-only tests)
+## Unit tests (`go test ./...`) — all passing, 197 tests in 22 packages (plus Windows-only tests)
 
 Phase 7 added:
 
