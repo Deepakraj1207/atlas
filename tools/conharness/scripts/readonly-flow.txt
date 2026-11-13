@@ -1,13 +1,15 @@
 # Read-only tour (test plan 2.5-2.13 preview only, 2.19, 2.20). Changes
 # nothing on the computer; run it with ATLAS_HOME set to a scratch folder.
+# Where a package manager can't be read (winget waiting for its agreements on
+# a fresh Windows), scans and checks finish "with gaps"; both are accepted.
 until 20 Press ? for help
 keys enter
 until 10 What will happen
 expect Is it safe?
 snap scan preview
 keys enter
-until 180 Scan complete
-expect See My Software (2)
+until 180 Scan complete || Scan finished with gaps
+expect See My Software (2) || See Activity History (8)
 keys 2
 until 10 My Software
 expect apps ·
@@ -61,8 +63,8 @@ until 10 Discover Apps
 snap discover
 keys 8
 until 10 Activity History
-expect Scanned your system
-expect Checked for updates
+expect Scanned your system || Scan finished with gaps
+expect Checked for updates || Update check finished with gaps
 expect Analyzed your software
 expect Looked for things to tidy
 snap activity

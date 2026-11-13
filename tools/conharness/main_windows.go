@@ -13,6 +13,10 @@
 //	snap <label>             record the screen
 //	expect <text>            the screen must contain text now
 //	absent <text>            the screen must not contain text now
+//
+// In until, gone, expect and absent, "a || b" means either text: for
+// outcomes that depend on the computer, such as a scan with gaps.
+//
 //	resize <cols> <rows>
 //	# comment
 //
@@ -173,7 +177,7 @@ func main() {
 			}
 			deadline := time.Now().Add(time.Duration(secs) * time.Second)
 			for {
-				has := strings.Contains(screen(), rest)
+				has := containsAny(screen(), rest)
 				if (cmd == "until") == has {
 					logf("-- %s %q ok after %.1fs", cmd, rest, time.Since(start).Seconds())
 					break
@@ -203,7 +207,7 @@ func main() {
 			time.Sleep(300 * time.Millisecond)
 			snap(rest)
 		case "expect", "absent":
-			has := strings.Contains(screen(), rest)
+			has := containsAny(screen(), rest)
 			if (cmd == "expect") != has {
 				logf("!! FAILED %s %q", cmd, rest)
 				snap("failed check")
@@ -244,6 +248,16 @@ func main() {
 	windows.TerminateProcess(pi.Process, 1)
 	windows.ClosePseudoConsole(hpc)
 	finish()
+}
+
+// containsAny reports whether s contains any of the " || "-separated texts.
+func containsAny(s, alternatives string) bool {
+	for _, a := range strings.Split(alternatives, " || ") {
+		if strings.Contains(s, a) {
+			return true
+		}
+	}
+	return false
 }
 
 func makeCmdLine(args []string) string {
