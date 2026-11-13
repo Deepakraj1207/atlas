@@ -51,3 +51,29 @@ func TestNameAndVersion(t *testing.T) {
 		}
 	}
 }
+
+func TestExitCodeHelpers(t *testing.T) {
+	if got := FormatExitCode(negHRESULT); got != "0x8A15010C" {
+		t.Errorf("negative HRESULT: %s", got)
+	}
+	if got := FormatExitCode(2316632332); got != "0x8A15010C" {
+		t.Errorf("unsigned HRESULT: %s", got)
+	}
+	if FormatExitCode(1) != "1" || FormatExitCode(1602) != "1602" {
+		t.Error("small codes stay decimal")
+	}
+	for _, c := range []int{2316632332, negHRESULT, 1602, 1223} {
+		if !CancelledByUser(c) {
+			t.Errorf("%d should mean cancelled by the user", c)
+		}
+	}
+	for _, c := range []int{0, 1, 130, 0x8A150046} {
+		if CancelledByUser(c) {
+			t.Errorf("%d is not a cancellation", c)
+		}
+	}
+}
+
+// negHRESULT is 0x8A15010C as Windows returns it to Go on 64-bit: a negative
+// 32-bit value.
+var negHRESULT = int(int32(-1978334964))

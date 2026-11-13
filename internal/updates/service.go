@@ -287,7 +287,7 @@ func ApplyActivity(results []core.StepResult, at time.Time) core.Activity {
 			line += " in " + r.Duration.Round(100*time.Millisecond).String()
 		}
 		if r.Status == core.StepFailed {
-			line += fmt.Sprintf(" (exit code %d)", r.ExitCode)
+			line += fmt.Sprintf(" (exit code %s)", core.FormatExitCode(r.ExitCode))
 		}
 		if r.Command != "" {
 			line += " — " + r.Command

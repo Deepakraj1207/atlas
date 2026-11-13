@@ -35,14 +35,8 @@ func (e *CommandError) Error() string {
 	return msg
 }
 
-// FormatExitCode shows Windows HRESULT-style codes (such as winget's
-// 0x8A15xxxx errors) in hexadecimal, the form their documentation uses.
-func FormatExitCode(code int) string {
-	if code > 0xFFFF || code < -0xFFFF {
-		return fmt.Sprintf("0x%08X", uint32(code))
-	}
-	return fmt.Sprint(code)
-}
+// FormatExitCode is core.FormatExitCode.
+func FormatExitCode(code int) string { return core.FormatExitCode(code) }
 
 func (e *CommandError) Unwrap() error { return e.Err }
 

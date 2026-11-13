@@ -171,8 +171,11 @@ func (j *Job) Run() error {
 			res.Restart = res.Restart || restart
 			if !ok {
 				res.Status = core.StepFailed
-				if stopped.Load() {
+				switch {
+				case stopped.Load():
 					res.Status, res.Note = core.StepStopped, "Stopped by you"
+				case core.CancelledByUser(code):
+					res.Status, res.Note = core.StepStopped, "You cancelled it, for example by answering No to Windows' permission prompt"
 				}
 				break
 			}
@@ -214,12 +217,15 @@ func resultLine(r core.StepResult) string {
 		}
 		return "  Done."
 	case core.StepStopped:
+		if r.Note != "" && r.Note != "Stopped by you" {
+			return "  Cancelled: " + r.Note + "."
+		}
 		return "  Stopped."
 	default:
 		if r.Note != "" {
 			return "  Didn't work: " + r.Note
 		}
-		return fmt.Sprintf("  Didn't work (exit code %d). The message above explains why.", r.ExitCode)
+		return fmt.Sprintf("  Didn't work (exit code %s). The message above explains why.", core.FormatExitCode(r.ExitCode))
 	}
 }
 

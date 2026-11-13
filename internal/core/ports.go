@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"slices"
 	"strings"
@@ -685,4 +686,27 @@ func NameAndVersion(name, version string) string {
 		return name
 	}
 	return name + " " + version
+}
+
+// FormatExitCode shows Windows HRESULT-style codes (such as winget's
+// 0x8A15xxxx errors) in hexadecimal, the form their documentation uses.
+func FormatExitCode(code int) string {
+	if code > 0xFFFF || code < -0xFFFF {
+		return fmt.Sprintf("0x%08X", uint32(code))
+	}
+	return fmt.Sprint(code)
+}
+
+// CancelledByUser reports whether an exit code means the person chose to
+// cancel: winget's "installation cancelled by the user" (0x8A15010C, seen
+// on Windows 11 after answering No to the permission prompt), Windows
+// Installer's 1602, and Windows' "operation cancelled" (1223), which a
+// declined permission prompt returns. None of these can occur on Linux,
+// where exit codes are 0-255.
+func CancelledByUser(code int) bool {
+	switch uint32(code) {
+	case 0x8A15010C, 1602, 1223:
+		return true
+	}
+	return false
 }

@@ -310,7 +310,7 @@ func Activity(results []core.StepResult, at time.Time) core.Activity {
 	for _, r := range results {
 		line := fmt.Sprintf("%s: %s", r.Step.Label, r.Status)
 		if r.Status == core.StepFailed {
-			line += fmt.Sprintf(" (exit code %d)", r.ExitCode)
+			line += fmt.Sprintf(" (exit code %s)", core.FormatExitCode(r.ExitCode))
 		}
 		if r.Command != "" {
 			line += " — " + r.Command

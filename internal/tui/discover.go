@@ -80,18 +80,23 @@ func (m *Model) markInstalled(results []core.StepResult) {
 }
 
 func installResultStatus(results []core.StepResult, recordErr error) components.Status {
-	done, bad, restart := 0, 0, false
+	done, bad, stopped, restart := 0, 0, 0, false
 	for _, r := range results {
 		switch r.Status {
 		case core.StepDone:
 			done++
 			restart = restart || r.Restart
-		case core.StepFailed, core.StepStopped:
+		case core.StepFailed:
 			bad++
+		case core.StepStopped:
+			bad++
+			stopped++
 		}
 	}
 	var st components.Status
 	switch {
+	case done == 0 && bad > 0 && stopped == bad:
+		st = components.Status{Text: "Install cancelled. Details are in Activity History (8).", Kind: components.StatusWarning}
 	case done > 0 && bad == 0:
 		st = components.Status{Text: fmt.Sprintf("Installed %d. Scan again to add it to My Software.", done), Kind: components.StatusSuccess}
 	case done > 0:

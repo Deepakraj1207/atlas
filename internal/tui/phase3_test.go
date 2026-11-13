@@ -343,3 +343,14 @@ func TestFailedCheckExplainsWhyOnUpdatesScreen(t *testing.T) {
 		t.Error("a failed check must not look like no check at all")
 	}
 }
+
+func TestInstallCancelledStatus(t *testing.T) {
+	st := installResultStatus([]core.StepResult{{Status: core.StepStopped, Note: "You cancelled it"}}, nil)
+	if !strings.Contains(st.Text, "Install cancelled") {
+		t.Errorf("declining the permission prompt should read as cancelled, got %q", st.Text)
+	}
+	st = installResultStatus([]core.StepResult{{Status: core.StepFailed}}, nil)
+	if !strings.Contains(st.Text, "didn't finish") {
+		t.Errorf("a real failure still reads as a failure, got %q", st.Text)
+	}
+}

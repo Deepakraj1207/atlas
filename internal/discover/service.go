@@ -237,7 +237,7 @@ func (s *Service) RecordResults(ctx context.Context, results []core.StepResult) 
 		}
 		line := fmt.Sprintf("%s: %s", r.Step.Label, r.Status)
 		if r.Status == core.StepFailed {
-			line += fmt.Sprintf(" (exit code %d)", r.ExitCode)
+			line += fmt.Sprintf(" (exit code %s)", core.FormatExitCode(r.ExitCode))
 		}
 		if r.Command != "" {
 			line += " — " + r.Command

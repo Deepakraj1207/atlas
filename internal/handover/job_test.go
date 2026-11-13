@@ -108,3 +108,37 @@ func TestVerbsFollowTheStepAction(t *testing.T) {
 		t.Error("clean-up summary wording")
 	}
 }
+
+// Seen on Windows 11: answering No to the permission prompt made winget exit
+// with 0x8A15010C, shown as "Didn't work (exit code 2316632332)".
+func TestDecliningPermissionIsCancelledNotFailed(t *testing.T) {
+	codes := map[string]int{"x": negHRESULT, "y": 0x8A150001, "z": 0}
+	start := func(c core.Command, in io.Reader, out, errw io.Writer) (int, error) {
+		return codes[c.Program], nil
+	}
+	var out bytes.Buffer
+	j := New([]core.UpdateStep{
+		{Label: "Windows Package Manager", Action: core.ActionInstall, Updates: []core.Update{{Name: "Notepad++"}}, Commands: []core.Command{{Program: "x"}}},
+		{Label: "Windows Package Manager", Action: core.ActionInstall, Updates: []core.Update{{Name: "Broken"}}, Commands: []core.Command{{Program: "y"}}},
+		{Label: "Windows Package Manager", Action: core.ActionInstall, Updates: []core.Update{{Name: "Fine"}}, Commands: []core.Command{{Program: "z"}}},
+	}, start, func() (<-chan os.Signal, func()) { return make(chan os.Signal), func() {} })
+	j.SetStdin(strings.NewReader("\n"))
+	j.SetStdout(&out)
+	j.Run()
+	r := j.Results()
+	if r[0].Status != core.StepStopped || !strings.Contains(r[0].Note, "You cancelled it") {
+		t.Errorf("declined: %+v", r[0])
+	}
+	if r[1].Status != core.StepFailed || r[2].Status != core.StepDone {
+		t.Errorf("a cancelled step must not stop the others: %+v", r)
+	}
+	for _, w := range []string{"Cancelled: You cancelled it", "Didn't work (exit code 0x8A150001)"} {
+		if !strings.Contains(out.String(), w) {
+			t.Errorf("output missing %q:\n%s", w, out.String())
+		}
+	}
+}
+
+// negHRESULT is 0x8A15010C as Windows returns it to Go on 64-bit: a negative
+// 32-bit value.
+var negHRESULT = int(int32(-1978334964))
