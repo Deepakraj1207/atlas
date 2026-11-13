@@ -8,10 +8,12 @@ Windows 11. Linux stays compatible.
 
 **Phase 6 — Discover Apps: complete.** All nine sections are now real.
 
-**Windows verification: in progress.** CI on Windows Server 2025 and 2022 passes,
-including Windows-only tests against the real registry, consoles and UserAssist. Four
-issues it found are fixed. The interactive Windows 11 checks in
-`docs/WINDOWS_TEST_PLAN.md` are waiting for the user's PC.
+**Windows verification: done, apart from three small checks.** CI on Windows Server 2025
+and 2022 runs the tests, the self-test and scripted interface checks in a real Windows
+console on every push. On the user's Windows 11 PC: self-test 15/15, all screens, a real
+winget install and removal (jq), and the UAC prompt declined and approved (Notepad++).
+Fifteen problems found this way are fixed (see TEST_STATUS.md). Still open: Ctrl+C during
+a real install, seeing "Install cancelled" live, and the legacy conhost window.
 
 | Phase | Status |
 |-------|--------|
@@ -57,7 +59,7 @@ issues it found are fixed. The interactive Windows 11 checks in
 | **Run and record** | done | Same terminal handover as updates; removed software leaves My Software; Smart Analysis marked stale; Activity History records everything |
 | **Discover Apps** | done | 30 curated tools in 7 categories, embedded and validated at build time, dated 2026-11; suggestions only from local data with a reason ("because you have Git"); installed and not-installable tools clearly marked with the reason |
 | **Installing** | done | Picks the best available manager (winget, Scoop, Chocolatey; APT, DNF, Flatpak, Snap); blocks Chocolatey without admin, APT without package lists, Flatpak without Flathub; adds a missing Scoop bucket as a visible step; classic snaps explained |
-| Removals, cleanup actions | not started | Phase 5 |
+| Windows verification tooling | done | `atlas -selftest` (read-only report), Windows CI, `tools/conharness` (drives ATLAS in a real Windows console) |
 
 ## Guarantees still held
 
