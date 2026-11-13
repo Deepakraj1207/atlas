@@ -57,6 +57,26 @@ func TestParseWingetList(t *testing.T) {
 	if tr := byName["Truncated Id App"]; tr.PackageID != "" {
 		t.Errorf("truncated IDs must be dropped, got %q", tr.PackageID)
 	}
+	for name, want := range map[string]string{"Git": "winget", "Some Local Tool": "ARP", "Microsoft.UI.Xaml.2.8": "MSIX"} {
+		if got := byName[name].Origin; got != want {
+			t.Errorf("%s: origin %q, want %q", name, got, want)
+		}
+	}
+}
+
+// Windows app frameworks that winget lists by display name (seen on a real
+// Windows 11 PC) are supporting parts, not apps to tidy away.
+func TestWindowsFrameworkPackagesAreComponents(t *testing.T) {
+	for _, n := range []string{"Microsoft .Net Native Framework Package 1.7", "Microsoft .NET Native Runtime Package 2.2", "Microsoft Visual C++ 2015 UWP Desktop Runtime Package"} {
+		if classifyWindowsName(n) != core.KindComponent {
+			t.Errorf("%q should be a component", n)
+		}
+	}
+	for _, n := range []string{"Visual Studio Code", "Obsidian", "Microsoft Edge"} {
+		if classifyWindowsName(n) != core.KindApp {
+			t.Errorf("%q should be an app", n)
+		}
+	}
 }
 
 func TestParseWingetLocalizedHeaderAndNoAvailableColumn(t *testing.T) {

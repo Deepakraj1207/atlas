@@ -126,7 +126,7 @@ func TestCheckForUpdatesFlow(t *testing.T) {
 	}
 	m = press(t, m, "3")
 	v := m.View()
-	for _, want := range []string{"Editor", "1.0", "1.1", "Pinned Tool (held)", "1 held back", "2 app updates · checked just now", "Press u to update all supported applications (2)", "Manager a"} {
+	for _, want := range []string{"Editor", "1.0", "1.1", "Pinned Tool (held)", "1 held back", "2 app updates · checked just now", "Press u to update all 2 apps.", "Manager a"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("Updates screen missing %q:\n%s", want, v)
 		}

@@ -62,9 +62,16 @@ func parseWingetUpgrade(out string) ([]core.Update, error) {
 				Manager:          ManagerWinget,
 				PackageID:        r.ID,
 				Name:             r.Name,
-				CurrentVersion:   strings.TrimPrefix(strings.TrimPrefix(r.Version, "< "), "> "),
+				CurrentVersion:   strings.TrimPrefix(r.Version, "> "),
 				AvailableVersion: r.Available,
 				Origin:           r.Source,
+			}
+			if bound, ok := strings.CutPrefix(r.Version, "< "); ok {
+				// winget only knows the installed version is older than the
+				// oldest one in its catalogue. Leave it blank so the saved
+				// software list's exact version is used instead.
+				u.CurrentVersion = ""
+				u.Note = "winget can't tell the exact installed version, only that it's older than " + bound
 			}
 			if inventory.Truncated(r.ID) {
 				u.PackageID = ""

@@ -39,6 +39,11 @@ type SoftwareItem struct {
 	// Scope is "machine" or "user" when known.
 	Scope       string
 	Description string
+	// Origin says where a package manager's record comes from: its
+	// repository ("winget", "msstore") or, for a local record, the kind of
+	// record ("ARP" for Windows' installed-programs list, "MSIX" for a
+	// Windows app package). Used while merging; not saved.
+	Origin string
 }
 
 // ErrSourceUnavailable is returned by a Scanner whose source does not exist
@@ -662,4 +667,22 @@ type DiscoverService interface {
 	PlanInstall(ctx context.Context, ids []string) ([]UpdateStep, error)
 	NewJob(steps []UpdateStep) TerminalJob
 	RecordResults(ctx context.Context, results []StepResult) error
+}
+
+// NameAndVersion joins a display name and a version for reading, leaving
+// out a version the name already ends with: many Windows programs are named
+// like "Antigravity 2.29.0". version may be "2.29.0 → 2.31.2".
+func NameAndVersion(name, version string) string {
+	name, version = strings.TrimSpace(name), strings.TrimSpace(version)
+	if version == "" {
+		return name
+	}
+	first, rest, arrow := strings.Cut(version, " → ")
+	if first != "" && strings.HasSuffix(strings.ToLower(name), " "+strings.ToLower(first)) {
+		if arrow {
+			return name + " → " + rest
+		}
+		return name
+	}
+	return name + " " + version
 }

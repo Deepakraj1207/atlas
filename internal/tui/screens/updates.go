@@ -213,7 +213,7 @@ func (u *Updates) View(ctx Context) string {
 	b.WriteString(title + "\n")
 	b.WriteString(components.Truncate(u.summaryLine(ctx, apps, comps), w) + "\n")
 	if apps+comps > 0 {
-		b.WriteString(components.Truncate(t.Accent.Render(fmt.Sprintf("Press u to update all supported applications (%d).", apps+comps)), w) + "\n\n")
+		b.WriteString(components.Truncate(t.Accent.Render(updateAllHint(apps, comps)), w) + "\n\n")
 	} else {
 		b.WriteString("\n")
 	}
@@ -420,4 +420,17 @@ func countWord(n int, word string) string {
 		return "1 " + word
 	}
 	return fmt.Sprintf("%d %ss", n, word)
+}
+
+// updateAllHint says exactly what u includes: system components are hidden
+// from the list by default but are updated with everything else.
+func updateAllHint(apps, comps int) string {
+	switch {
+	case comps == 0:
+		return "Press u to update all " + components.Plural(apps, "app") + "."
+	case apps == 0:
+		return "Press u to update all " + components.Plural(comps, "system component") + "."
+	default:
+		return fmt.Sprintf("Press u to update all %d: %s and %s.", apps+comps, components.Plural(apps, "app"), components.Plural(comps, "system component"))
+	}
 }

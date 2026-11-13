@@ -819,7 +819,8 @@ func (m Model) View() string {
 	if l.Breakpoint == layout.TooSmall {
 		msg := fmt.Sprintf("ATLAS needs a terminal of at least %d×%d. This one is %d×%d.\nMake the window bigger, or press q to quit.",
 			layout.MinWidth, layout.MinHeight, l.Width, l.Height)
-		return t.Warning.Render(msg)
+		// Wrap to the window, or the end of each line would be cut off.
+		return t.Warning.Width(max(l.Width, 1)).Render(msg)
 	}
 
 	var b strings.Builder

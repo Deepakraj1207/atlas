@@ -277,7 +277,7 @@ func TestMergeJoinsWingetReadOfTheSameWindowsEntry(t *testing.T) {
 		return core.SoftwareItem{Name: name, Version: v, Source: SourceRegistry, Kind: core.KindApp}
 	}
 	wg := func(name, v, id string) core.SoftwareItem {
-		return core.SoftwareItem{Name: name, Version: v, PackageID: id, Source: SourceWinget, Kind: core.KindApp}
+		return core.SoftwareItem{Name: name, Version: v, PackageID: id, Source: SourceWinget, Kind: core.KindApp, Origin: "winget"}
 	}
 	in := []core.SoftwareItem{
 		reg("PyCharm 2026.2.2", "262.10315.174"),
@@ -291,7 +291,9 @@ func TestMergeJoinsWingetReadOfTheSameWindowsEntry(t *testing.T) {
 		wg("Safe Exam Browser", "< 3.10.3", "ETHZurich.SafeExamBrowser"),
 		wg("Microsoft Edge", "157.0.4341.46", "Microsoft.Edge"),
 		// Windows' packaged copy of Edge is a separate package.
-		wg("Microsoft Edge", "152.0.4191.66", `MSIX\Microsoft.MicrosoftEdge.Stable_152.0.4191.66_neutral__8wekyb3d8bbwe`),
+		// (winget shows its local ID MSIX\Microsoft.MicrosoftEdge.Stable_…; the
+		// scanner keeps no package ID for it, only its origin.)
+		{Name: "Microsoft Edge", Version: "152.0.4191.66", Source: SourceWinget, Kind: core.KindApp, Origin: "MSIX"},
 		wg("Tool", "3.0", "Vendor.Tool"),
 	}
 	out := Merge(in)

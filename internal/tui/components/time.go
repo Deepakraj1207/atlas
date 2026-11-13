@@ -17,13 +17,13 @@ func HumanTime(t, now time.Time) string {
 	case d < time.Minute:
 		return "just now"
 	case d < time.Hour:
-		return plural(int(d/time.Minute), "minute") + " ago"
+		return Plural(int(d/time.Minute), "minute") + " ago"
 	case d < 24*time.Hour:
-		return plural(int(d/time.Hour), "hour") + " ago"
+		return Plural(int(d/time.Hour), "hour") + " ago"
 	case d < 48*time.Hour:
 		return "yesterday"
 	case d < 7*24*time.Hour:
-		return plural(int(d/(24*time.Hour)), "day") + " ago"
+		return Plural(int(d/(24*time.Hour)), "day") + " ago"
 	default:
 		return t.Local().Format("2 Jan 2006")
 	}
@@ -37,7 +37,8 @@ func Timestamp(t time.Time) string {
 	return t.Local().Format("2006-01-02 15:04:05 MST")
 }
 
-func plural(n int, word string) string {
+// Plural writes "1 thing" or "3 things".
+func Plural(n int, word string) string {
 	if n == 1 {
 		return "1 " + word
 	}

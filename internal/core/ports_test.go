@@ -36,3 +36,18 @@ func TestStatusSavedAndCounts(t *testing.T) {
 		t.Errorf("CountKinds = %d, %d", apps, comps)
 	}
 }
+
+func TestNameAndVersion(t *testing.T) {
+	for _, c := range [][3]string{
+		{"Antigravity 2.29.0", "2.29.0", "Antigravity 2.29.0"},
+		{"Antigravity 2.29.0", "2.29.0 → 2.31.2", "Antigravity 2.29.0 → 2.31.2"},
+		{"Anki", "26.9.2 → 26.09.4", "Anki 26.9.2 → 26.09.4"},
+		{"Python 3.14.7", "3.14-64", "Python 3.14.7 3.14-64"},
+		{"Git", "", "Git"},
+		{"Tool 1.0", "1.0.1", "Tool 1.0 1.0.1"},
+	} {
+		if got := NameAndVersion(c[0], c[1]); got != c[2] {
+			t.Errorf("NameAndVersion(%q, %q) = %q, want %q", c[0], c[1], got, c[2])
+		}
+	}
+}

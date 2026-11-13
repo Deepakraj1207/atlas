@@ -272,7 +272,7 @@ func (c *Cleanup) View(ctx Context) string {
 					body(fmt.Sprintf("…and %d more", len(e.step.Updates)-show), t.Subtle.Render)
 					break
 				}
-				body("• "+strings.TrimSpace(u.Name+" "+u.CurrentVersion), t.Body.Render)
+				body("• "+core.NameAndVersion(u.Name, u.CurrentVersion), t.Body.Render)
 			}
 			if e.step.Rollback != "" {
 				body(e.step.Rollback+".", t.Muted.Render)

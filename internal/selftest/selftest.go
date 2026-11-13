@@ -151,7 +151,7 @@ func Run(ctx context.Context, w io.Writer, version string) (Result, error) {
 			if len(it.AlsoFoundIn) > 0 {
 				also = " (also: " + strings.Join(it.AlsoFoundIn, ", ") + ")"
 			}
-			r.printf("- %s: %s %s%s%s\n", it.Source, it.Name, it.Version, id, also)
+			r.printf("- %s: %s%s%s\n", it.Source, core.NameAndVersion(it.Name, it.Version), id, also)
 		}
 	}
 
@@ -168,7 +168,7 @@ func Run(ctx context.Context, w io.Writer, version string) (Result, error) {
 			r.printf("- …and %d more\n", len(check.Updates)-5)
 			break
 		}
-		r.printf("- %s: %s %s → %s [%s]%s\n", u.Manager, u.Name, u.CurrentVersion, u.AvailableVersion, u.PackageID, map[bool]string{true: " (held)"}[u.Held])
+		r.printf("- %s: %s [%s]%s\n", u.Manager, core.NameAndVersion(u.Name, strings.TrimSpace(u.CurrentVersion+" → "+u.AvailableVersion)), u.PackageID, map[bool]string{true: " (held)"}[u.Held])
 	}
 	if len(check.Updates) > 0 {
 		steps := upd.Plan(check.Updates[:1])
@@ -191,7 +191,7 @@ func Run(ctx context.Context, w io.Writer, version string) (Result, error) {
 		if rt.DepsKnown {
 			deps = fmt.Sprintf("needed by %d direct + %d indirect", len(rt.Dependents), rt.Indirect)
 		}
-		r.printf("- Runtime %s %s: %s %s — support %s %s — %s\n", rt.Family, rt.Branch, rt.Name, rt.Version, rt.Support.State, rt.Support.EndDate, deps)
+		r.printf("- Runtime %s %s: %s — support %s — %s\n", rt.Family, rt.Branch, core.NameAndVersion(rt.Name, rt.Version), strings.TrimSpace(string(rt.Support.State)+" "+rt.Support.EndDate), deps)
 	}
 	for _, f := range res.Findings {
 		r.printf("- Finding [%s] %s (%d items)\n", f.Severity, f.Title, len(f.Items))

@@ -50,6 +50,20 @@ func TestParseWingetUpgrade(t *testing.T) {
 	}
 }
 
+// Seen on a real Windows 11 PC: "< 3.10.3" means winget only knows the
+// installed version is older than its oldest catalogue entry.
+func TestWingetOlderThanVersionIsNotShownAsExact(t *testing.T) {
+	ups, err := parseWingetUpgrade("Name              Id                        Version  Available Source\n" +
+		"------------------------------------------------------------------------\n" +
+		"Safe Exam Browser ETHZurich.SafeExamBrowser < 3.10.3 3.10.3    winget\n")
+	if err != nil || len(ups) != 1 {
+		t.Fatalf("got %+v, %v", ups, err)
+	}
+	if u := ups[0]; u.CurrentVersion != "" || u.AvailableVersion != "3.10.3" || !strings.Contains(u.Note, "older than 3.10.3") {
+		t.Errorf("update = %+v", u)
+	}
+}
+
 func TestWingetPlan(t *testing.T) {
 	ups, _ := parseWingetUpgrade(wingetUpgradeFixture)
 	steps := NewWinget(nil, false).PlanUpdates(ups[:2])

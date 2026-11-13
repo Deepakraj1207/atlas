@@ -10,7 +10,7 @@ import (
 var windowsComponentHints = []string{
 	"redist", "runtime", "language pack", "update for", "hotfix",
 	"security update", "service pack", "driver", "sdk arm", "targeting pack",
-	"shared framework", "host fx resolver", "webview2",
+	"shared framework", "host fx resolver", "webview2", "framework package",
 }
 
 // classifyWindowsName guesses whether a Windows display name is an app.

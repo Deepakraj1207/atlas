@@ -188,6 +188,8 @@ func ApplyPlan(ctx Context, steps []core.UpdateStep) core.ActionPlan {
 
 func updateLine(u core.Update) string {
 	switch {
+	case u.CurrentVersion != "" && core.NameAndVersion(u.Name, u.CurrentVersion) == u.Name:
+		return u.Name + " → " + u.AvailableVersion
 	case u.CurrentVersion != "":
 		return u.Name + ": " + u.CurrentVersion + " → " + u.AvailableVersion
 	default:
@@ -276,7 +278,7 @@ func CleanupPlan(ctx Context, steps []core.UpdateStep) core.ActionPlan {
 		elevations[st.Elevation] = true
 		bytes += st.Bytes
 		for _, u := range st.Updates {
-			name := strings.TrimSpace(u.Name + " " + u.CurrentVersion)
+			name := core.NameAndVersion(u.Name, u.CurrentVersion)
 			if firstName == "" {
 				firstName = u.Name
 			}

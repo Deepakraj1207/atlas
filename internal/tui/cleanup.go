@@ -108,7 +108,7 @@ func tidyResultStatus(r core.TidyReport) components.Status {
 	case len(r.Steps) == 0:
 		return components.Status{Text: "Nothing to tidy right now.", Kind: components.StatusSuccess}
 	}
-	text := fmt.Sprintf("Found %d things to tidy", len(r.Steps))
+	text := "Found " + components.Plural(len(r.Steps), "thing") + " to tidy"
 	if b := r.Bytes(); b > 0 {
 		text += fmt.Sprintf(", about %s", humanBytes(b))
 	}

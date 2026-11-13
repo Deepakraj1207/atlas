@@ -10,6 +10,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/deepakraj1207/atlas/internal/config"
 	"github.com/deepakraj1207/atlas/internal/core"
@@ -355,8 +356,15 @@ func TestResizeChangesLayoutAndTooSmallMessage(t *testing.T) {
 	}
 	next, _ = m.Update(tea.WindowSizeMsg{Width: 30, Height: 8})
 	m = next.(Model)
-	if !strings.Contains(m.View(), "needs a terminal of at least") {
-		t.Error("too-small terminals should get a plain explanation")
+	view := m.View()
+	if flat := strings.Join(strings.Fields(view), " "); !strings.Contains(flat, "needs a terminal of at least 40×10") || !strings.Contains(flat, "press q to quit") {
+		t.Errorf("too-small terminals should get a plain explanation, in full:\n%s", view)
+	}
+	// Seen on Windows 11 at 39×9: the message was cut off at the edge.
+	for _, line := range strings.Split(view, "\n") {
+		if w := lipgloss.Width(line); w > 30 {
+			t.Errorf("line wider than the 30-column window (%d): %q", w, line)
+		}
 	}
 }
 

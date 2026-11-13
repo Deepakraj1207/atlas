@@ -166,10 +166,7 @@ func (a *SmartAnalysis) View(ctx Context) string {
 				lines = append(lines, indent+t.Subtle.Render(fmt.Sprintf("…and %d more", len(f.Items)-show)))
 				break
 			}
-			text := "• " + it.Name
-			if it.Version != "" {
-				text += " " + it.Version
-			}
+			text := "• " + core.NameAndVersion(it.Name, it.Version)
 			if it.Note != "" {
 				text += " (" + it.Note + ")"
 			}
@@ -351,10 +348,7 @@ func (dp *Dependencies) View(ctx Context) string {
 		case rt.DepsKnown:
 			needed = t.Body.Render(fmt.Sprintf("needed by %d", len(rt.Dependents)+rt.Indirect))
 		}
-		name := rt.Name
-		if rt.Version != "" && !strings.Contains(rt.Name, rt.Version) {
-			name += " " + rt.Version
-		}
+		name := core.NameAndVersion(rt.Name, rt.Version)
 		prefix := "  "
 		nameStyled := t.Body.Render(name)
 		if i == dp.cursor {

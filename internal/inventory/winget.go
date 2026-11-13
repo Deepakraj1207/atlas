@@ -149,6 +149,12 @@ func parseWingetList(out string) ([]core.SoftwareItem, error) {
 			if r.Source != "" && !truncated(r.ID) {
 				it.PackageID = r.ID
 			}
+			it.Origin = r.Source
+			if r.Source == "" {
+				if kind, _, ok := strings.Cut(r.ID, `\`); ok {
+					it.Origin = strings.ToUpper(kind) // "ARP" or "MSIX"
+				}
+			}
 			if strings.HasPrefix(r.ID, "MSIX\\") && it.Kind == core.KindApp && strings.HasPrefix(r.Name, "Microsoft.") {
 				it.Kind = core.KindComponent
 			}

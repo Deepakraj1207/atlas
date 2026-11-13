@@ -157,15 +157,16 @@ func numericParts(v string) ([]int, bool) {
 }
 
 // joinWingetReadsOfRegistry joins a winget entry with the Windows
-// "installed programs" entry it was read from. For desktop programs (IDs
-// not starting with MSIX\), winget list reads those same entries but shows
+// "installed programs" entry it was read from. For desktop programs (not
+// Windows app packages, which winget reads from elsewhere), winget list
+// reads those same entries but shows
 // the version from its own catalogue: PyCharm's "262.10315.174" becomes
 // "2026.2.2", "9.4.0.129" becomes "9.4.0", "3.10.2.920" becomes "< 3.10.3".
 // So versions are not compared. To avoid joining two real installs, the
 // name must belong to exactly one unjoined entry on each side.
 func joinWingetReadsOfRegistry(items []core.SoftwareItem, used []bool) {
 	isWingetARP := func(it core.SoftwareItem) bool {
-		return it.Source == SourceWinget && !strings.HasPrefix(strings.ToUpper(it.PackageID), `MSIX\`)
+		return it.Source == SourceWinget && it.Origin != "MSIX" && it.Origin != "msstore"
 	}
 	for i := range items {
 		if used[i] || items[i].Source != SourceRegistry || len(normName(items[i].Name)) < 3 {
