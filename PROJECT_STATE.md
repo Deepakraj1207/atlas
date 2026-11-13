@@ -6,8 +6,10 @@ Windows 11. Linux stays compatible.
 
 ## Current phase
 
-**Phase 7 — Release and AI explanations: built, waiting for approval.** Version 0.1.0
-is ready to tag; nothing has been tagged or published. See `docs/RELEASING.md`.
+**Phase 7 — Release and AI explanations: done; v0.1.0 tagged.** The tag (commit 11d7977)
+built and passed every release check, and a **draft** release "ATLAS 0.1.0" with all
+files exists on GitHub. Next, by the user: publish the draft, let `winget-check` pass,
+then submit the winget manifests (see `docs/RELEASING.md`).
 
 - MIT licence; `atlas -version` shows version, commit and build date.
 - Release workflow: Windows zips (x64, ARM64), Linux tarballs, `.deb` and `.rpm`
@@ -35,7 +37,7 @@ a real install, seeing "Install cancelled" live, and the legacy conhost window.
 | 4. Smart Analysis and Dependencies | done |
 | 5. Cleanup: remove software and tidy caches, with a fresh dependency gate | done |
 | 6. Discover Apps: curated catalogue, local suggestions, install with preview | done |
-| 7. Release packaging, winget, catalogue check, AI explanations | built, awaiting approval |
+| 7. Release packaging, winget, catalogue check, AI explanations | done; v0.1.0 draft release created |
 
 ## What exists now
 
