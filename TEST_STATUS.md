@@ -1,8 +1,25 @@
 # ATLAS — Test Status
 
-Last run: 2026-11-13, Windows verification, Go 1.24.7 (`GOTOOLCHAIN=local`) on linux/amd64.
+Last run: 2026-11-13, Phase 7, Go 1.27.4 on linux/amd64.
 
-## Unit tests (`go test ./...`) — all passing, 176 tests in 17 packages (plus Windows-only tests)
+## Unit tests (`go test ./...`) — all passing, 204 tests in 21 packages (plus Windows-only tests)
+
+Phase 7 added:
+
+| Package | Tests | Covers |
+|---------|-------|--------|
+| internal/ai | 6 | the request carries exactly the previewed question plus fixed instructions, `claude-opus-5-5`, low effort, the refusal fallback and its beta header, and no thinking override (against a local fake of the Messages API); 401, 402, 404, 429, 529, refusal, empty answer and an unreachable server each give a plain message; credentials detection; every question (answered, failed, stopped) is recorded in Activity History |
+| internal/tui (phase 7) | 6 | AI off by default (no hint, nothing sent); no key: explained, nothing sent; preview shows the exact text and appears even with read-only previews off; Esc sends nothing; Enter sends exactly what was shown; the answer is labelled as AI-written; errors explained; Settings toggles and saves; finding questions leave out file paths |
+| internal/config | +1 | AI off by default; enabled and model read; a bad model name ignored with a warning; saved |
+| tools/release | 2 | winget manifests: layout, identifier, zip + nested portable, alias and moniker, SHA-256 and URLs, release date, licence; refuses a zip without `atlas.exe` at the top, bad versions or dates, missing files |
+| tools/catalogcheck | 2 | found / missing / not checked per manager (winget, Scoop bucket files, Chocolatey, Flathub, a manager that can't run); report and exit count |
+| cmd/atlas | 1 | version line from build settings or Go's Git details |
+
+Release files, built locally with `packaging/build-release.sh`: both zips (with `atlas.exe`
+at the top), both tarballs, both `.deb` and both `.rpm` (the arm64 `.rpm` holds the arm64
+binary unchanged), winget manifests and SHA256SUMS, which all verify. The manifests pass
+`winget validate` on the user's Windows 11 PC. Not yet done: a live AI request (needs the
+user's API key), and installing a published release through winget (after publishing).
 
 | Package | Tests | Covers |
 |---------|-------|--------|

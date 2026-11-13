@@ -6,7 +6,19 @@ Windows 11. Linux stays compatible.
 
 ## Current phase
 
-**Phase 6 — Discover Apps: complete.** All nine sections are now real.
+**Phase 7 — Release and AI explanations: built, waiting for approval.** Version 0.1.0
+is ready to tag; nothing has been tagged or published. See `docs/RELEASING.md`.
+
+- MIT licence; `atlas -version` shows version, commit and build date.
+- Release workflow: Windows zips (x64, ARM64), Linux tarballs, `.deb` and `.rpm`
+  (`atlas-lifecycle`), checksums and winget manifests, all checked automatically; a
+  version tag creates a draft release for a person to publish.
+- winget package `Deepakraj1207.ATLAS` (moniker and command `atlas`); manifests pass
+  `winget validate` on the user's Windows 11 PC. Submitting to winget is manual.
+- Catalogue check: a manual workflow confirms every Discover package ID still exists.
+- AI explanations: off by default; `e` on a finding or an app, after a preview of exactly
+  what is sent, asks Claude (official Anthropic Go SDK, `claude-opus-5-5`).
+- Go 1.27.4 (Go 1.24 is out of support; the SDK needs 1.25+).
 
 **Windows verification: done, apart from three small checks.** CI on Windows Server 2025
 and 2022 runs the tests, the self-test and scripted interface checks in a real Windows
@@ -23,6 +35,7 @@ a real install, seeing "Install cancelled" live, and the legacy conhost window.
 | 4. Smart Analysis and Dependencies | done |
 | 5. Cleanup: remove software and tidy caches, with a fresh dependency gate | done |
 | 6. Discover Apps: curated catalogue, local suggestions, install with preview | done |
+| 7. Release packaging, winget, catalogue check, AI explanations | built, awaiting approval |
 
 ## What exists now
 

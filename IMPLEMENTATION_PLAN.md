@@ -114,12 +114,26 @@ Changes from the plan:
 | Install planning per manager, exact commands, notes (classic snaps, batcat), rollback via My Software | done |
 | TUI: Discover screen with categories and multi-select, install preview and handover, Home "Find New Tools" opens it | done |
 
-## Phase 7+ (outline, not started)
+## Phase 7 — Release and AI explanations — BUILT, AWAITING APPROVAL
 
-- Catalogue maintenance: a documented review checklist, and a test that every catalogue
-  ID still resolves (run manually with network, never at runtime).
-- Optional AI explanations, off by default and clearly labelled.
-- Packaging and release: Windows installer or winget manifest, signed binaries, Linux packages.
-- Verification on real Windows 11 hardware: done on the user's PC (see TEST_STATUS.md).
-  Still open: Ctrl+C during a real install, a live "Install cancelled", and the legacy
-  conhost window, per `docs/WINDOWS_TEST_PLAN.md`.
+| Step | Result |
+|------|--------|
+| MIT licence; version, commit and date in `atlas -version` | done |
+| `packaging/build-release.sh`: Windows zips, Linux tarballs, `.deb` (dpkg-deb) and `.rpm` (rpmbuild), SHA256SUMS | done |
+| `tools/release`: winget manifests (zip + nested portable, moniker `atlas`), validated by `winget validate` on Windows 11 | done |
+| `release.yml`: tests, build, checks on Windows/Ubuntu/Fedora, draft release on `v*` tags | done (dry run on every packaging change) |
+| `winget-check.yml`: install a published release from its manifests on clean Windows | done (runs after publishing) |
+| `tools/catalogcheck` + `catalog-check.yml` (manual) | done |
+| Go 1.27.4 | done |
+| AI explanations: config, Settings row, `e` in Smart Analysis and My Software, preview of exact text, answer overlay, Activity History, plain-language errors | done |
+| Docs: `docs/RELEASING.md`, README install section | done |
+
+Not done, needing the user: tagging and publishing v0.1.0, submitting the manifests to
+microsoft/winget-pkgs, code signing (needs a certificate in the user's name), and a live
+AI request with the user's own API key.
+
+## Later (not started)
+
+- Code-signed Windows builds.
+- Remaining Windows 11 checks: Ctrl+C during a real install, a live "Install
+  cancelled", and the legacy conhost window (`docs/WINDOWS_TEST_PLAN.md`).
