@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 
@@ -224,13 +225,18 @@ func Run(ctx context.Context, w io.Writer, version string) (Result, error) {
 	r.printf("\nRemoval safety check on sample items (planned only, never run):\n\n")
 	steps, err := cln.PlanRemoval(ctx, sample)
 	r.check(err == nil, false, "removal planning works")
+	// One line per planned step: a package manager removes several items in
+	// one command, so listing that command against each item would read as
+	// though removing one item also removed the others.
 	for _, st := range steps {
+		names := make([]string, 0, len(st.Updates))
 		for _, u := range st.Updates {
-			if st.Blocked != "" {
-				r.printf("- %s: blocked — %s\n", u.Name, st.Blocked)
-			} else {
-				r.printf("- %s: allowed — `%s`\n", u.Name, commands(st))
-			}
+			names = append(names, u.Name)
+		}
+		if st.Blocked != "" {
+			r.printf("- %s: blocked — %s\n", strings.Join(names, ", "), st.Blocked)
+		} else {
+			r.printf("- %s: allowed, removed together in one step — `%s`\n", strings.Join(names, ", "), commands(st))
 		}
 	}
 
@@ -256,8 +262,8 @@ func Run(ctx context.Context, w io.Writer, version string) (Result, error) {
 				suggested++
 			}
 		}
-		r.printf("\n%d entries for this platform: %d installed, %d installable (%v), %d suggested. Package managers here: %s.\n",
-			len(d.Items), installed, installable, via, suggested, strings.Join(d.ManagersHere, ", "))
+		r.printf("\n%d entries for this platform: %d installed, %d installable%s, %d suggested. Package managers here: %s.\n",
+			len(d.Items), installed, installable, viaPhrase(via), suggested, strings.Join(d.ManagersHere, ", "))
 	}
 
 	r.printf("\n## Summary\n\n%d passed, %d warnings, %d failed.\n", r.res.Passed, r.res.Warnings, r.res.Failed)
@@ -303,4 +309,21 @@ func terminalInfo() string {
 		return "unknown"
 	}
 	return strings.Join(parts, ", ")
+}
+
+// viaPhrase turns {"winget": 22} into " (22 via winget)" for the report.
+func viaPhrase(via map[string]int) string {
+	if len(via) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(via))
+	for k := range via {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		parts = append(parts, fmt.Sprintf("%d via %s", via[k], k))
+	}
+	return " (" + strings.Join(parts, ", ") + ")"
 }

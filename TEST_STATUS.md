@@ -62,12 +62,21 @@ Problems the first run found, all now fixed and covered by tests:
    how to do it. It never accepts them itself.
 3. Analysis sources always reported "1 found"; they now report packages and records.
 4. "Support for Node.js 22 ends in 30 Apr 2027" now reads "ends on".
+5. **"Analysis is out of date" could fail to appear on Windows Server 2022.** Two scans
+   finished within the same clock tick and got identical timestamps, so a "newer than"
+   comparison saw no change. Staleness is now decided by which scan the analysis was
+   built from (scan ID) and by the order of activity entries, never by timestamps.
+6. **The self-test report listed a combined removal command against each item.** For
+   example, `7-Zip: choco uninstall 7zip.install ant apache-httpd`, which reads as though
+   removing 7-Zip also removed Ant and Apache. The planner was right to remove the three
+   in one step; the report now prints one line per step. Discover's count no longer
+   prints Go's raw `map[winget:22]` formatting.
 
 Self-test on the 2025 image after the fixes: 81 apps, 16 components; 11 Chocolatey
 updates with friendly names; .NET 10 and Node.js 22 detected; the removal check
 routes 7-Zip to `choco uninstall` and blocks .NET and Visual C++ runtimes; Discover
 recognises 7-Zip, Firefox, Git, GitHub CLI, Node.js and jq. The only failures are
-winget, for the reason above.
+winget, for the reason above (16 passed, 2 failed: the scan and the update check).
 
 ## End-to-end runs in a pseudo-terminal
 
