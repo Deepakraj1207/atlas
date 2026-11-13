@@ -4,6 +4,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"runtime"
@@ -38,8 +39,10 @@ type Options struct {
 	Analysis  core.AnalysisService
 	Cleanup   core.CleanupService
 	Discover  core.DiscoverService
-	StoreErr  string
-	DBPath    string
+	// Explain is the optional AI explanation service; nil means none.
+	Explain  core.ExplainService
+	StoreErr string
+	DBPath   string
 	// Elevated is true when ATLAS runs as administrator or root.
 	Elevated bool
 }
@@ -67,6 +70,11 @@ type Model struct {
 	cln      core.CleanupService
 	tidy     *scanRun
 	dsc      core.DiscoverService
+	explain  core.ExplainService
+	// explaining cancels the question being asked; nil when none is.
+	explaining context.CancelFunc
+	// answer is the AI answer overlay; nil when closed.
+	answer *answerView
 	// exec hands the terminal to a job; replaced in tests.
 	exec     func(core.TerminalJob, tea.ExecCallback) tea.Cmd
 	storeErr string
@@ -113,6 +121,7 @@ func New(opts Options) Model {
 		ana:      opts.Analysis,
 		cln:      opts.Cleanup,
 		dsc:      opts.Discover,
+		explain:  opts.Explain,
 		elevated: opts.Elevated,
 		exec:     func(j core.TerminalJob, cb tea.ExecCallback) tea.Cmd { return tea.Exec(j, cb) },
 		storeErr: opts.StoreErr,
@@ -314,6 +323,7 @@ func (m Model) ctx() screens.Context {
 		Managers:        managers,
 		AnalysisSources: anaSources,
 		Tidiers:         tidiers,
+		AI:              m.aiStatus(),
 		Elevated:        m.elevated,
 		Data:            m.dataView(),
 	}
@@ -628,6 +638,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.save(what)
 
+	case screens.SetAIEnabledMsg:
+		m.cfg.AI.Enabled = msg.Enabled
+		what := "AI explanations off: nothing will be sent"
+		if msg.Enabled {
+			what = "AI explanations on: press e on a finding or an app. You'll see what is sent first"
+		}
+		return m, m.save(what)
+
+	case screens.RequestExplainMsg:
+		return m.requestExplain(msg)
+
+	case screens.StartExplainMsg:
+		return m.startExplain(msg)
+
+	case explainDoneMsg:
+		return m.explainDone(msg)
+
 	case screens.StatusMsg:
 		return m, m.setStatus(msg.Status)
 
@@ -647,7 +674,7 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Overlays capture input first.
-	if m.preview != nil || m.helpOpen {
+	if m.preview != nil || m.helpOpen || m.answer != nil {
 		switch k {
 		case "pgdown", "ctrl+d", "down", "j":
 			step := 1
@@ -697,6 +724,13 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
+	if m.answer != nil {
+		switch k {
+		case "esc", "q", "enter", "e":
+			m.answer = nil
+		}
+		return m, nil
+	}
 
 	cur := m.screens[m.nav.Current()]
 	if ic, ok := cur.(screens.InputCapturer); ok && ic.CapturesInput() {
@@ -708,6 +742,10 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "q":
 		return m.quit()
 	case "x":
+		if m.explaining != nil {
+			m.explaining()
+			return m, m.setStatus(components.Status{Text: "Stopping… nothing more will be sent."})
+		}
 		if m.busy() {
 			m.cancelTasks()
 			return m, nil
@@ -874,6 +912,8 @@ func (m Model) content() string {
 		body, m.overlayScroll = components.Scroll(m.theme, components.ActionPreview(m.theme, w, *m.preview, ctx.Advanced()), w, h, m.overlayScroll)
 	case m.helpOpen:
 		body, m.overlayScroll = components.Scroll(m.theme, components.Help(m.theme, w, m.helpContext(), m.helpGroups()), w, h, m.overlayScroll)
+	case m.answer != nil:
+		body, m.overlayScroll = components.Scroll(m.theme, renderAnswer(m.theme, w, *m.answer, ctx.Advanced()), w, h, m.overlayScroll)
 	default:
 		cur := m.nav.Current()
 		scr := m.screens[cur]
@@ -891,6 +931,9 @@ func (m Model) content() string {
 }
 
 func (m Model) hints() []components.KeyHint {
+	if m.answer != nil {
+		return []components.KeyHint{{Key: "esc", Desc: "close"}, {Key: "↑/↓", Desc: "scroll"}}
+	}
 	if m.preview != nil {
 		if m.preview.Available && m.preview.Destructive && m.confirm != nil {
 			return []components.KeyHint{{Key: "r", Desc: "go ahead"}, {Key: "esc", Desc: "cancel"}, {Key: "↑/↓", Desc: "scroll"}, {Key: "m", Desc: "mode"}}

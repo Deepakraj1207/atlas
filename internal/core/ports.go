@@ -710,3 +710,42 @@ func CancelledByUser(code int) bool {
 	}
 	return false
 }
+
+// Explainer asks an AI model for a plain-language explanation of one thing
+// ATLAS shows. Optional and off by default: nothing is sent until the user
+// has seen exactly what will be sent and confirmed.
+type Explainer interface {
+	// Model is the model that is asked.
+	Model() string
+	// Instructions are the fixed instructions sent with every question.
+	Instructions() string
+	// Explain sends question and returns the answer. Errors are
+	// *SourceError with a plain-language Message.
+	Explain(ctx context.Context, question string) (Explanation, error)
+}
+
+// Explanation is an AI model's answer.
+type Explanation struct {
+	Text string
+	// Model is the model that answered; it can differ from the one asked
+	// when the service passed the question to a fallback model.
+	Model                     string
+	InputTokens, OutputTokens int64
+}
+
+// ActivityRecorder adds an entry to Activity History.
+type ActivityRecorder interface {
+	AddActivity(ctx context.Context, a Activity) (int64, error)
+}
+
+// ExplainService asks the AI and records every question in Activity History.
+type ExplainService interface {
+	// Model and Instructions are shown in the preview (Advanced mode).
+	Model() string
+	Instructions() string
+	// Ready is false when no credentials were found; Reason says what to do.
+	Ready() (ok bool, reason string)
+	// Explain sends question exactly as previewed. subject names it in
+	// Activity History.
+	Explain(ctx context.Context, subject, question string) (Explanation, error)
+}

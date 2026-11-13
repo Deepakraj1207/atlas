@@ -44,6 +44,11 @@ func (a *SmartAnalysis) Update(msg tea.Msg, ctx Context) (Screen, tea.Cmd) {
 		if ctx.Data.Summary == nil {
 			return a, requestScan(ctx)
 		}
+	case "e":
+		if ctx.Data.Analysis != nil && a.cursor < len(ctx.Data.Analysis.Findings) {
+			f := ctx.Data.Analysis.Findings[a.cursor]
+			return a, requestExplain(f.Title, FindingQuestion(f))
+		}
 	case "up", "k":
 		a.cursor--
 	case "down", "j":
@@ -69,7 +74,7 @@ func (a *SmartAnalysis) Hints(ctx Context) []components.KeyHint {
 	case ctx.Data.Analysis == nil:
 		return []components.KeyHint{{Key: "a", Desc: "analyze"}}
 	}
-	return []components.KeyHint{{Key: "↑/↓", Desc: "choose"}, {Key: "a", Desc: "analyze again"}}
+	return append([]components.KeyHint{{Key: "↑/↓", Desc: "choose"}}, append(explainHint(ctx), components.KeyHint{Key: "a", Desc: "analyze again"})...)
 }
 
 // View renders the findings or the appropriate state.

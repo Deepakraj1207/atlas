@@ -103,3 +103,14 @@ func requestAnalysis(ctx Context) tea.Cmd {
 func requestTidyFind(ctx Context) tea.Cmd {
 	return send(ShowActionPreviewMsg{Plan: TidyFindPlan(ctx), Confirm: StartTidyFindMsg{}})
 }
+
+// SetAIEnabledMsg asks the root to turn AI explanations on or off and
+// persist it.
+type SetAIEnabledMsg struct{ Enabled bool }
+
+// RequestExplainMsg asks the root to preview sending Question to the AI.
+// Nothing is sent until the user confirms the preview.
+type RequestExplainMsg struct{ Subject, Question string }
+
+// StartExplainMsg sends the question. Only sent after the preview.
+type StartExplainMsg struct{ Subject, Question string }

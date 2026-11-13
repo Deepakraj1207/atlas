@@ -4,7 +4,18 @@
 that makes the software on your computer easy to understand and manage. Built
 for Windows 11 first; Linux stays supported.
 
-What works today:
+## Install
+
+```powershell
+winget install Deepakraj1207.ATLAS     # Windows, once the package is accepted
+```
+
+Or download a release from GitHub: a zip for Windows (x64 or ARM64), a `.deb`
+(Ubuntu/Debian) or `.rpm` (Fedora/RHEL) named `atlas-lifecycle`, or a tarball for any
+Linux. The command is `atlas` everywhere. `atlas -selftest` checks ATLAS against your
+computer without changing anything.
+
+## What it does
 
 - **Scan My System** finds installed software without changing anything. On
   Windows it reads installed programs, winget, Chocolatey and Scoop. On Linux it
@@ -25,6 +36,9 @@ What works today:
 - **Discover Apps** suggests free, well-known tools based on what you already have,
   explains why, and installs them through your package manager after a preview. No
   internet lookups are made to build suggestions.
+- **AI explanations** (optional, off by default): press `e` on a finding or an app to
+  ask Claude, Anthropic's AI, what it is and whether it matters. You see exactly what
+  will be sent first; it needs your own Anthropic API key in `ANTHROPIC_API_KEY`.
 - **Activity History** records every scan and change, so nothing happens silently.
 - Simple and Advanced modes, dark and light themes, and help on every screen.
 
@@ -85,7 +99,9 @@ Setting `ATLAS_HOME` keeps settings and logs in one folder (portable use).
 
 ## Development
 
-Use the local Go toolchain so dependency updates can't raise the Go version:
+ATLAS needs Go 1.27.4 (the version in `go.mod`; Go 1.24 is no longer supported and
+the Anthropic SDK needs 1.25 or later). With it installed, use the local toolchain so
+dependency updates can't raise the Go version:
 
 ```bash
 export GOTOOLCHAIN=local

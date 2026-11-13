@@ -10,6 +10,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/deepakraj1207/atlas/internal/ai"
 	"github.com/deepakraj1207/atlas/internal/analysis"
 	"github.com/deepakraj1207/atlas/internal/cleanup"
 	"github.com/deepakraj1207/atlas/internal/config"
@@ -80,6 +81,7 @@ func Run(opts Options) error {
 	var ana core.AnalysisService
 	var cln core.CleanupService
 	var dsc core.DiscoverService
+	var rec core.ActivityRecorder
 	elevated := platform.IsElevated()
 	dbPath, storeErr := "", ""
 	if dir, err := platform.DataDir(); err != nil {
@@ -91,6 +93,7 @@ func Run(opts Options) error {
 			storeErr = err.Error()
 		} else {
 			defer db.Close()
+			rec = db
 			inv = inventory.NewService(inventory.DefaultScanners(), db, logger, inventory.DefaultTimeouts())
 			upd = updates.NewService(updates.DefaultManagers(elevated), db, logger, updates.DefaultTimeouts())
 			ana = analysis.NewService(analysis.DefaultSources(), db, logger, analysis.UsageSupported)
@@ -108,6 +111,10 @@ func Run(opts Options) error {
 		logger.Info("database opened", "path", dbPath, "schema", database.SchemaVersion(), "elevated", elevated)
 	}
 
+	// AI explanations: the service exists either way, but nothing is sent
+	// unless the setting is on and the user confirms a preview.
+	explain := ai.NewService(ai.New(res.Config.AI.Model), rec, logger)
+
 	model := tui.New(tui.Options{
 		ConfigResult: res,
 		LogPath:      logPath,
@@ -119,6 +126,7 @@ func Run(opts Options) error {
 		Analysis:     ana,
 		Cleanup:      cln,
 		Discover:     dsc,
+		Explain:      explain,
 		Elevated:     elevated,
 		StoreErr:     storeErr,
 		DBPath:       dbPath,

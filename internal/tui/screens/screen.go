@@ -42,7 +42,9 @@ type Context struct {
 	AnalysisSources []core.SourceInfo
 	// Tidiers are the places "look for things to tidy" examines.
 	Tidiers []core.SourceInfo
-	Data    DataView
+	// AI describes the optional AI explanations.
+	AI   AIStatus
+	Data DataView
 }
 
 // DataView is the root model's read-only snapshot of saved data.

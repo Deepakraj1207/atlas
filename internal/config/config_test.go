@@ -174,3 +174,28 @@ func TestToggles(t *testing.T) {
 		t.Error("labels broken")
 	}
 }
+
+func TestAIIsOffByDefaultAndValidated(t *testing.T) {
+	if d := Default(); d.AI.Enabled || d.AI.Model != "" {
+		t.Errorf("AI must be off with the built-in model by default: %+v", d.AI)
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, FileName)
+	os.WriteFile(path, []byte("ai:\n  enabled: true\n  model: claude-sonnet-5-5\n"), 0o644)
+	res := Load(path)
+	if !res.Config.AI.Enabled || res.Config.AI.Model != "claude-sonnet-5-5" || len(res.Warnings) != 0 {
+		t.Errorf("loaded %+v, warnings %v", res.Config.AI, res.Warnings)
+	}
+	os.WriteFile(path, []byte("ai:\n  enabled: true\n  model: \"gpt; rm -rf\"\n"), 0o644)
+	res = Load(path)
+	if res.Config.AI.Model != "" || len(res.Warnings) != 1 {
+		t.Errorf("a bad model name should be ignored with a warning: %+v %v", res.Config.AI, res.Warnings)
+	}
+	// Round trip: saving keeps the choice.
+	if err := Save(path, res.Config, false); err != nil {
+		t.Fatal(err)
+	}
+	if !Load(path).Config.AI.Enabled {
+		t.Error("enabled lost on save")
+	}
+}

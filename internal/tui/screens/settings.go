@@ -67,6 +67,26 @@ func (s *Settings) rows(ctx Context) []settingRow {
 				return ShowActionPreviewMsg{Plan: ClearPlan(ctx), Confirm: ClearInventoryMsg{}}
 			},
 		},
+		{
+			label: "AI explanations",
+			value: aiValue(ctx),
+			help: "Off unless you turn it on. When on, press e on a Smart Analysis finding or an app in My Software to ask Claude, Anthropic's AI, to explain it. " +
+				"You always see exactly what will be sent first, and nothing else leaves your computer. Needs an Anthropic API key in ANTHROPIC_API_KEY (or \"ant auth login\").",
+			toggle: func(ctx Context) tea.Msg { return SetAIEnabledMsg{Enabled: !ctx.Config.AI.Enabled} },
+		},
+	}
+}
+
+func aiValue(ctx Context) string {
+	switch {
+	case !ctx.Config.AI.Enabled:
+		return "Off"
+	case !ctx.AI.Available:
+		return "On · not available in this session"
+	case !ctx.AI.Ready:
+		return "On · no API key found"
+	default:
+		return "On"
 	}
 }
 

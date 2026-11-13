@@ -12,6 +12,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -86,6 +87,16 @@ type Config struct {
 	Version int       `yaml:"version"`
 	UI      UIConfig  `yaml:"ui"`
 	Logging LogConfig `yaml:"logging"`
+	AI      AIConfig  `yaml:"ai"`
+}
+
+// AIConfig controls the optional AI explanations. Off by default: nothing is
+// ever sent to an AI service unless the user turns this on, and even then
+// only after a preview of exactly what will be sent.
+type AIConfig struct {
+	Enabled bool `yaml:"enabled"`
+	// Model is the Claude model asked. Empty means the built-in default.
+	Model string `yaml:"model,omitempty"`
 }
 
 // UIConfig holds presentation preferences.
@@ -212,6 +223,15 @@ func merge(base, raw Config, data []byte) (Config, []string) {
 		warnings = append(warnings, fmt.Sprintf("Unknown mode %q ignored; using %s", raw.UI.Mode, base.UI.Mode))
 	}
 
+	if raw.AI.Model != "" {
+		if reModel.MatchString(raw.AI.Model) {
+			out.AI.Model = raw.AI.Model
+		} else {
+			warnings = append(warnings, fmt.Sprintf("AI model name %q doesn't look like a Claude model ID; using the default", raw.AI.Model))
+		}
+	}
+	out.AI.Enabled = raw.AI.Enabled
+
 	switch raw.Logging.Level {
 	case "":
 	case LogDebug, LogInfo, LogWarn, LogError:
@@ -232,6 +252,9 @@ func merge(base, raw Config, data []byte) (Config, []string) {
 
 	return out, warnings
 }
+
+// reModel accepts Claude model IDs such as claude-opus-5-5.
+var reModel = regexp.MustCompile(`^claude-[a-z0-9.-]+$`)
 
 // presentKeys reports which dotted keys exist in the YAML document.
 func presentKeys(data []byte) map[string]bool {

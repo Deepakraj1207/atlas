@@ -10,7 +10,7 @@ nothing important is at risk.
 ## 0. Get the build
 
 Either download `atlas-windows-amd64` from the latest **windows** workflow run
-(Actions tab on GitHub), or build it yourself:
+(Actions tab on GitHub), or build it yourself with Go 1.27.4:
 
 ```powershell
 $env:GOTOOLCHAIN = "local"

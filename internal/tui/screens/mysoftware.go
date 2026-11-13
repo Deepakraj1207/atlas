@@ -129,6 +129,11 @@ func (s *MySoftware) Update(msg tea.Msg, ctx Context) (Screen, tea.Cmd) {
 			if s.cursor < len(visible) {
 				return s, send(RequestCleanupMsg{Items: []core.SoftwareItem{visible[s.cursor]}})
 			}
+		case "e":
+			if s.cursor < len(visible) {
+				it := visible[s.cursor]
+				return s, requestExplain(core.NameAndVersion(it.Name, it.Version), ItemQuestion(ctx, it))
+			}
 		}
 		return s, nil
 	}
@@ -168,6 +173,11 @@ func (s *MySoftware) Update(msg tea.Msg, ctx Context) (Screen, tea.Cmd) {
 		if s.cursor < len(visible) {
 			return s, send(RequestCleanupMsg{Items: []core.SoftwareItem{visible[s.cursor]}})
 		}
+	case "e":
+		if s.cursor < len(visible) {
+			it := visible[s.cursor]
+			return s, requestExplain(core.NameAndVersion(it.Name, it.Version), ItemQuestion(ctx, it))
+		}
 	}
 	s.clamp(len(s.Visible(ctx.Data.Items)), h)
 	return s, nil
@@ -179,7 +189,7 @@ func (s *MySoftware) Hints(ctx Context) []components.KeyHint {
 	case s.searching:
 		return []components.KeyHint{{Key: "enter", Desc: "done"}, {Key: "esc", Desc: "clear search"}}
 	case s.detail:
-		return []components.KeyHint{{Key: "esc", Desc: "back to list"}, {Key: "r", Desc: "remove…"}}
+		return append([]components.KeyHint{{Key: "esc", Desc: "back to list"}, {Key: "r", Desc: "remove…"}}, explainHint(ctx)...)
 	case ctx.Data.Summary == nil:
 		return []components.KeyHint{{Key: "s", Desc: "scan"}}
 	}
@@ -187,14 +197,13 @@ func (s *MySoftware) Hints(ctx Context) []components.KeyHint {
 	if s.showAll {
 		filter = "apps only"
 	}
-	return []components.KeyHint{
+	return append([]components.KeyHint{
 		{Key: "↑/↓", Desc: "move"},
 		{Key: "enter", Desc: "details"},
 		{Key: "/", Desc: "search"},
 		{Key: "f", Desc: filter},
 		{Key: "r", Desc: "remove…"},
-		{Key: "s", Desc: "scan again"},
-	}
+	}, append(explainHint(ctx), components.KeyHint{Key: "s", Desc: "scan again"})...)
 }
 
 // View renders the list, details, or the appropriate empty/error state.

@@ -243,3 +243,42 @@ Short, dated records of choices that shape the code.
   is listed with the version folder's name instead of being skipped.
 - **D69. `tools/conharness`** drives ATLAS in a real Windows pseudo-console. It's a
   separate module, so ATLAS doesn't depend on it.
+
+## 2026-11-13 — Phase 7: release and AI explanations
+
+- **D70. MIT licence, version 0.1.0.** Chosen by the user. `atlas -version` prints the
+  version, commit and build date; release builds set them with `-ldflags`, other builds
+  fall back to the Git details Go records.
+- **D71. winget package `Deepakraj1207.ATLAS`, moniker and command `atlas`.** winget
+  requires a `Publisher.Name` identifier, so a bare `atlas` (the user's wish) isn't
+  possible; the moniker keeps `winget install --moniker atlas` working. A portable zip
+  (`InstallerType: zip`, nested portable `atlas.exe`) needs no installer and no admin
+  rights. `tools/release` writes the three manifests in the winget-pkgs layout; they
+  pass `winget validate` on the user's Windows 11 PC. Submitting them to
+  microsoft/winget-pkgs stays a manual step for the user.
+- **D72. Linux packages are named `atlas-lifecycle`.** Fedora already ships a package
+  called `atlas` (the ATLAS maths library numpy depends on); an .rpm of the same name
+  would be treated as its upgrade. The command is still `/usr/bin/atlas`; dpkg and rpm
+  refuse to overwrite another package's file. Packages are built with the distributions'
+  own `dpkg-deb` and `rpmbuild`, not a third-party packager.
+- **D73. Releases are drafts.** A `v*` tag builds, tests and checks every file (the zip
+  runs and validates with winget; the .deb and .rpm install, run and remove on Ubuntu and
+  Fedora) and creates a draft GitHub release. A person publishes it. `winget-check`
+  then installs the published release from its manifests on a clean Windows machine.
+- **D74. The catalogue check is manual.** `tools/catalogcheck` looks each Discover
+  package ID up with its own package manager (Flathub through its public API) and
+  reports found / missing / not checked; ATLAS never does this at runtime.
+- **D75. Go 1.27.4.** Go 1.24 is out of support, and the official Anthropic Go SDK
+  (v2) needs Go 1.25 or later. `GOTOOLCHAIN=local` still applies once 1.27.4 is
+  installed. Other dependencies were not upgraded.
+- **D76. AI explanations are off by default and always previewed.** When turned on in
+  Settings, `e` on a Smart Analysis finding or an app in My Software opens a preview of
+  the exact text that would be sent: names, versions, publisher, package ID and ATLAS's
+  own wording, never install paths (which can contain the user's name) or the rest of
+  the software list. Sending is listed under "What will change", so the preview appears
+  even with read-only previews turned off. It uses the official Anthropic Go SDK,
+  `claude-opus-5-5` (overridable as `ai.model`) at low effort, with Anthropic's
+  server-side refusal fallback. The key comes from `ANTHROPIC_API_KEY`
+  (or an `ant auth login` profile); ATLAS never stores it. Answers are labelled as written
+  by AI, `x` stops a question, and every question (answered, failed or stopped) is
+  recorded in Activity History with what was sent.
