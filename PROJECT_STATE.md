@@ -6,10 +6,11 @@ Windows 11. Linux stays compatible.
 
 ## Current phase
 
-**Phase 7 — Release and AI explanations: done; v0.1.0 tagged.** The tag (commit 11d7977)
-built and passed every release check, and a **draft** release "ATLAS 0.1.0" with all
-files exists on GitHub. Next, by the user: publish the draft, let `winget-check` pass,
-then submit the winget manifests (see `docs/RELEASING.md`).
+**Next release: 0.2.0, prepared.** It adds the engineering audit fixes and the new
+interface (D77–D82) to 0.1.0. Release notes are in `packaging/release-notes.md`. The
+v0.1.0 draft release was never published. Next, by the owner: merge the working branch
+into `main`, tag `v0.2.0`, publish the draft release, let `winget-check` pass, then submit
+the winget manifests (see `docs/RELEASING.md`).
 
 - MIT licence; `atlas -version` shows version, commit and build date.
 - Release workflow: Windows zips (x64, ARM64), Linux tarballs, `.deb` and `.rpm`
