@@ -54,6 +54,8 @@ jobs:
       - name: Uninstall
         shell: pwsh
         run: |
-          winget uninstall --id Deepakraj1207.ATLAS --accept-source-agreements --disable-interactivity
+          # Installed from local manifests, so uninstall the same way: winget
+          # can't match a manifest install by ID (it isn't from a source).
+          winget uninstall --manifest $env:MANIFEST_DIR --accept-source-agreements --disable-interactivity
           if ($LASTEXITCODE -ne 0) { throw "winget uninstall failed ($LASTEXITCODE)" }
           if (Test-Path (Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links\atlas.exe')) { throw "the atlas command is still there" }
