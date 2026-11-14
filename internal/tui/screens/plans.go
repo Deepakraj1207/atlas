@@ -235,12 +235,12 @@ func ClearPlan(ctx Context) core.ActionPlan {
 // read-only task; the rest open the section that does the job.
 func quickActions(ctx Context) []QuickAction {
 	return []QuickAction{
-		{Label: "Scan my system", Desc: "Find what's installed. Only reads information", Plan: ScanPlan(ctx), Confirm: StartScanMsg{}},
-		{Label: "Check for updates", Desc: "Ask your package managers for newer versions", Plan: CheckPlan(ctx), Confirm: StartCheckMsg{}},
-		{Label: "Analyze installed software", Desc: "Support status, duplicates, what depends on what", Plan: AnalyzePlan(ctx), Confirm: StartAnalysisMsg{}},
-		{Label: "Find unused applications", Desc: "Apps not opened in over a year · Smart Analysis", Navigate: true, Section: nav.SmartAnalysis},
+		{Label: "Scan my system", Desc: "Find what's installed. Only reads", Plan: ScanPlan(ctx), Confirm: StartScanMsg{}},
+		{Label: "Check for updates", Desc: "Newer versions from your package managers", Plan: CheckPlan(ctx), Confirm: StartCheckMsg{}},
+		{Label: "Analyze installed software", Desc: "Support status, duplicates, dependencies", Plan: AnalyzePlan(ctx), Confirm: StartAnalysisMsg{}},
+		{Label: "Find unused applications", Desc: "Not opened in a year · Smart Analysis", Navigate: true, Section: nav.SmartAnalysis},
 		{Label: "Clean unnecessary files", Desc: "Caches, old versions, leftovers · Cleanup", Navigate: true, Section: nav.Cleanup},
-		{Label: "Discover useful applications", Desc: "Free tools that fit what you use · Discover Apps", Navigate: true, Section: nav.DiscoverApps},
+		{Label: "Discover useful applications", Desc: "Free tools that fit what you use", Navigate: true, Section: nav.DiscoverApps},
 		{Label: "Search software", Desc: "Find anything installed · /", Search: true},
 	}
 }

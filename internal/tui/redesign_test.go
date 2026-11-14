@@ -207,3 +207,21 @@ func TestBigLogoWhereThereIsRoom(t *testing.T) {
 		t.Errorf("a narrow but tall terminal has room above the welcome:\n%s", text)
 	}
 }
+
+func TestLargeLogoOnLargeWindows(t *testing.T) {
+	m := bootWithSystem(t, testSystem)
+	large := "██████████  ██          ▄█████▄"
+	small := "▄▀▀▄ ▀█▀ █    ▄▀▀▄ ▄▀▀▀"
+	if v := m.View(); strings.Contains(v, large) || !strings.Contains(v, small) {
+		t.Errorf("120×30 is too short for the large logo; the three-row one is used:\n%s", v)
+	}
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 160, Height: 45})
+	big := next.(Model)
+	if v := big.View(); !strings.Contains(v, large) || strings.Contains(v, small) || !strings.Contains(v, "Welcome to ATLAS") {
+		t.Errorf("a large window shows the six-row logo beside the welcome:\n%s", v)
+	}
+	next, _ = m.Update(tea.WindowSizeMsg{Width: 90, Height: 50})
+	if text := dashboardText(next.(Model)); !strings.Contains(text, large) {
+		t.Errorf("a narrower but very tall window shows it above the welcome:\n%s", text)
+	}
+}

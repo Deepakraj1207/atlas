@@ -124,9 +124,10 @@ func (h *Home) View(ctx Context) string {
 	return b.String()
 }
 
-// intro is the big ATLAS logo with the welcome beside it. Where there is
-// no room beside it, the logo goes above on tall terminals and is left out
-// on small ones.
+// intro is the ATLAS logo with the welcome beside it. The six-row logo is
+// for large windows; it falls back to the three-row one, which goes beside
+// the welcome where it fits, above it on tall terminals, and is left out on
+// small ones.
 func (h *Home) intro(ctx Context, w int) string {
 	t := ctx.Theme
 	greeting := "Welcome to ATLAS"
@@ -137,11 +138,19 @@ func (h *Home) intro(ctx Context, w int) string {
 	text := func(width int) string {
 		return t.Title.Render(greeting) + "\n" + t.Muted.Render(components.Wrap(about, width))
 	}
-	logoW := components.BigLogoWidth
+	beside := func(logo string, logoW int) string {
+		return lipgloss.JoinHorizontal(lipgloss.Center, logo, "    ", text(w-logoW-4))
+	}
+	termH := ctx.Layout.Height
+	largeW, smallW := components.LargeLogoWidth, components.BigLogoWidth
 	switch {
-	case w >= logoW+4+40:
-		return lipgloss.JoinHorizontal(lipgloss.Top, components.BigLogo(t), "    ", text(w-logoW-4))
-	case w >= logoW && ctx.Layout.Height >= 30:
+	case w >= largeW+4+36 && termH >= 40:
+		return beside(components.LargeLogo(t), largeW)
+	case w >= largeW && termH >= 46:
+		return components.LargeLogo(t) + "\n\n" + text(w)
+	case w >= smallW+4+40:
+		return lipgloss.JoinHorizontal(lipgloss.Top, components.BigLogo(t), "    ", text(w-smallW-4))
+	case w >= smallW && termH >= 30:
 		return components.BigLogo(t) + "\n\n" + text(w)
 	default:
 		return text(w)

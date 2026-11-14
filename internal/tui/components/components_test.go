@@ -147,21 +147,29 @@ func TestStatusMessageWinsOverFigures(t *testing.T) {
 }
 
 func TestBigLogoShape(t *testing.T) {
-	for _, th := range []theme.Theme{theme.New(theme.Dark), theme.New(theme.Light)} {
-		lines := strings.Split(BigLogo(th), "\n")
-		if len(lines) != BigLogoHeight {
-			t.Fatalf("logo has %d rows, want %d", len(lines), BigLogoHeight)
-		}
-		for i, l := range lines {
-			if w := lipgloss.Width(l); w != BigLogoWidth {
-				t.Errorf("row %d is %d wide, want %d", i, w, BigLogoWidth)
+	for _, c := range []struct {
+		render func(theme.Theme) string
+		w, h   int
+	}{{BigLogo, BigLogoWidth, BigLogoHeight}, {LargeLogo, LargeLogoWidth, LargeLogoHeight}} {
+		for _, th := range []theme.Theme{theme.New(theme.Dark), theme.New(theme.Light)} {
+			lines := strings.Split(c.render(th), "\n")
+			if len(lines) != c.h {
+				t.Fatalf("logo has %d rows, want %d", len(lines), c.h)
 			}
-			for _, r := range l {
-				if r >= 0x80 && r != '█' && r != '▀' && r != '▄' { // ASCII is spaces and colour codes
-					t.Errorf("row %d uses %q; only block characters render reliably everywhere", i, r)
+			for i, l := range lines {
+				if w := lipgloss.Width(l); w != c.w {
+					t.Errorf("row %d is %d wide, want %d", i, w, c.w)
+				}
+				for _, r := range l {
+					if r >= 0x80 && r != '█' && r != '▀' && r != '▄' { // ASCII is spaces and colour codes
+						t.Errorf("row %d uses %q; only block characters render reliably everywhere", i, r)
+					}
 				}
 			}
 		}
+	}
+	if LargeLogoHeight != 6 || LargeLogoWidth <= BigLogoWidth {
+		t.Errorf("large logo is %dx%d", LargeLogoWidth, LargeLogoHeight)
 	}
 	if mix([3]float64{0, 0, 0}, [3]float64{255, 255, 255}, 0.5) != "#808080" {
 		t.Error("gradient midpoint")

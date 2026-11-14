@@ -400,5 +400,6 @@ Short, dated records of choices that shape the code.
     (single width in every Windows console font, legacy conhost included), with a
     gradient from the accent colour to the info colour. It sits beside the welcome on wide
     terminals, so it costs no rows at 120×30. It goes above the welcome on narrow but tall
-    terminals and is left out on small ones.
+    terminals and is left out on small ones. On large windows (at least 40 rows) a
+    six-row version with double-width strokes is used instead, in the same colours.
 
