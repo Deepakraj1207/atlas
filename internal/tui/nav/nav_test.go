@@ -4,7 +4,7 @@ import "testing"
 
 func TestSectionOrderAndTitles(t *testing.T) {
 	want := []string{
-		"Home", "My Software", "Updates", "Smart Analysis", "Dependencies",
+		"Dashboard", "My Software", "Updates", "Smart Analysis", "Dependencies",
 		"Cleanup", "Discover Apps", "Activity History", "Settings",
 	}
 	all := All()

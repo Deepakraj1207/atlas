@@ -366,3 +366,34 @@ Short, dated records of choices that shape the code.
   limit and can't be turned off on the default model; the ceiling keeps a request
   without streaming under the SDK's timeout. An answer that hits the limit is kept and
   marked "cut short"; one with no text says how to raise the limit.
+
+## 2026-11-14 — Interface redesign
+
+- **D82. A quieter, modern terminal look, with the same features and keys.** Inspired by
+  current AI command-line tools (no copied branding or text). Same Bubble Tea, Bubbles and
+  Lip Gloss; no new dependency.
+  - **Look.** Dark-first palette with one accent (periwinkle) and status colours used only
+    for status. Text weight and dim/bright carry the hierarchy, and boxes are kept for the
+    few places that need them. Only symbols already confirmed to render in Windows Terminal
+    and conhost are used (`◆ › ● ○ • │ ─`), no emoji, because those are double width.
+  - **Shell.** A one-line header (`◆ ATLAS`, version, a status dot with plain words, the
+    computer, the mode) over a thin rule. A borderless sidebar with `›` on the current
+    section. A footer without a box: `● message` with real figures on the right (apps,
+    updates, memory in use), then key hints.
+  - **Focus.** Esc is "back": it closes what a screen has open (a search, the details
+    view), then moves focus to the section list, where ↑ ↓ move and Enter, → or Esc
+    return. Digits, Tab and `/` work everywhere, as before. Focus starts on the screen,
+    so every existing key keeps its meaning. A screen keeps Esc for itself only while
+    `HandlesBack` says it has something open.
+  - **Dashboard** (Home, renamed in the interface only). A "What would you like to do?"
+    list (scan, check for updates, analyze, find unused apps, clean up, discover,
+    search); the first three still preview first. The computer at a glance comes from
+    the new read-only `platform.ReadSystemInfo`: Windows name from the registry (build
+    22000 and later is Windows 11), memory from `GlobalMemoryStatusEx`, disk from
+    `GetDiskFreeSpaceEx`, and on Linux `/etc/os-release`, `/proc/meminfo` and statfs.
+    Figures are real or shown as "—" (not known yet), never 0 by default. The health
+    words ("Not scanned yet", "Last scan had gaps", "N need attention", "System ready")
+    only state what the saved data shows. On wide terminals the actions and the glance
+    sit side by side, so the important part fits Windows Terminal's default 120×30.
+  - Memory use is read again every 15 seconds; nothing else polls.
+

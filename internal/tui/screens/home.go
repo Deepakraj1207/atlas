@@ -9,25 +9,28 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/deepakraj1207/atlas/internal/core"
+	"github.com/deepakraj1207/atlas/internal/platform"
 	"github.com/deepakraj1207/atlas/internal/tui/components"
-	"github.com/deepakraj1207/atlas/internal/tui/nav"
+	"github.com/deepakraj1207/atlas/internal/tui/theme"
 )
 
 // staleAfter is when Home suggests scanning again.
 const staleAfter = 7 * 24 * time.Hour
 
-// Home is the landing screen.
+// Home is the Dashboard: a welcome, a "What would you like to do?" list,
+// the computer at a glance, and what needs attention. It only shows real,
+// saved data; anything not known yet says so.
 type Home struct {
 	focus int
 }
 
-// NewHome creates the Home screen.
+// NewHome creates the Dashboard screen.
 func NewHome() *Home { return &Home{} }
 
-// Focus returns the index of the focused quick action (for tests).
+// Focus returns the index of the highlighted action (for tests).
 func (h *Home) Focus() int { return h.focus }
 
-// Update handles keys for the quick action row.
+// Update moves through the action list and runs the chosen action.
 func (h *Home) Update(msg tea.Msg, ctx Context) (Screen, tea.Cmd) {
 	key, ok := msg.(tea.KeyMsg)
 	if !ok {
@@ -39,69 +42,86 @@ func (h *Home) Update(msg tea.Msg, ctx Context) (Screen, tea.Cmd) {
 		h.focus = (h.focus + len(actions) - 1) % len(actions)
 	case "right", "l", "down", "j":
 		h.focus = (h.focus + 1) % len(actions)
+	case "home", "g":
+		h.focus = 0
+	case "end", "G":
+		h.focus = len(actions) - 1
 	case "enter", " ":
 		a := actions[h.focus]
-		if a.Navigate {
-			return h, send(NavigateMsg{Section: nav.DiscoverApps})
+		switch {
+		case a.Search:
+			return h, send(SearchMsg{})
+		case a.Navigate:
+			return h, send(NavigateMsg{Section: a.Section})
 		}
 		return h, send(ShowActionPreviewMsg{Plan: a.Plan, Confirm: a.Confirm})
 	}
 	return h, nil
 }
 
-// Hints lists Home's keys.
+// Hints lists the Dashboard's keys.
 func (h *Home) Hints(ctx Context) []components.KeyHint {
 	return []components.KeyHint{
-		{Key: "←/→", Desc: "choose action"},
-		{Key: "enter", Desc: "preview action"},
+		{Key: "↑↓", Desc: "choose"},
+		{Key: "enter", Desc: "select"},
 	}
 }
 
-// View renders Home.
+// View renders the Dashboard. On wide terminals the actions and the
+// at-a-glance figures sit side by side so both fit a default 120×30 window;
+// otherwise everything is one column.
 func (h *Home) View(ctx Context) string {
 	t := ctx.Theme
 	w := ctx.Width()
+	d := ctx.Data
 	var b strings.Builder
 
-	b.WriteString(t.Title.Render("Welcome to ATLAS"))
+	greeting := "Welcome to ATLAS"
+	if d.Summary != nil {
+		greeting = "Welcome back"
+	}
+	b.WriteString(t.Title.Render(greeting))
 	b.WriteString("\n")
 	b.WriteString(t.Muted.Render(components.Wrap("Keep your software tidy, up to date and understood, in plain language. Nothing happens without your say-so.", w)))
 	b.WriteString("\n\n")
 
-	b.WriteString(t.Heading.Render("Quick actions"))
-	b.WriteString("\n")
-	b.WriteString(h.buttons(ctx))
-	b.WriteString("\n")
-	b.WriteString(t.Subtle.Render(components.Wrap("Press Enter on an action to see exactly what it will do before anything happens. Find New Tools just opens Discover Apps.", w)))
-	b.WriteString("\n\n")
-
-	if p := ctx.Data.Scan; p != nil {
-		b.WriteString(scanProgressView(ctx, *p))
-		b.WriteString("\n\n")
-	}
-	if p := ctx.Data.Check; p != nil {
-		b.WriteString(checkProgressView(ctx, *p))
-		b.WriteString("\n\n")
-	}
-	if p := ctx.Data.Analyze; p != nil {
-		b.WriteString(analyzeProgressView(ctx, *p))
-		b.WriteString("\n\n")
-	}
-
-	if ctx.Layout.TwoColumn {
-		leftW := (w - 3) / 2
-		rightW := w - leftW - 3
-		left := lipgloss.NewStyle().Width(leftW).Render(h.overview(ctx))
-		right := lipgloss.NewStyle().Width(rightW).Render(h.recentActivity(ctx, rightW))
-		b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, left, "   ", right))
+	wide := ctx.Layout.TwoColumn && w >= 84
+	if wide {
+		rightW := min(max(w*2/5, 34), 48)
+		leftW := w - rightW - 4
+		left := lipgloss.NewStyle().Width(leftW).Render(h.actions(ctx, leftW))
+		right := lipgloss.NewStyle().Width(rightW).Render(h.glance(ctx, rightW))
+		b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, left, "    ", right))
+		b.WriteString("\n")
 	} else {
-		b.WriteString(h.overview(ctx))
+		b.WriteString(h.actions(ctx, w))
+		b.WriteString("\n")
+	}
+
+	for _, p := range []string{progress(ctx, d.Scan, scanProgressView), progress(ctx, d.Check, checkProgressView), progress(ctx, d.Analyze, analyzeProgressView)} {
+		if p != "" {
+			b.WriteString("\n")
+			b.WriteString(p)
+			b.WriteString("\n")
+		}
+	}
+
+	b.WriteString("\n")
+	b.WriteString(components.Divider(t, w))
+	b.WriteString("\n\n")
+	if wide {
+		leftW := (w - 4) / 2
+		rightW := w - leftW - 4
+		left := lipgloss.NewStyle().Width(leftW).Render(h.recommended(ctx, leftW))
+		right := lipgloss.NewStyle().Width(rightW).Render(h.recentActivity(ctx, rightW))
+		b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, left, "    ", right))
+	} else {
+		b.WriteString(h.glance(ctx, w))
+		b.WriteString("\n\n")
+		b.WriteString(h.recommended(ctx, w))
 		b.WriteString("\n\n")
 		b.WriteString(h.recentActivity(ctx, w))
 	}
-	b.WriteString("\n\n")
-
-	b.WriteString(h.recommended(ctx))
 
 	if ctx.Advanced() {
 		b.WriteString("\n\n")
@@ -110,34 +130,112 @@ func (h *Home) View(ctx Context) string {
 	return b.String()
 }
 
-// buttons lays the quick action buttons out in as many rows as needed.
-func (h *Home) buttons(ctx Context) string {
+// actions is the "What would you like to do?" block.
+func (h *Home) actions(ctx Context, width int) string {
 	t := ctx.Theme
-	w := ctx.Width()
-	var rows []string
-	var row []string
-	used := 0
-	for i, a := range quickActions(ctx) {
-		style := t.Button
-		if i == h.focus {
-			style = t.ButtonOn
-		}
-		btn := style.Render(a.Label)
-		bw := lipgloss.Width(btn)
-		if len(row) > 0 && used+1+bw > w {
-			rows = append(rows, strings.Join(row, " "))
-			row, used = nil, 0
-		}
-		row = append(row, btn)
-		used += bw
-		if len(row) > 1 {
-			used++
-		}
+	actions := quickActions(ctx)
+	items := make([]components.ActionItem, len(actions))
+	for i, a := range actions {
+		items[i] = components.ActionItem{Label: a.Label, Desc: a.Desc}
 	}
-	if len(row) > 0 {
-		rows = append(rows, strings.Join(row, " "))
+	h.focus = min(max(h.focus, 0), len(items)-1)
+	return t.Heading.Render("What would you like to do?") + "\n\n" +
+		components.ActionList(t, width, items, h.focus, !ctx.NavFocused) + "\n\n" +
+		t.Subtle.Render(components.Wrap("Anything that changes your computer is previewed first.", width))
+}
+
+// glance is the computer and the software at a glance.
+func (h *Home) glance(ctx Context, width int) string {
+	t := ctx.Theme
+	return h.system(ctx, width) + "\n\n" + components.Stats(t, width, h.stats(ctx)) + "\n\n" + h.overview(ctx)
+}
+
+func progress(ctx Context, p *ScanProgress, view func(Context, ScanProgress) string) string {
+	if p == nil {
+		return ""
 	}
-	return strings.Join(rows, "\n")
+	return view(ctx, *p)
+}
+
+// system describes the computer with only what is known, one fact per
+// line so it reads well in a narrow column.
+func (h *Home) system(ctx Context, width int) string {
+	t := ctx.Theme
+	label := components.SectionLabel(t, "System")
+	s := ctx.System
+	if s == nil {
+		return label + "\n" + t.Subtle.Render("Reading system information…")
+	}
+	var lines []string
+	if s.OS != "" {
+		lines = append(lines, t.Body.Render(components.Truncate(s.OS, width)))
+	}
+	if s.MemTotal > 0 {
+		mem := t.Body.Render(platform.GB(s.MemTotal) + " memory")
+		if used := s.MemUsed(); used > 0 {
+			mem += t.Subtle.Render(" · " + platform.GB(used) + " in use")
+		}
+		lines = append(lines, mem)
+	}
+	if s.DiskTotal > 0 {
+		disk := platform.GB(s.DiskFree) + " free of " + platform.GB(s.DiskTotal)
+		if s.DiskPath != "" && s.DiskPath != "/" {
+			disk += " on " + s.DiskPath
+		}
+		lines = append(lines, t.Body.Render(disk))
+	}
+	if len(lines) == 0 {
+		return label + "\n" + t.Subtle.Render("ATLAS couldn't read this computer's details.")
+	}
+	return label + "\n" + strings.Join(lines, "\n")
+}
+
+// stats are the headline figures. A dash means "not known yet" (no scan,
+// check or analysis), never zero.
+func (h *Home) stats(ctx Context) []components.Stat {
+	d := ctx.Data
+	unknown := func(label string) components.Stat { return components.Stat{Value: "—", Label: label, Dim: true} }
+	var out []components.Stat
+	if d.Summary != nil {
+		out = append(out, components.Stat{Value: fmt.Sprint(d.Summary.AppCount), Label: plural(d.Summary.AppCount, "app", "apps")})
+	} else {
+		out = append(out, unknown("apps"))
+	}
+	if d.UpdateSummary != nil {
+		apps, comps := d.PendingUpdates()
+		n := apps + comps
+		st := components.Stat{Value: fmt.Sprint(n), Label: plural(n, "update", "updates")}
+		if n > 0 {
+			st.Tone = theme.ToneBusy
+		}
+		out = append(out, st)
+	} else {
+		out = append(out, unknown("updates"))
+	}
+	if a := d.Analysis; a != nil {
+		out = append(out, components.Stat{Value: fmt.Sprint(len(a.Runtimes)), Label: plural(len(a.Runtimes), "runtime", "runtimes")})
+		n := 0
+		for _, f := range a.Findings {
+			if f.Kind == "unused" || f.Kind == "unneeded" {
+				n += len(f.Items)
+			}
+		}
+		st := components.Stat{Value: fmt.Sprint(n), Label: "to clean up"}
+		if n > 0 {
+			st.Tone = theme.ToneWarn
+		}
+		out = append(out, st)
+	} else {
+		out = append(out, unknown("runtimes"), unknown("to clean up"))
+	}
+	return out
+}
+
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
 }
 
 func (h *Home) overview(ctx Context) string {
@@ -217,20 +315,18 @@ func (h *Home) overview(ctx Context) string {
 			rows = append(rows, [2]string{"Smart Analysis", val})
 		}
 	}
-	return t.Heading.Render("Software overview") + "\n" + components.LabelValue(t, rows)
+	return components.SectionLabel(t, "Software overview") + "\n" + components.LabelValue(t, rows)
 }
 
 func (h *Home) recentActivity(ctx Context, width int) string {
 	t := ctx.Theme
 	acts := ctx.Data.Activity
 	if len(acts) == 0 {
-		return components.EmptyState{
-			Title:   "Recent activity",
-			Message: "Nothing yet. Everything ATLAS does will be listed here and in Activity History.",
-		}.Render(t, width)
+		return components.SectionLabel(t, "Recent activity") + "\n" +
+			t.Muted.Render(components.Wrap("Nothing yet. Everything ATLAS does will be listed here and in Activity History.", width))
 	}
 	var b strings.Builder
-	b.WriteString(t.Heading.Render("Recent activity"))
+	b.WriteString(components.SectionLabel(t, "Recent activity"))
 	for i, a := range acts {
 		if i == 3 {
 			break
@@ -245,7 +341,7 @@ func (h *Home) recentActivity(ctx Context, width int) string {
 	return b.String()
 }
 
-func (h *Home) recommended(ctx Context) string {
+func (h *Home) recommended(ctx Context, width int) string {
 	t := ctx.Theme
 	d := ctx.Data
 	var items []string
@@ -301,7 +397,7 @@ func (h *Home) recommended(ctx Context) string {
 	} else {
 		items = append(items, "Developer? Press m for Advanced mode to see package IDs, paths and command details.")
 	}
-	return t.Heading.Render("Recommended actions") + "\n" + components.Bullets(t, ctx.Width(), items)
+	return components.SectionLabel(t, "Next steps") + "\n" + components.Bullets(t, width, items)
 }
 
 func (h *Home) diagnostics(ctx Context) string {
@@ -316,7 +412,7 @@ func (h *Home) diagnostics(ctx Context) string {
 		{"Database", ctx.DBPath},
 		{"Log file", ctx.LogPath},
 	}
-	return t.Heading.Render("Diagnostics") + "\n" + components.LabelValue(t, rows)
+	return components.SectionLabel(t, "Diagnostics") + "\n" + components.LabelValue(t, rows)
 }
 
 var _ Screen = (*Home)(nil)

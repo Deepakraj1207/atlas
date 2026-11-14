@@ -4,12 +4,14 @@
 package screens
 
 import (
+	"fmt"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/deepakraj1207/atlas/internal/config"
 	"github.com/deepakraj1207/atlas/internal/core"
+	"github.com/deepakraj1207/atlas/internal/platform"
 	"github.com/deepakraj1207/atlas/internal/tui/components"
 	"github.com/deepakraj1207/atlas/internal/tui/layout"
 	"github.com/deepakraj1207/atlas/internal/tui/theme"
@@ -45,6 +47,12 @@ type Context struct {
 	// AI describes the optional AI explanations.
 	AI   AIStatus
 	Data DataView
+	// System is what is known about the computer; nil until it has been
+	// read.
+	System *platform.SystemInfo
+	// NavFocused is true while the arrow keys move through the sections,
+	// so a screen's own list isn't the one with focus.
+	NavFocused bool
 }
 
 // DataView is the root model's read-only snapshot of saved data.
@@ -101,6 +109,38 @@ type DataView struct {
 	Discovery *core.Discovery
 	// InstalledNow lists catalogue IDs installed this session, before a rescan.
 	InstalledNow map[string]bool
+}
+
+// Health sums up the state of the saved data in a few words for the header
+// and status bar. It only states what ATLAS knows: before a scan it says so
+// instead of calling the system healthy.
+func (d DataView) Health() (string, theme.Tone) {
+	switch {
+	case !d.Available:
+		return "Saved data unavailable", theme.ToneBad
+	case d.Scan != nil:
+		return "Scanning", theme.ToneBusy
+	case d.Check != nil:
+		return "Checking for updates", theme.ToneBusy
+	case d.Analyze != nil:
+		return "Analyzing", theme.ToneBusy
+	case d.Tidying != nil:
+		return "Looking for things to tidy", theme.ToneBusy
+	case !d.Loaded:
+		return "Loading", theme.ToneNeutral
+	case d.LoadErr != "":
+		return "Couldn't load saved list", theme.ToneBad
+	case d.Summary == nil:
+		return "Not scanned yet", theme.ToneNeutral
+	case d.Summary.Status == core.ScanPartial:
+		return "Last scan had gaps", theme.ToneWarn
+	}
+	if d.Analysis != nil && !d.AnalysisStale() {
+		if att, _ := d.Analysis.Counts(); att > 0 {
+			return fmt.Sprintf("%d need attention", att), theme.ToneWarn
+		}
+	}
+	return "System ready", theme.ToneOK
 }
 
 // Busy reports whether a background task is running.
@@ -215,4 +255,11 @@ type SelfScrolling interface {
 // CapturesInput is true, for example while the user types a search.
 type InputCapturer interface {
 	CapturesInput() bool
+}
+
+// BackHandler screens use Esc themselves while HandlesBack is true, for
+// example to close a detail view or clear a search. Otherwise Esc moves
+// focus out of the screen to the section list.
+type BackHandler interface {
+	HandlesBack(ctx Context) bool
 }

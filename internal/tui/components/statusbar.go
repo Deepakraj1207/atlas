@@ -16,6 +16,10 @@ const (
 	StatusSuccess
 	StatusWarning
 	StatusError
+	// StatusBusy is a task in progress.
+	StatusBusy
+	// StatusReady is the resting state: nothing to report.
+	StatusReady
 )
 
 // Status is a transient message for the status bar.
@@ -24,10 +28,27 @@ type Status struct {
 	Kind StatusKind
 }
 
-// StatusBar renders the footer: a message row and, optionally, a hint row.
-// right is drawn at the end of the message row (e.g. the mode badge).
+// Tone maps a status kind to an indicator tone.
+func (s Status) Tone() theme.Tone {
+	switch s.Kind {
+	case StatusSuccess, StatusReady:
+		return theme.ToneOK
+	case StatusWarning:
+		return theme.ToneWarn
+	case StatusError:
+		return theme.ToneBad
+	case StatusBusy:
+		return theme.ToneBusy
+	default:
+		return theme.ToneNeutral
+	}
+}
+
+// StatusBar renders the footer without a box: a "● message" line with
+// facts on the right (e.g. "87 apps · 3 updates"), and, optionally, a quiet
+// line of key hints.
 func StatusBar(t theme.Theme, width int, st Status, right string, hints []KeyHint, showHints bool) string {
-	var style lipgloss.Style
+	style := t.Status
 	switch st.Kind {
 	case StatusSuccess:
 		style = t.Success
@@ -35,12 +56,16 @@ func StatusBar(t theme.Theme, width int, st Status, right string, hints []KeyHin
 		style = t.Warning
 	case StatusError:
 		style = t.Danger
-	default:
-		style = t.Status
+	case StatusBusy:
+		style = t.Info
 	}
+	dot := t.Dot(st.Tone()) + " "
 	rightW := lipgloss.Width(right)
-	msgW := max(width-rightW-1, 1)
-	msg := style.MaxWidth(msgW).Render(truncate(st.Text, msgW))
+	if rightW > width/2 {
+		right, rightW = "", 0 // a long message matters more than the facts
+	}
+	msgW := max(width-rightW-lipgloss.Width(dot)-1, 1)
+	msg := dot + style.Render(truncate(st.Text, msgW))
 	gap := max(width-lipgloss.Width(msg)-rightW, 0)
 	row := msg + strings.Repeat(" ", gap) + right
 

@@ -17,6 +17,9 @@ computer without changing anything.
 
 ## What it does
 
+- **Dashboard** is where ATLAS opens: a "What would you like to do?" list of the
+  common jobs, your computer at a glance (Windows or Linux version, memory, disk), the
+  real numbers of apps, updates, runtimes and things to clean up, and what to do next.
 - **Scan My System** finds installed software without changing anything. On
   Windows it reads installed programs, winget, Chocolatey and Scoop. On Linux it
   reads dpkg/apt, RPM, Snap and Flatpak.
@@ -89,8 +92,10 @@ Setting `ATLAS_HOME` keeps settings and logs in one folder (portable use).
 | Key | Action |
 |-----|--------|
 | `?` | Help for the current screen |
+| `↑` `↓`, `enter` | Move through the list on screen and choose |
+| `esc` | Back: close what's open, then move to the section list (`↑` `↓` to move, `enter` to open) |
+| `/` | Search your software from anywhere |
 | `tab` / `shift+tab`, `1`–`9` | Move between sections |
-| arrows, `enter` | Move within a screen, choose an item |
 | `m` | Simple / Advanced mode (remembered) |
 | `t` | Dark / light theme (remembered) |
 | `pgup` / `pgdn` | Scroll when a screen does not fit |

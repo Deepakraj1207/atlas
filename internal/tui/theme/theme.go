@@ -1,6 +1,7 @@
 // Package theme defines the dark and light colour themes and the Lip Gloss
 // styles built from them. Colours are explicit (not terminal-adaptive) so the
-// user's persisted choice always wins.
+// user's persisted choice always wins. The look is deliberately quiet: text
+// carries the hierarchy, colour is kept for focus and status.
 package theme
 
 import (
@@ -13,48 +14,52 @@ import (
 type Palette struct {
 	Name config.Theme
 
-	Accent     lipgloss.Color // teal/cyan: focus, selection, links
-	AccentSoft lipgloss.Color // dimmer accent for secondary highlights
+	Accent     lipgloss.Color // focus, selection, the brand mark
+	AccentSoft lipgloss.Color // dimmer accent: unfocused selection, badges
 	Text       lipgloss.Color // primary text
 	Muted      lipgloss.Color // secondary text
-	Subtle     lipgloss.Color // tertiary text, separators
-	Surface    lipgloss.Color // background for selected rows / buttons
-	Border     lipgloss.Color
+	Subtle     lipgloss.Color // tertiary text, hints
+	Surface    lipgloss.Color // background of the selected row
+	Border     lipgloss.Color // separators and the few panels
 	Success    lipgloss.Color
 	Warning    lipgloss.Color
 	Danger     lipgloss.Color
+	Info       lipgloss.Color // running tasks
 	OnAccent   lipgloss.Color // text drawn on top of Accent
 }
 
-// Dark is the default palette.
+// Dark is the default palette, tuned for dark terminal backgrounds such as
+// Windows Terminal's and PowerShell's defaults.
 var Dark = Palette{
 	Name:       config.ThemeDark,
-	Accent:     lipgloss.Color("#2DD4BF"),
-	AccentSoft: lipgloss.Color("#14B8A6"),
-	Text:       lipgloss.Color("#E6EDF3"),
-	Muted:      lipgloss.Color("#9BA7B4"),
-	Subtle:     lipgloss.Color("#5C6773"),
-	Surface:    lipgloss.Color("#1F2A33"),
-	Border:     lipgloss.Color("#3A4650"),
-	Success:    lipgloss.Color("#4ADE80"),
-	Warning:    lipgloss.Color("#FBBF24"),
-	Danger:     lipgloss.Color("#F87171"),
-	OnAccent:   lipgloss.Color("#06201C"),
+	Accent:     lipgloss.Color("#9AA8FF"),
+	AccentSoft: lipgloss.Color("#6672C9"),
+	Text:       lipgloss.Color("#E6E8EF"),
+	Muted:      lipgloss.Color("#9097A8"),
+	Subtle:     lipgloss.Color("#5E6576"),
+	Surface:    lipgloss.Color("#262A3B"),
+	Border:     lipgloss.Color("#363B4E"),
+	Success:    lipgloss.Color("#6FD49A"),
+	Warning:    lipgloss.Color("#F2C46D"),
+	Danger:     lipgloss.Color("#F2797B"),
+	Info:       lipgloss.Color("#7CC7E8"),
+	OnAccent:   lipgloss.Color("#141726"),
 }
 
 // Light is the light palette.
 var Light = Palette{
 	Name:       config.ThemeLight,
-	Accent:     lipgloss.Color("#0D9488"),
-	AccentSoft: lipgloss.Color("#0F766E"),
-	Text:       lipgloss.Color("#1F2933"),
-	Muted:      lipgloss.Color("#52606D"),
-	Subtle:     lipgloss.Color("#9AA5B1"),
-	Surface:    lipgloss.Color("#E6FFFA"),
-	Border:     lipgloss.Color("#CBD2D9"),
-	Success:    lipgloss.Color("#15803D"),
-	Warning:    lipgloss.Color("#B45309"),
-	Danger:     lipgloss.Color("#B91C1C"),
+	Accent:     lipgloss.Color("#4A55C2"),
+	AccentSoft: lipgloss.Color("#7C86D9"),
+	Text:       lipgloss.Color("#1E2230"),
+	Muted:      lipgloss.Color("#5A6072"),
+	Subtle:     lipgloss.Color("#9AA0AF"),
+	Surface:    lipgloss.Color("#E8EAF8"),
+	Border:     lipgloss.Color("#D3D6E2"),
+	Success:    lipgloss.Color("#1E7F4B"),
+	Warning:    lipgloss.Color("#A3640B"),
+	Danger:     lipgloss.Color("#B4282B"),
+	Info:       lipgloss.Color("#1F6E95"),
 	OnAccent:   lipgloss.Color("#FFFFFF"),
 }
 
@@ -62,8 +67,9 @@ var Light = Palette{
 type Theme struct {
 	Palette
 
-	Title    lipgloss.Style // app / screen titles
+	Title    lipgloss.Style // screen titles
 	Heading  lipgloss.Style // section headings inside a screen
+	Label    lipgloss.Style // small section label such as "SYSTEM"
 	Body     lipgloss.Style
 	Muted    lipgloss.Style
 	Subtle   lipgloss.Style
@@ -71,24 +77,29 @@ type Theme struct {
 	Success  lipgloss.Style
 	Warning  lipgloss.Style
 	Danger   lipgloss.Style
+	Info     lipgloss.Style
+	Strong   lipgloss.Style // emphasised figures, e.g. "87" in "87 apps"
+	Logo     lipgloss.Style // the brand name
 	Key      lipgloss.Style // keyboard hint key
 	KeyDesc  lipgloss.Style // keyboard hint description
 	Badge    lipgloss.Style // small label such as "Simple"
 	NavItem  lipgloss.Style
 	NavCur   lipgloss.Style // selected navigation item
 	NavSoon  lipgloss.Style // not-yet-available navigation item
+	Selected lipgloss.Style // the highlighted row of a focused list
 	Button   lipgloss.Style
 	ButtonOn lipgloss.Style // focused button
 	Panel    lipgloss.Style // bordered container, used sparingly
 	Divider  lipgloss.Style
-	Status   lipgloss.Style // status bar background row
+	Status   lipgloss.Style // status bar text
 }
 
 // New builds a Theme from a palette.
 func New(p Palette) Theme {
 	t := Theme{Palette: p}
-	t.Title = lipgloss.NewStyle().Bold(true).Foreground(p.Accent)
+	t.Title = lipgloss.NewStyle().Bold(true).Foreground(p.Text)
 	t.Heading = lipgloss.NewStyle().Bold(true).Foreground(p.Text)
+	t.Label = lipgloss.NewStyle().Bold(true).Foreground(p.Subtle)
 	t.Body = lipgloss.NewStyle().Foreground(p.Text)
 	t.Muted = lipgloss.NewStyle().Foreground(p.Muted)
 	t.Subtle = lipgloss.NewStyle().Foreground(p.Subtle)
@@ -96,18 +107,66 @@ func New(p Palette) Theme {
 	t.Success = lipgloss.NewStyle().Foreground(p.Success)
 	t.Warning = lipgloss.NewStyle().Foreground(p.Warning)
 	t.Danger = lipgloss.NewStyle().Foreground(p.Danger)
-	t.Key = lipgloss.NewStyle().Bold(true).Foreground(p.Accent)
-	t.KeyDesc = lipgloss.NewStyle().Foreground(p.Muted)
-	t.Badge = lipgloss.NewStyle().Foreground(p.OnAccent).Background(p.AccentSoft).Padding(0, 1)
-	t.NavItem = lipgloss.NewStyle().Foreground(p.Text).Padding(0, 1)
-	t.NavCur = lipgloss.NewStyle().Bold(true).Foreground(p.Accent).Padding(0, 1)
-	t.NavSoon = lipgloss.NewStyle().Foreground(p.Muted).Padding(0, 1)
-	t.Button = lipgloss.NewStyle().Foreground(p.Text).Background(p.Surface).Padding(0, 2)
+	t.Info = lipgloss.NewStyle().Foreground(p.Info)
+	t.Strong = lipgloss.NewStyle().Bold(true).Foreground(p.Text)
+	t.Logo = lipgloss.NewStyle().Bold(true).Foreground(p.Accent)
+	t.Key = lipgloss.NewStyle().Bold(true).Foreground(p.Muted)
+	t.KeyDesc = lipgloss.NewStyle().Foreground(p.Subtle)
+	t.Badge = lipgloss.NewStyle().Foreground(p.Muted).Background(p.Surface).Padding(0, 1)
+	t.NavItem = lipgloss.NewStyle().Foreground(p.Muted)
+	t.NavCur = lipgloss.NewStyle().Bold(true).Foreground(p.Accent)
+	t.NavSoon = lipgloss.NewStyle().Foreground(p.Subtle)
+	t.Selected = lipgloss.NewStyle().Bold(true).Foreground(p.Text).Background(p.Surface)
+	t.Button = lipgloss.NewStyle().Foreground(p.Muted).Background(p.Surface).Padding(0, 2)
 	t.ButtonOn = lipgloss.NewStyle().Bold(true).Foreground(p.OnAccent).Background(p.Accent).Padding(0, 2)
 	t.Panel = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(p.Border).Padding(0, 1)
 	t.Divider = lipgloss.NewStyle().Foreground(p.Border)
 	t.Status = lipgloss.NewStyle().Foreground(p.Muted)
 	return t
+}
+
+// Tone is the meaning of a status indicator.
+type Tone int
+
+const (
+	ToneNeutral Tone = iota
+	ToneOK
+	ToneBusy
+	ToneWarn
+	ToneBad
+)
+
+// Dot renders the coloured "●" status indicator for a tone. A neutral tone
+// is a hollow "○": nothing known yet.
+func (t Theme) Dot(tone Tone) string {
+	switch tone {
+	case ToneOK:
+		return t.Success.Render("●")
+	case ToneBusy:
+		return t.Info.Render("●")
+	case ToneWarn:
+		return t.Warning.Render("●")
+	case ToneBad:
+		return t.Danger.Render("●")
+	default:
+		return t.Subtle.Render("○")
+	}
+}
+
+// ToneStyle is the text style that goes with a tone.
+func (t Theme) ToneStyle(tone Tone) lipgloss.Style {
+	switch tone {
+	case ToneOK:
+		return t.Success
+	case ToneBusy:
+		return t.Info
+	case ToneWarn:
+		return t.Warning
+	case ToneBad:
+		return t.Danger
+	default:
+		return t.Muted
+	}
 }
 
 // ByName returns the theme for a config value, defaulting to Dark.

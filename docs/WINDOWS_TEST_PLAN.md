@@ -52,7 +52,7 @@ Run `.\atlas.exe` in Windows Terminal. For each row, note **OK** or what you saw
 
 | # | Do this | Expect |
 |---|---------|--------|
-| 2.1 | Start ATLAS | Home appears at once; no strange characters; the sidebar shows 9 sections |
+| 2.1 | Start ATLAS | The Dashboard appears at once, with "What would you like to do?", the computer's name, memory and disk; no strange characters; the sidebar shows 9 sections. Esc then ↑ ↓ moves through the sections, Enter opens one |
 | 2.2 | Press `t`, then `t` again | Light theme, then dark again; colours stay readable |
 | 2.3 | Resize the window narrow, then very small | Tabs replace the sidebar; very small shows "ATLAS needs a terminal of at least…" |
 | 2.4 | Press `?`, then Esc | Help opens and closes |

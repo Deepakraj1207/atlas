@@ -17,6 +17,7 @@ import (
 
 	"github.com/deepakraj1207/atlas/internal/config"
 	"github.com/deepakraj1207/atlas/internal/core"
+	"github.com/deepakraj1207/atlas/internal/platform"
 	"github.com/deepakraj1207/atlas/internal/tui/components"
 	"github.com/deepakraj1207/atlas/internal/tui/layout"
 	"github.com/deepakraj1207/atlas/internal/tui/nav"
@@ -45,6 +46,9 @@ type Options struct {
 	DBPath   string
 	// Elevated is true when ATLAS runs as administrator or root.
 	Elevated bool
+	// SystemInfo reads facts about the computer for the dashboard (OS,
+	// memory, disk). Nil means platform.ReadSystemInfo.
+	SystemInfo func() platform.SystemInfo
 }
 
 // Model is the root Bubble Tea model.
@@ -83,6 +87,14 @@ type Model struct {
 	scan     *scanRun
 	spinner  spinner.Model
 	now      func() time.Time
+
+	// navFocus is true while the arrow keys move through the sections
+	// (Esc from a screen); false while they belong to the screen.
+	navFocus bool
+	// sys is what is known about the computer; sysKnown is false until read.
+	sys      platform.SystemInfo
+	sysKnown bool
+	readSys  func() platform.SystemInfo
 
 	helpOpen bool
 	// overlayScroll is the scroll offset of the help or preview overlay.
@@ -128,6 +140,10 @@ func New(opts Options) Model {
 		dbPath:   opts.DBPath,
 		now:      time.Now,
 		spinner:  spinner.New(spinner.WithSpinner(spinner.Line)),
+		readSys:  opts.SystemInfo,
+	}
+	if m.readSys == nil {
+		m.readSys = platform.ReadSystemInfo
 	}
 	m.data.Available = m.inv != nil
 	m.data.UpdatesAvailable = m.upd != nil
@@ -194,6 +210,21 @@ var statusClearAfter = 8 * time.Second
 
 type statusClearMsg struct{ seq int }
 
+// systemInfoMsg carries freshly read facts about the computer.
+type systemInfoMsg struct{ info platform.SystemInfo }
+
+// systemTickMsg asks for the facts to be read again (memory use changes).
+type systemTickMsg struct{}
+
+// systemRefreshEvery is how often memory use is read again; 0 turns the
+// refresh off (tests).
+var systemRefreshEvery = 15 * time.Second
+
+func (m Model) readSystem() tea.Cmd {
+	read := m.readSys
+	return func() tea.Msg { return systemInfoMsg{info: read()} }
+}
+
 type configSavedMsg struct {
 	err  error
 	what string
@@ -201,7 +232,7 @@ type configSavedMsg struct {
 
 // Init starts the status-clear timer and loads saved data.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(m.scheduleStatusClear(), loadData(m.inv), loadUpdates(m.upd), loadAnalysis(m.ana), loadDiscovery(m.dsc))
+	return tea.Batch(m.scheduleStatusClear(), loadData(m.inv), loadUpdates(m.upd), loadAnalysis(m.ana), loadDiscovery(m.dsc), m.readSystem())
 }
 
 // Accessors used by tests.
@@ -214,6 +245,9 @@ func (m Model) Config() config.Config { return m.cfg }
 
 // Layout returns the current layout decisions.
 func (m Model) Layout() layout.Layout { return m.layout }
+
+// NavFocused reports whether the arrow keys move through the sections.
+func (m Model) NavFocused() bool { return m.navFocus }
 
 // HelpOpen reports whether the help overlay is showing.
 func (m Model) HelpOpen() bool { return m.helpOpen }
@@ -326,7 +360,17 @@ func (m Model) ctx() screens.Context {
 		AI:              m.aiStatus(),
 		Elevated:        m.elevated,
 		Data:            m.dataView(),
+		System:          m.systemPtr(),
+		NavFocused:      m.navFocus,
 	}
+}
+
+func (m Model) systemPtr() *platform.SystemInfo {
+	if !m.sysKnown {
+		return nil
+	}
+	s := m.sys
+	return &s
 }
 
 // Update is the Bubble Tea update loop.
@@ -346,6 +390,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = components.Status{}
 		}
 		return m, nil
+
+	case systemInfoMsg:
+		m.sys, m.sysKnown = msg.info, true
+		if systemRefreshEvery > 0 {
+			return m, tea.Tick(systemRefreshEvery, func(time.Time) tea.Msg { return systemTickMsg{} })
+		}
+		return m, nil
+
+	case systemTickMsg:
+		return m, m.readSystem()
 
 	case configSavedMsg:
 		if msg.err != nil {
@@ -662,7 +716,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case screens.NavigateMsg:
 		m.nav.Go(msg.Section)
+		m.navFocus = false
+		m.scroll[msg.Section] = 0
 		return m, nil
+
+	case screens.SearchMsg:
+		return m.startSearch()
 	}
 
 	return m.updateScreen(msg)
@@ -740,6 +799,12 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	_, selfScroll := cur.(screens.SelfScrolling)
 
+	if m.navFocus {
+		if next, cmd, done := m.navKey(k); done {
+			return next, cmd
+		}
+	}
+
 	switch k {
 	case "q":
 		return m.quit()
@@ -768,6 +833,16 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.setMode(m.cfg.UI.Mode.Toggle())
 	case "t":
 		return m.setTheme(m.cfg.UI.Theme.Toggle())
+	case "/":
+		if m.nav.Current() != nav.MySoftware {
+			return m.startSearch()
+		}
+	case "esc":
+		if b, ok := cur.(screens.BackHandler); ok && b.HandlesBack(m.ctx()) {
+			return m.updateScreen(key)
+		}
+		m.navFocus = true
+		return m, nil
 	case "pgdown", "ctrl+d":
 		if !selfScroll {
 			m.scroll[m.nav.Current()] += m.layout.ContentHeight / 2
@@ -780,11 +855,61 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	if m.nav.GoShortcut(k) {
+		m.navFocus = false
 		m.scroll[m.nav.Current()] = 0
 		m.log.Debug("navigate", "section", m.nav.Current().Title())
 		return m, nil
 	}
 	return m.updateScreen(key)
+}
+
+// navKey handles a key while the sections have focus. done is false for
+// keys that work the same either way (digits, q, ?, m, t…).
+func (m Model) navKey(k string) (tea.Model, tea.Cmd, bool) {
+	vertical := m.layout.ShowSidebar
+	move := func(next bool) (tea.Model, tea.Cmd, bool) {
+		if next {
+			m.nav.Next()
+		} else {
+			m.nav.Prev()
+		}
+		m.scroll[m.nav.Current()] = 0
+		return m, nil, true
+	}
+	switch k {
+	case "up", "k":
+		return move(false)
+	case "down", "j":
+		return move(true)
+	case "left", "h":
+		if !vertical {
+			return move(false)
+		}
+		return m, nil, true
+	case "right", "l":
+		if !vertical {
+			return move(true)
+		}
+		m.navFocus = false
+		return m, nil, true
+	case "enter", " ", "esc":
+		m.navFocus = false
+		return m, nil, true
+	case "q", "?", "m", "t", "x", "/", "tab", "shift+tab", "pgup", "pgdown", "ctrl+u", "ctrl+d":
+		return m, nil, false
+	}
+	if len(k) == 1 && k[0] >= '1' && k[0] <= '9' {
+		return m, nil, false
+	}
+	return m, nil, true // other keys belong to a screen, which isn't focused
+}
+
+// startSearch opens My Software with its search box active.
+func (m Model) startSearch() (tea.Model, tea.Cmd) {
+	m.nav.Go(nav.MySoftware)
+	m.navFocus = false
+	m.scroll[nav.MySoftware] = 0
+	return m.updateScreen(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
 }
 
 func (m Model) quit() (tea.Model, tea.Cmd) {
@@ -864,14 +989,20 @@ func (m Model) View() string {
 	}
 
 	var b strings.Builder
-	modeBadge := t.Badge.Render(m.cfg.UI.Mode.Label() + " mode")
-
+	d := m.dataView()
+	healthText, healthTone := d.Health()
 	if l.ShowHeader {
-		b.WriteString(components.Header(t, l.Width, modeBadge+" "+t.Subtle.Render(t.Name.Label())))
-		b.WriteString("\n")
+		b.WriteString(components.Header(t, l.Width, components.HeaderInfo{
+			Version: displayVersion(m.version),
+			Status:  healthText,
+			Tone:    healthTone,
+			System:  m.systemSummary(),
+			Mode:    m.cfg.UI.Mode.Label(),
+		}))
+		b.WriteString("\n\n") // and a blank gutter above the content
 	}
 	if l.ShowTabBar {
-		b.WriteString(components.TabBar(t, m.nav.Current(), l.Width, l.UseShortTitles))
+		b.WriteString(components.NavTabs(t, m.nav.Current(), l.Width, l.UseShortTitles, m.navFocus))
 		b.WriteString("\n")
 	}
 
@@ -879,33 +1010,103 @@ func (m Model) View() string {
 	if l.ShowSidebar {
 		footer := ""
 		if !l.ShowHeader {
-			footer = modeBadge
+			footer = " " + t.Badge.Render(m.cfg.UI.Mode.Label())
 		}
-		side := components.Sidebar(t, m.nav.Current(), l.SidebarWidth, l.ContentHeight, footer)
+		side := components.Sidebar(t, m.nav.Current(), l.SidebarWidth, l.ContentHeight, m.navFocus, footer)
 		b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, side, content))
 	} else {
 		b.WriteString(content)
 	}
 	b.WriteString("\n")
 
-	right := t.Subtle.Render(m.nav.Current().Title())
-	if !l.ShowHeader {
-		right = modeBadge + " " + right
-	}
 	status := m.status
-	if m.busy() && (status.Text == "" || status.Kind == components.StatusInfo) {
+	switch {
+	case m.busy() && (status.Text == "" || status.Kind == components.StatusInfo):
 		status = m.busyStatus()
+		if status.Kind == components.StatusInfo {
+			status.Kind = components.StatusBusy
+		}
+	case status.Text == "":
+		status = components.Status{Text: healthText, Kind: toneKind(healthTone)}
 	}
-	b.WriteString(components.StatusBar(t, l.Width, status, right, m.hints(), l.ShowHints && m.cfg.UI.ShowHints))
+	b.WriteString(components.StatusBar(t, l.Width, status, m.facts(d), m.hints(), l.ShowHints && m.cfg.UI.ShowHints))
 	return b.String()
+}
+
+// displayVersion shows "0.1.0" as "v0.1.0" and leaves "dev" alone.
+func displayVersion(v string) string {
+	if v != "" && v[0] >= '0' && v[0] <= '9' {
+		return "v" + v
+	}
+	return v
+}
+
+// toneKind maps a health tone to the status bar's message kind.
+func toneKind(tone theme.Tone) components.StatusKind {
+	switch tone {
+	case theme.ToneOK:
+		return components.StatusReady
+	case theme.ToneWarn:
+		return components.StatusWarning
+	case theme.ToneBad:
+		return components.StatusError
+	case theme.ToneBusy:
+		return components.StatusBusy
+	default:
+		return components.StatusInfo
+	}
+}
+
+// systemSummary is "Windows 11 Home 25H2 · 15.8 GB RAM" for the header,
+// with only what is known.
+func (m Model) systemSummary() string {
+	if !m.sysKnown {
+		return ""
+	}
+	parts := []string{}
+	if m.sys.OS != "" {
+		parts = append(parts, m.sys.OS)
+	}
+	if m.sys.MemTotal > 0 {
+		parts = append(parts, platform.GB(m.sys.MemTotal)+" RAM")
+	}
+	return strings.Join(parts, " · ")
+}
+
+// facts are the figures on the right of the status bar, all real:
+// "87 apps · 3 updates · RAM 7.6 / 15.8 GB".
+func (m Model) facts(d screens.DataView) string {
+	t := m.theme
+	var parts []string
+	if d.Summary != nil {
+		parts = append(parts, t.Muted.Render(fmt.Sprintf("%d apps", d.Summary.AppCount)))
+	}
+	if d.UpdateSummary != nil {
+		apps, comps := d.PendingUpdates()
+		n := apps + comps
+		label := fmt.Sprintf("%d updates", n)
+		if n == 1 {
+			label = "1 update"
+		}
+		style := t.Muted
+		if n > 0 {
+			style = t.Accent
+		}
+		parts = append(parts, style.Render(label))
+	}
+	if m.sysKnown && m.sys.MemTotal > 0 && m.sys.MemUsed() > 0 {
+		parts = append(parts, t.Subtle.Render("RAM "+strings.TrimSuffix(platform.GB(m.sys.MemUsed()), " GB")+" / "+platform.GB(m.sys.MemTotal)))
+	}
+	return strings.Join(parts, t.Subtle.Render(" · "))
 }
 
 func (m Model) content() string {
 	ctx := m.ctx()
 	l := m.layout
 	w, h := l.ContentWidth, l.ContentHeight
-	inner := lipgloss.NewStyle().Padding(0, 1)
-	w -= 2 // horizontal padding
+	pad := max(l.ContentPad, 1)
+	inner := lipgloss.NewStyle().Padding(0, pad)
+	w -= 2 * pad
 	ctx.Layout.ContentWidth = w
 
 	var body string
@@ -949,6 +1150,9 @@ func (m Model) hints() []components.KeyHint {
 		return []components.KeyHint{{Key: "esc", Desc: "close help"}, {Key: "↑/↓", Desc: "scroll"}}
 	}
 	cur := m.screens[m.nav.Current()]
+	if m.navFocus {
+		return navHints
+	}
 	screenHints := cur.Hints(m.ctx())
 	if ic, ok := cur.(screens.InputCapturer); ok && ic.CapturesInput() {
 		return screenHints
@@ -965,7 +1169,16 @@ func (m Model) hints() []components.KeyHint {
 		out = append(out, components.KeyHint{Key: "x", Desc: "stop check"})
 	}
 	out = append(out, screenHints...)
-	return append(out, globalHints...)
+	for _, g := range globalHints {
+		dup := false
+		for _, h := range out {
+			dup = dup || h.Key == g.Key
+		}
+		if !dup {
+			out = append(out, g)
+		}
+	}
+	return out
 }
 
 func (m Model) helpContext() string {

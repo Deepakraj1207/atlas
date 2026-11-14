@@ -1,6 +1,7 @@
 package theme
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/deepakraj1207/atlas/internal/config"
@@ -28,5 +29,19 @@ func TestPalettesAreComplete(t *testing.T) {
 				t.Errorf("%s palette missing %s", p.Name, name)
 			}
 		}
+	}
+}
+
+func TestDotsDifferByTone(t *testing.T) {
+	th := New(Dark)
+	seen := map[string]bool{}
+	for _, tone := range []Tone{ToneNeutral, ToneOK, ToneBusy, ToneWarn, ToneBad} {
+		seen[fmt.Sprint(th.ToneStyle(tone).GetForeground())] = true
+	}
+	if len(seen) != 5 {
+		t.Errorf("each tone needs its own colour, got %d distinct", len(seen))
+	}
+	if th.Dot(ToneNeutral) == th.Dot(ToneOK) {
+		t.Error("an unknown state must look different from a good one even without colour")
 	}
 }

@@ -150,7 +150,7 @@ func TestCheckForUpdatesFlow(t *testing.T) {
 	if st := m.Status(); st.Kind != components.StatusSuccess || !strings.Contains(st.Text, "2 updates available") {
 		t.Errorf("status = %+v (held updates must not be counted)", st)
 	}
-	if !strings.Contains(m.View(), "2 updates are waiting") {
+	if !strings.Contains(dashboardText(m), "2 updates are waiting") {
 		t.Error("Home should recommend reviewing updates")
 	}
 	m = press(t, m, "3")
@@ -212,7 +212,7 @@ func TestUpdateAllPreviewsThenRunsAndRecords(t *testing.T) {
 		t.Errorf("apply must be recorded: %+v", acts)
 	}
 	m = press(t, m, "1")
-	if !strings.Contains(m.View(), "You installed updates after your last scan") {
+	if !strings.Contains(dashboardText(m), "You installed updates after your last scan") {
 		t.Error("Home should suggest a rescan after updates")
 	}
 }

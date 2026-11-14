@@ -69,7 +69,7 @@ fixed one at a time, each with regression tests that fail on the old code:
 | Configuration | done | YAML with defaults, per-field validation, atomic save, backup of a malformed original |
 | Logging | done | slog JSON lines to a file only |
 | Platform paths | done | Config, log and data dirs; build-tagged; `ATLAS_HOME` override |
-| TUI shell | done | Sidebar or three-tier tab bar, status bar, help, scrolling with indicators |
+| TUI shell | done | Modern, quiet look (D82): one-line header with status, computer and mode; borderless sidebar or tab bar with `›` selection; Esc moves focus to the sections (↑ ↓, Enter); `/` searches from anywhere; footer with status dot, real figures and hints; help; scrolling with indicators |
 | Simple / Advanced mode, themes | done | Persisted; Advanced adds package IDs, paths, source IDs, technical errors |
 | **Inventory scanners** | done | Windows: registry Uninstall keys, winget, Chocolatey, Scoop. Linux: dpkg, RPM, Snap, Flatpak. All read-only |
 | **Merging** | done | One entry only when the sources can report the same copy (Windows entries, winget, Chocolatey) and nothing contradicts it; truncated or unversioned entries only on a unique match; when unsure, two entries (D80) |
@@ -79,7 +79,7 @@ fixed one at a time, each with regression tests that fail on the old code:
 | **Scan My System** | done | Preview → confirm → live per-source progress → status line → saved; `x` stops |
 | **My Software** | done | Searchable list, apps/everything filter, details, data-sized columns, empty and error states |
 | **Activity History** | done | Every scan and clear recorded with outcome; details in Advanced mode |
-| **Home** | done | Real counts, last scan time, partial-scan warning, recent activity, state-aware recommendations |
+| **Dashboard** (Home) | done | "What would you like to do?" action list; computer at a glance (OS, memory, disk, read-only); real figures for apps, updates, runtimes, things to clean up ("—" until known); health; overview; next steps; recent activity |
 | **Clear saved list** | done | Settings → preview → confirm; never touches installed software; recorded |
 | **Update checks** | done | winget, Chocolatey, Scoop (Windows); APT, DNF or Zypper (by distribution), Snap, Flatpak (Linux). Read-only, parallel, timeouts, cancellable |
 | **Updates screen** | done | Apps listed, system components behind `f`, held packages shown but never selected; select, update selected, update all |

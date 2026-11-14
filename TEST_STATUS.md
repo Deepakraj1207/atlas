@@ -200,6 +200,29 @@ Verification: gofmt clean; `go vet ./...` (Linux and `GOOS=windows`); `go test .
 pass; `go test -race` on ai, tui, config pass; Windows amd64, Linux amd64 and arm64 builds
 pass.
 
+## Interface redesign (2026-11-14)
+
+| Test | Proves |
+|------|--------|
+| TestEscMovesFocusToTheSectionsAndBack (tui) | the screen has focus at start (↓ moves the Dashboard list); Esc moves focus to the sections, where ↓ ↓ ↑ moves and keys don't reach the screen; Enter opens; a digit jumps and returns focus; Esc again returns |
+| TestNarrowTerminalsMoveThroughTabs (tui) | with the tab bar, ← → move between sections |
+| TestEscClosesTheScreensOwnThingsFirst (tui) | `/` from the Dashboard opens My Software's search; Esc clears the search, then closes the details view, and only then moves to the sections |
+| TestSearchActionOpensMySoftwareSearch, TestDashboardActionsOpenTheirSections (tui) | each Dashboard action opens its section (Smart Analysis, Cleanup, Discover Apps, the search) without a preview; scan, check and analyze still preview first |
+| TestHeaderAndStatusBarShowRealFacts (tui) | header shows `◆ ATLAS`, `v0.1.0`, "Not scanned yet", the computer and the mode; footer shows memory in use; no app or update counts before a scan or check; after a scan "● System ready" and "2 apps" |
+| TestUnknownSystemFactsAreLeftOut, TestDashboardFiguresAreRealOrMarkedUnknown (tui) | unknown memory and disk aren't shown; figures are "—" before a scan, real counts after; disk shown as "200 GB free of 500 GB on C:" |
+| TestViewNeverExceedsTerminalWidth (tui) | no line wider than the terminal at 8 sizes from 40×10 to 200×50, in every section, with and without section focus |
+| TestReadSystemInfoIsHonest, TestGBAndMemUsed, TestParseMeminfo (platform); TestWindowsName (platform, Windows only) | real system facts are consistent (available ≤ total); Windows 11 is recognised by build number; formatting |
+| TestDotsDifferByTone (theme) | each status tone has its own colour, and "unknown" (○) differs from "good" (●) even without colour |
+
+Updated for the new interface: help context "Dashboard:", narrow tab "1 Dashboard",
+Dashboard content checks read the whole Dashboard (it scrolls at 120×30), the
+"Find New Tools" test became TestDashboardActionsOpenTheirSections. The conharness script
+`ui-basics.txt` waits for "1 Dashboard".
+
+Real binary in a pseudo-terminal (120×30, true colour): Dashboard and header shown,
+Esc then ↓ moves to My Software with the section hints, Enter and `/` open the search,
+q exits with 0.
+
 ## Real Windows 11 PC (DESKTOP-41IVS1K, Windows 11 Home build 26300, not administrator)
 
 Reached through Desktop Commander. ATLAS was built on the PC with a portable Go in

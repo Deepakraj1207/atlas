@@ -14,7 +14,7 @@ snap help
 keys esc
 gone 10 Keyboard help
 resize 72 24
-until 10 1 Home
+until 10 1 Dashboard
 snap narrow 72x24
 resize 40 12
 wait 800

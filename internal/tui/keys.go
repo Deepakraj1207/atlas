@@ -2,22 +2,33 @@ package tui
 
 import "github.com/deepakraj1207/atlas/internal/tui/components"
 
-// Global key labels shared by the footer and the help overlay.
+// Key labels shared by the footer and the help overlay.
 var (
+	// globalHints follow a screen's own hints in the footer.
 	globalHints = []components.KeyHint{
+		{Key: "esc", Desc: "menu"},
+		{Key: "/", Desc: "search"},
 		{Key: "?", Desc: "help"},
-		{Key: "tab", Desc: "next section"},
-		{Key: "1-9", Desc: "jump"},
-		{Key: "m", Desc: "mode"},
-		{Key: "t", Desc: "theme"},
 		{Key: "q", Desc: "quit"},
 	}
 
+	// navHints are shown while the arrow keys move through the sections.
+	navHints = []components.KeyHint{
+		{Key: "↑↓", Desc: "navigate"},
+		{Key: "enter", Desc: "select"},
+		{Key: "/", Desc: "search"},
+		{Key: "?", Desc: "help"},
+		{Key: "q", Desc: "quit"},
+		{Key: "1-9", Desc: "jump"},
+	}
+
 	navigationHelp = []components.KeyHint{
-		{Key: "tab / shift+tab", Desc: "Next / previous section"},
+		{Key: "esc", Desc: "Back: leave the screen's list and move through the sections with ↑ ↓ (Esc or Enter returns)"},
+		{Key: "↑ ↓", Desc: "Move through the screen's list, or through the sections after Esc"},
+		{Key: "enter", Desc: "Choose the highlighted item or section"},
 		{Key: "1 … 9", Desc: "Jump straight to a section (shown next to each name)"},
-		{Key: "↑ ↓ ← →", Desc: "Move within the current screen"},
-		{Key: "enter", Desc: "Choose the highlighted item"},
+		{Key: "tab / shift+tab", Desc: "Next / previous section"},
+		{Key: "/", Desc: "Search your software from anywhere"},
 		{Key: "pgup / pgdn", Desc: "Scroll the screen when it does not fit"},
 	}
 

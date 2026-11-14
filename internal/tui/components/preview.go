@@ -20,7 +20,7 @@ func ActionPreview(t theme.Theme, width int, p core.ActionPlan, advanced bool) s
 		b.WriteString("\n\n")
 	}
 
-	b.WriteString(t.Title.Render(p.Title))
+	b.WriteString(t.Logo.Render("›") + " " + t.Title.Render(p.Title))
 	b.WriteString("\n")
 	if !p.Available {
 		note := "Not available. Nothing has been changed on your computer."
