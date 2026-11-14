@@ -5,6 +5,7 @@ import (
 	"context"
 	"io"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -80,6 +81,22 @@ func bootCleanup(t *testing.T) cleanEnv {
 			Commands: []core.Command{{Program: "apt-get", Args: []string{"clean"}}},
 			Rollback: "APT downloads them again when needed",
 		}}}},
+		// Afterwards dpkg lists what wasn't named in a remove command.
+		Verifier: funcVerifier(func() core.Snapshot {
+			var left []core.SoftwareItem
+			for _, it := range phase5Items() {
+				removed := false
+				for _, c := range *calls {
+					f := strings.Fields(c)
+					removed = removed || (slices.Contains(f, "remove") && slices.Contains(f, it.PackageID))
+				}
+				if it.Source == inventory.SourceDpkg && !removed {
+					left = append(left, it)
+				}
+			}
+			return core.Snapshot{Sources: []core.SourceResult{{Source: inventory.SourceDpkg, Label: "Debian packages", Status: core.SourceOK}},
+				BySource: map[string][]core.SoftwareItem{inventory.SourceDpkg: left}}
+		}),
 	}, db, nil).WithProcessStarter(func(c core.Command, in io.Reader, out, errw io.Writer) (int, error) {
 		*calls = append(*calls, c.String())
 		return 0, nil

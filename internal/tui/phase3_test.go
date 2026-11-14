@@ -5,6 +5,7 @@ import (
 	"context"
 	"io"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -66,8 +67,36 @@ func newEnv(t *testing.T, managers ...core.PackageManager) env {
 		func(c core.Command, in io.Reader, out, errw io.Writer) (int, error) {
 			*e.calls = append(*e.calls, c.String())
 			return e.exits[c.Program], nil
-		})
+		}).WithVerifier(afterCommands(managers, e.calls, e.exits))
 	return e
+}
+
+type funcVerifier func() core.Snapshot
+
+func (f funcVerifier) Snapshot(context.Context) core.Snapshot { return f() }
+
+// afterCommands reports each manager's packages as they'd be after the
+// scripted commands: upgraded to the new version when an upgrade command
+// named them and exited 0, otherwise unchanged.
+func afterCommands(managers []core.PackageManager, calls *[]string, exits map[string]int) core.Verifier {
+	return funcVerifier(func() core.Snapshot {
+		snap := core.Snapshot{BySource: map[string][]core.SoftwareItem{}}
+		for _, m := range managers {
+			ups, _ := m.CheckUpdates(context.Background())
+			snap.Sources = append(snap.Sources, core.SourceResult{Source: m.ID(), Label: m.Label(), Status: core.SourceOK})
+			for _, u := range ups {
+				v := u.CurrentVersion
+				for _, c := range *calls {
+					f := strings.Fields(c)
+					if len(f) > 2 && exits[f[0]] == 0 && slices.Contains(f[2:], u.PackageID) {
+						v = u.AvailableVersion
+					}
+				}
+				snap.BySource[m.ID()] = append(snap.BySource[m.ID()], core.SoftwareItem{Name: u.Name, PackageID: u.PackageID, Version: v, Source: m.ID()})
+			}
+		}
+		return snap
+	})
 }
 
 // bootEnv builds a model whose terminal handover runs the job in-process
@@ -172,7 +201,7 @@ func TestUpdateAllPreviewsThenRunsAndRecords(t *testing.T) {
 	if !strings.Contains(out.String(), "ATLAS never answers for you") || !strings.Contains(out.String(), "Press Enter to return to ATLAS") {
 		t.Errorf("terminal output = %s", out.String())
 	}
-	if st := m.Status(); st.Kind != components.StatusSuccess || !strings.Contains(st.Text, "Installed 2 updates") {
+	if st := m.Status(); st.Kind != components.StatusSuccess || !strings.Contains(st.Text, "Installed and confirmed 2 updates") {
 		t.Errorf("status = %+v", st)
 	}
 	apps, _ := m.Data().PendingUpdates()
@@ -352,5 +381,22 @@ func TestInstallCancelledStatus(t *testing.T) {
 	st = installResultStatus([]core.StepResult{{Status: core.StepFailed}}, nil)
 	if !strings.Contains(st.Text, "didn't finish") {
 		t.Errorf("a real failure still reads as a failure, got %q", st.Text)
+	}
+}
+
+// When the check afterwards can't confirm everything, the status says so
+// instead of reporting success from the exit codes.
+func TestResultStatusReflectsVerification(t *testing.T) {
+	done := []core.StepResult{{Step: core.UpdateStep{Action: core.ActionRemove, Updates: []core.Update{{Name: "a"}, {Name: "b"}}}, Status: core.StepDone}}
+	mixed := core.RecordOutcome{Verifications: []core.Verification{{Name: "a", State: core.VerifyConfirmed}, {Name: "b", State: core.VerifyNotDone}}}
+	if st := cleanupResultStatus(done, mixed, nil); st.Kind != components.StatusWarning || !strings.Contains(st.Text, "1 item couldn't be confirmed") {
+		t.Errorf("cleanup = %+v", st)
+	}
+	all := core.RecordOutcome{Verifications: []core.Verification{{Name: "a", State: core.VerifyConfirmed}, {Name: "b", State: core.VerifyConfirmed}}}
+	if st := cleanupResultStatus(done, all, nil); st.Kind != components.StatusSuccess || !strings.Contains(st.Text, "finished and checked") {
+		t.Errorf("cleanup confirmed = %+v", st)
+	}
+	if st := applyResultStatus(done, mixed, nil); st.Kind != components.StatusWarning || !strings.Contains(st.Text, "1 of 2 updates confirmed") {
+		t.Errorf("updates = %+v", st)
 	}
 }

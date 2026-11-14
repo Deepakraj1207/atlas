@@ -318,12 +318,18 @@ func TestFindTidyUpsAndRecordResults(t *testing.T) {
 		calls = append(calls, c.String())
 		return 0, nil
 	})
+	// Afterwards dpkg no longer lists lonely-tool: the removal is confirmed.
+	s.verify = fakeVerifier{snap: dpkgSnapshot(core.SourceOK, deb("meld", core.KindApp))}
 	job := s.NewJob(append(allowed, r.Steps...))
 	job.SetStdin(strings.NewReader("\n"))
 	job.SetStdout(io.Discard)
 	job.Run()
-	if err := s.RecordResults(ctx, job.Results()); err != nil {
+	out, err := s.RecordResults(ctx, job.Results())
+	if err != nil {
 		t.Fatal(err)
+	}
+	if len(out.Verifications) != 1 || out.Verifications[0].State != core.VerifyConfirmed {
+		t.Errorf("verification = %+v", out)
 	}
 	if len(calls) != 1 || calls[0] != "sudo apt-get remove lonely-tool" {
 		t.Errorf("calls = %v", calls)

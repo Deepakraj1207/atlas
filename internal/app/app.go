@@ -94,10 +94,15 @@ func Run(opts Options) error {
 		} else {
 			defer db.Close()
 			rec = db
-			inv = inventory.NewService(inventory.DefaultScanners(), db, logger, inventory.DefaultTimeouts())
-			upd = updates.NewService(updates.DefaultManagers(elevated), db, logger, updates.DefaultTimeouts())
+			invSvc := inventory.NewService(inventory.DefaultScanners(), db, logger, inventory.DefaultTimeouts())
+			inv = invSvc
+			// After removals and updates, the inventory re-reads every
+			// source to confirm what really changed.
+			upd = updates.NewService(updates.DefaultManagers(elevated), db, logger, updates.DefaultTimeouts()).WithVerifier(invSvc)
 			ana = analysis.NewService(analysis.DefaultSources(), db, logger, analysis.UsageSupported)
-			cln = cleanup.NewService(cleanup.DefaultConfig(elevated), db, logger)
+			clnCfg := cleanup.DefaultConfig(elevated)
+			clnCfg.Verifier = invSvc
+			cln = cleanup.NewService(clnCfg, db, logger)
 			if d, err := discover.NewService(discover.DefaultConfig(elevated), db, logger); err != nil {
 				logger.Error("discover catalogue", "error", err)
 			} else {

@@ -139,8 +139,10 @@ func parseWingetList(out string) ([]core.SoftwareItem, error) {
 	for _, rows := range tables {
 		for _, r := range rows {
 			it := core.SoftwareItem{
-				Name:    r.Name,
-				Version: strings.TrimPrefix(strings.TrimPrefix(r.Version, "< "), "> "),
+				Name: r.Name,
+				// "< 3.10.3" means older than 3.10.3: keep the marker, it isn't
+				// a version (merging ignores it when matching).
+				Version: strings.TrimSpace(r.Version),
 				Source:  SourceWinget,
 				Kind:    classifyWindowsName(r.Name),
 			}

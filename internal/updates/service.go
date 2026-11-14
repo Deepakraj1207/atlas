@@ -24,6 +24,7 @@ type Service struct {
 	log      *slog.Logger
 	timeouts map[string]time.Duration
 	now      func() time.Time
+	verify   core.Verifier
 
 	// Hooks for the terminal job; replaced in tests.
 	start  handover.ProcessStarter
@@ -39,6 +40,10 @@ func NewService(managers []core.PackageManager, store core.Store, log *slog.Logg
 	}
 	return &Service{managers: managers, store: store, log: log, timeouts: timeouts, now: time.Now, start: handover.ExecStarter, notify: handover.NotifyInterrupt}
 }
+
+// WithVerifier sets what re-reads installed versions after updates.
+// Without one, no update is confirmed and the updates list is kept.
+func (s *Service) WithVerifier(v core.Verifier) *Service { s.verify = v; return s }
 
 // WithProcessStarter replaces how commands are started (tests).
 func (s *Service) WithProcessStarter(p handover.ProcessStarter) *Service { s.start = p; return s }
@@ -164,24 +169,45 @@ func (s *Service) NewJob(steps []core.UpdateStep) core.TerminalJob {
 }
 
 // RecordResults writes the activity entry and removes applied updates.
-func (s *Service) RecordResults(ctx context.Context, results []core.StepResult) error {
-	var applied []int64
+func (s *Service) RecordResults(ctx context.Context, results []core.StepResult) (core.RecordOutcome, error) {
+	var done []core.Update
 	for _, r := range results {
 		s.log.Info("update step finished", "manager", r.Step.Manager, "status", string(r.Status),
 			"exit_code", r.ExitCode, "command", r.Command, "duration_ms", r.Duration.Milliseconds(), "note", r.Note)
 		if r.Status == core.StepDone {
-			for _, u := range r.Step.Updates {
-				if u.ID != 0 {
-					applied = append(applied, u.ID)
-				}
+			done = append(done, r.Step.Updates...)
+		}
+	}
+	// An exit code of 0 isn't proof: read the installed versions again and
+	// drop an update from the list only when the new version is confirmed.
+	var out core.RecordOutcome
+	var applied []int64
+	if len(done) > 0 {
+		var snap *core.Snapshot
+		if s.verify != nil {
+			sn := s.verify.Snapshot(ctx)
+			snap = &sn
+		}
+		for _, u := range done {
+			src := inventorySource(u.Manager)
+			v := inventory.NotVerified(u.Name, src)
+			if snap != nil {
+				v = inventory.VerifyUpdated(*snap, src, u)
+			}
+			s.log.Info("update verified", "name", u.Name, "manager", u.Manager, "state", string(v.State), "detail", v.Detail)
+			out.Verifications = append(out.Verifications, v)
+			if v.State == core.VerifyConfirmed && u.ID != 0 {
+				applied = append(applied, u.ID)
 			}
 		}
 	}
-	if _, err := s.store.AddActivity(ctx, ApplyActivity(results, s.now())); err != nil {
+	a := ApplyActivity(results, s.now())
+	inventory.AddVerification(&a, out)
+	if _, err := s.store.AddActivity(ctx, a); err != nil {
 		s.log.Error("record update activity", "error", err)
-		return err
+		return out, err
 	}
-	return s.store.RemoveUpdates(ctx, applied)
+	return out, s.store.RemoveUpdates(ctx, applied)
 }
 
 // CheckActivity describes a finished update check.

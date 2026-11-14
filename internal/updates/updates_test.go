@@ -313,8 +313,14 @@ func TestRecordResultsRemovesAppliedAndLogsActivity(t *testing.T) {
 		{Step: core.UpdateStep{Label: "APT", Updates: ups[:1]}, Status: core.StepDone, Command: "apt-get install a", Duration: time.Second},
 		{Step: core.UpdateStep{Label: "APT", Updates: ups[1:]}, Status: core.StepFailed, ExitCode: 100},
 	}
-	if err := svc.RecordResults(ctx, results); err != nil {
+	// dpkg now shows a at version 2: the update is confirmed.
+	svc.WithVerifier(snapVerifier{dpkgAt(map[string]string{"a": "2", "b": "1"})})
+	out, err := svc.RecordResults(ctx, results)
+	if err != nil {
 		t.Fatal(err)
+	}
+	if out.Count(core.VerifyConfirmed) != 1 {
+		t.Errorf("verification = %+v", out)
 	}
 	_, left, _, _ := svc.LatestCheck(ctx)
 	if len(left) != 1 || left[0].Name != "b" {
@@ -403,5 +409,57 @@ func TestRPMRefusedSaysWhy(t *testing.T) {
 	var se *core.SourceError
 	if !errors.As(err, &se) || !strings.Contains(se.Details, "uses yum") {
 		t.Errorf("got %v", err)
+	}
+}
+
+type snapVerifier struct{ snap core.Snapshot }
+
+func (v snapVerifier) Snapshot(context.Context) core.Snapshot { return v.snap }
+
+func dpkgAt(versions map[string]string) core.Snapshot {
+	var items []core.SoftwareItem
+	for n, v := range versions {
+		items = append(items, core.SoftwareItem{Name: n, PackageID: n, Version: v, Source: inventory.SourceDpkg})
+	}
+	return core.Snapshot{Sources: []core.SourceResult{{Source: inventory.SourceDpkg, Label: "Debian packages", Status: core.SourceOK}},
+		BySource: map[string][]core.SoftwareItem{inventory.SourceDpkg: items}}
+}
+
+// The audit's P0: an update with exit code 0 left the list as if it had
+// installed. Now the installed version is read again first.
+func TestUpdatesAreVerifiedBeforeLeavingTheList(t *testing.T) {
+	run := func(t *testing.T, v core.Verifier) (core.RecordOutcome, []core.Update, core.Activity) {
+		t.Helper()
+		svc, db := newService(t, fakeManager{id: "apt", ups: []core.Update{{Manager: "apt", PackageID: "a", Name: "a", CurrentVersion: "1", AvailableVersion: "2"}}})
+		if v != nil {
+			svc.WithVerifier(v)
+		}
+		ctx := context.Background()
+		svc.Check(ctx, nil)
+		_, ups, _, _ := svc.LatestCheck(ctx)
+		out, err := svc.RecordResults(ctx, []core.StepResult{{Step: core.UpdateStep{Label: "APT", Updates: ups}, Status: core.StepDone}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, left, _, _ := svc.LatestCheck(ctx)
+		acts, _ := db.RecentActivity(ctx, 1)
+		return out, left, acts[0]
+	}
+	out, left, act := run(t, snapVerifier{dpkgAt(map[string]string{"a": "1"})})
+	if out.Count(core.VerifyNotDone) != 1 || len(left) != 1 || act.Outcome != core.OutcomePartial || !strings.Contains(act.Summary, "still version 1") {
+		t.Errorf("still the old version: keep it in the list and say so: %+v / %d / %+v", out, len(left), act)
+	}
+	failed := core.Snapshot{Sources: []core.SourceResult{{Source: inventory.SourceDpkg, Status: core.SourceTimeout}}}
+	out, left, _ = run(t, snapVerifier{failed})
+	if out.Count(core.VerifyUnknown) != 1 || len(left) != 1 {
+		t.Errorf("couldn't re-read: keep it: %+v / %d", out, len(left))
+	}
+	out, left, _ = run(t, nil)
+	if out.Count(core.VerifyUnknown) != 1 || len(left) != 1 {
+		t.Errorf("no verifier: keep it: %+v / %d", out, len(left))
+	}
+	out, left, act = run(t, snapVerifier{dpkgAt(map[string]string{"a": "2"})})
+	if out.Count(core.VerifyConfirmed) != 1 || len(left) != 0 || act.Outcome != core.OutcomeSuccess || !strings.Contains(act.Details, "Verified a: confirmed") {
+		t.Errorf("confirmed: %+v / %d / %+v", out, len(left), act)
 	}
 }

@@ -26,6 +26,7 @@ type Service struct {
 	depTimeout   time.Duration
 	dnfProtected string
 	rpm          platform.RPMRoute
+	verify       core.Verifier
 	store        core.Store
 	log          *slog.Logger
 	now          func() time.Time
@@ -46,6 +47,9 @@ type Config struct {
 	// RPM is the tool that may remove RPM packages on this distribution
 	// ("dnf" or "zypper"), or why none may. The zero value refuses.
 	RPM platform.RPMRoute
+	// Verifier re-reads the computer after removals. Without one, nothing
+	// is confirmed and saved records are kept.
+	Verifier core.Verifier
 }
 
 // NewService builds the cleanup service.
@@ -53,7 +57,7 @@ func NewService(cfg Config, store core.Store, log *slog.Logger) *Service {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	s := &Service{removers: map[string]Remover{}, tidiers: cfg.Tidiers, deps: cfg.Deps, depTimeout: DefaultTimeout, dnfProtected: cfg.DnfProtectedDir, rpm: cfg.RPM,
+	s := &Service{removers: map[string]Remover{}, tidiers: cfg.Tidiers, deps: cfg.Deps, depTimeout: DefaultTimeout, dnfProtected: cfg.DnfProtectedDir, rpm: cfg.RPM, verify: cfg.Verifier,
 		store: store, log: log, now: time.Now, start: handover.ExecStarter, notify: handover.NotifyInterrupt}
 	for _, r := range cfg.Removers {
 		s.removers[r.ID()] = r
@@ -190,10 +194,12 @@ func (s *Service) NewJob(steps []core.UpdateStep) core.TerminalJob {
 	return handover.New(steps, s.start, s.notify)
 }
 
-// RecordResults records the outcome and drops removed software from the
-// saved list.
-func (s *Service) RecordResults(ctx context.Context, results []core.StepResult) error {
-	var gone []core.ItemRef
+// RecordResults checks the computer again and drops software from the
+// saved list only when its removal is confirmed. A package manager's exit
+// code alone isn't proof: when something is still listed, or a source it
+// came from can't be read, the saved record is kept and the activity says so.
+func (s *Service) RecordResults(ctx context.Context, results []core.StepResult) (core.RecordOutcome, error) {
+	var removed []core.Update
 	for _, r := range results {
 		s.log.Info("cleanup step finished", "manager", r.Step.Manager, "action", r.Step.Action, "status", string(r.Status),
 			"exit_code", r.ExitCode, "command", r.Command, "duration_ms", r.Duration.Milliseconds())
@@ -202,14 +208,52 @@ func (s *Service) RecordResults(ctx context.Context, results []core.StepResult) 
 		}
 		for _, u := range r.Step.Updates {
 			if u.Origin != "" {
-				gone = append(gone, core.ItemRef{Name: u.Name, Version: u.CurrentVersion, Source: u.Origin})
+				removed = append(removed, u)
 			}
 		}
 	}
-	if _, err := s.store.AddActivity(ctx, Activity(results, s.now())); err != nil {
-		return err
+	var out core.RecordOutcome
+	var gone []core.ItemRef
+	if len(removed) > 0 {
+		saved, err := s.store.Software(ctx)
+		if err != nil {
+			s.log.Error("read saved list for verification", "error", err)
+		}
+		var snap *core.Snapshot
+		if s.verify != nil {
+			sn := s.verify.Snapshot(ctx)
+			snap = &sn
+		}
+		for _, u := range removed {
+			it := savedItem(saved, u)
+			v := inventory.NotVerified(it.Name, it.Source)
+			if snap != nil {
+				v = inventory.VerifyRemoved(*snap, it)
+			}
+			s.log.Info("removal verified", "name", it.Name, "source", it.Source, "state", string(v.State), "detail", v.Detail)
+			out.Verifications = append(out.Verifications, v)
+			if v.State == core.VerifyConfirmed {
+				gone = append(gone, core.ItemRef{Name: it.Name, Version: it.Version, Source: it.Source})
+			}
+		}
 	}
-	return s.store.DeleteSoftware(ctx, gone)
+	a := Activity(results, s.now())
+	inventory.AddVerification(&a, out)
+	if _, err := s.store.AddActivity(ctx, a); err != nil {
+		return out, err
+	}
+	return out, s.store.DeleteSoftware(ctx, gone)
+}
+
+// savedItem finds the saved record a removal step was planned from (for
+// the other sources it was found in), or rebuilds it from the step.
+func savedItem(saved []core.SoftwareItem, u core.Update) core.SoftwareItem {
+	for _, it := range saved {
+		if it.Source == u.Origin && it.Name == u.Name && it.Version == u.CurrentVersion {
+			return it
+		}
+	}
+	return core.SoftwareItem{Name: u.Name, Version: u.CurrentVersion, PackageID: u.PackageID, Source: u.Origin}
 }
 
 // HumanBytes renders a size for people.

@@ -409,13 +409,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, tea.Batch(m.setStatus(components.Status{Text: text, Kind: components.StatusError}), tea.ClearScreen)
 		}
-		return m, tea.Batch(recordResults(m.upd, msg.results), tea.ClearScreen)
+		return m, tea.Batch(recordResults(m.upd, msg.results), tea.ClearScreen,
+			m.setStatus(components.Status{Text: "Checking which updates really installed…"}))
 
 	case updatesRecordedMsg:
 		if msg.err != nil {
 			m.log.Error("record update results", "error", msg.err)
 		}
-		return m, tea.Batch(m.setStatus(applyResultStatus(msg.results, msg.err)), loadData(m.inv), loadUpdates(m.upd))
+		return m, tea.Batch(m.setStatus(applyResultStatus(msg.results, msg.outcome, msg.err)), loadData(m.inv), loadUpdates(m.upd))
 
 	case checkEventMsg:
 		applyEvent(m.check, msg.ev)
@@ -523,14 +524,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if len(msg.results) == 0 {
 			return m, tea.Batch(m.setStatus(components.Status{Text: "Cleanup couldn't start. Nothing was changed.", Kind: components.StatusError}), tea.ClearScreen)
 		}
-		return m, tea.Batch(recordCleanup(m.cln, msg.results), tea.ClearScreen)
+		return m, tea.Batch(recordCleanup(m.cln, msg.results), tea.ClearScreen,
+			m.setStatus(components.Status{Text: "Checking what was really removed…"}))
 
 	case cleanupRecordedMsg:
 		if msg.err != nil {
 			m.log.Error("record cleanup", "error", msg.err)
 		}
 		m.pruneTidy(msg.results)
-		return m, tea.Batch(m.setStatus(cleanupResultStatus(msg.results, msg.err)), loadData(m.inv), loadAnalysis(m.ana))
+		return m, tea.Batch(m.setStatus(cleanupResultStatus(msg.results, msg.outcome, msg.err)), loadData(m.inv), loadAnalysis(m.ana))
 
 	case analysisEventMsg:
 		applyEvent(m.analysis, msg.ev)

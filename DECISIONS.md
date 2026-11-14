@@ -311,3 +311,17 @@ Short, dated records of choices that shape the code.
   Discover offers RPM installs only through DNF, since the catalogue has no Zypper
   names; openSUSE falls back to Flatpak rather than guessing names. The self-test
   report shows the detected distribution and route.
+- **D79. Removals and updates are verified on the computer before they count.**
+  `RecordResults` used to trust exit codes: a removal deleted the saved record and an
+  update left the updates list as soon as the package manager exited 0. Now inventory
+  takes a read-only snapshot of every source afterwards (`inventory.Service.Snapshot`,
+  unmerged, not saved). A removal is confirmed only when no source lists the item any
+  more (by package ID or name) and every source it came from was read. An update is
+  confirmed when its manager's source shows the offered version, or a version different
+  from before. Otherwise the saved record or update stays, and the activity becomes
+  "…, but not all confirmed" with what was found ("Still installed: listed by …",
+  "Not updated: still version …", "Couldn't check: … Their records are kept"). Without a
+  verifier nothing is confirmed. The status line reports what was confirmed, not what
+  exited 0. winget's "< 3.10.3" ("older than") is now kept by the scanner, because
+  stripping it would have let a failed update look like it reached 3.10.3. Discover
+  installs are not verified yet; the status already tells the user to scan again.

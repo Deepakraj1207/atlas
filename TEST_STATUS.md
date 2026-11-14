@@ -132,6 +132,23 @@ Verification: gofmt clean; `go vet ./...` (Linux and `GOOS=windows`); `go test .
 pass; `go test -race` on cleanup, updates, discover, platform pass; Windows amd64, Linux
 amd64 and arm64 builds pass.
 
+**P0 — post-operation verification.** Tests show that before this change an exit code of 0
+deleted the saved record or the pending update even when the software was still there.
+
+| Test | Proves |
+|------|--------|
+| TestVerifyRemoved (inventory) | gone everywhere → confirmed; still listed by winget (package ID) or another copy by name → not done; one of its sources failed, timed out, unavailable or not checked → unknown |
+| TestVerifyUpdated (inventory) | new version → confirmed; same version (also written differently) → not done; a different version → confirmed; no longer listed or unreadable → unknown; with no previous version, only the offered version confirms and "< 3.10.3" doesn't |
+| TestWingetKeepsOlderThanMarker (inventory) | the scanner keeps "< 3.10.3"; merging still pairs it with the Windows entry |
+| TestSnapshotReadsEverySourceWithoutSaving (inventory) | every source read, failed ones contribute nothing, nothing saved as a scan |
+| TestRemovalIsVerifiedBeforeTheRecordGoes (cleanup) | exit 0 but still installed → record kept, activity "Removed 1 item, but not all confirmed" with "Still installed: listed by …"; source unreadable → kept, "Couldn't check … records are kept"; no verifier → kept; confirmed → deleted, success |
+| TestUpdatesAreVerifiedBeforeLeavingTheList (updates) | still the old version → stays in Updates, partial, "still version 1"; unreadable or no verifier → stays; confirmed → removed, success |
+| TestResultStatusReflectsVerification (tui) | status lines say how many were confirmed instead of reporting success from exit codes |
+| TestUpdateAllPreviewsThenRunsAndRecords, TestRemoveFromMySoftwareNeedsDeliberateConfirmation (tui, updated) | end to end: "Installed and confirmed 2 updates", "Cleanup finished and checked" |
+
+Verification: gofmt clean; `go vet ./...` (Linux and `GOOS=windows`); `go test ./...` all
+pass; `go test -race` on tui, cleanup, updates, inventory pass; Windows and Linux builds pass.
+
 ## Real Windows 11 PC (DESKTOP-41IVS1K, Windows 11 Home build 26300, not administrator)
 
 Reached through Desktop Commander. ATLAS was built on the PC with a portable Go in
