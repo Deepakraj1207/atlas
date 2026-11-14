@@ -296,3 +296,18 @@ Short, dated records of choices that shape the code.
   existing rule: apps allowed, runtimes and components refused. The same work fixed Scoop
   matching: its graph uses bare app names while inventory uses `bucket/app`, so Scoop
   dependents were never seen (`analysis.GraphKey`).
+- **D78. RPM packages are changed with the distribution's own tool.** RPM used to be
+  mapped straight to DNF for removals, updates, installs and clean-up, so openSUSE got
+  `sudo dnf remove …`. `platform.RouteRPM` reads `/etc/os-release` (`ID`, `ID_LIKE`):
+  Fedora, RHEL and relatives (Rocky, Alma, CentOS Stream, Amazon Linux) use DNF;
+  openSUSE and SLES use Zypper, even when DNF is also installed. It goes by the
+  distribution, not by whichever tool is on PATH. It refuses, with the reason shown,
+  on yum-only systems, when the native tool is missing, on non-RPM distributions (an
+  `rpm` binary on Ubuntu is never used to change packages) and on unrecognised
+  systems. Zypper support: removal (`zypper remove`), update checks
+  (`zypper --non-interactive --no-refresh list-updates`, read by column name) and
+  updates (`zypper update`), never with `-y`/`--non-interactive`/`--clean-deps` on a
+  changing command. DNF's protected list and tidiers apply only where DNF is the tool.
+  Discover offers RPM installs only through DNF, since the catalogue has no Zypper
+  names; openSUSE falls back to Flatpak rather than guessing names. The self-test
+  report shows the detected distribution and route.

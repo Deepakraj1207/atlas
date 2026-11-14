@@ -16,6 +16,7 @@ import (
 	"github.com/deepakraj1207/atlas/internal/core"
 	"github.com/deepakraj1207/atlas/internal/database"
 	"github.com/deepakraj1207/atlas/internal/inventory"
+	"github.com/deepakraj1207/atlas/internal/platform"
 )
 
 const statusFixture = `Package: python3.12
@@ -136,7 +137,7 @@ func TestDnfProtectedList(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "dnf.conf"), "# protected\ndnf\nkernel-core\n")
 	writeFile(t, filepath.Join(dir, "extra.conf"), "mytool\n")
-	s, _ := newSvc(t, Config{Removers: []Remover{NewDnfRemover(true)}, DnfProtectedDir: dir})
+	s, _ := newSvc(t, Config{Removers: []Remover{NewDnfRemover(true)}, DnfProtectedDir: dir, RPM: platform.RPMRoute{Manager: "dnf"}})
 	_, blocked := plan(t, s, core.SoftwareItem{Name: "mytool", PackageID: "mytool", Source: inventory.SourceRPM, Kind: core.KindApp})
 	if len(blocked) != 1 || !strings.Contains(blocked[0].Blocked, "protected") {
 		t.Errorf("DNF-protected packages must be blocked: %+v", blocked)
@@ -180,7 +181,7 @@ func TestRemoverChoiceOnWindows(t *testing.T) {
 
 func TestNoAssumeYesPurgeOrDataFlags(t *testing.T) {
 	items := []core.SoftwareItem{{Name: "a", PackageID: "a"}}
-	for _, r := range []Remover{NewAptRemover(false), NewDnfRemover(false), NewSnapRemover(false), NewFlatpakRemover(),
+	for _, r := range []Remover{NewAptRemover(false), NewDnfRemover(false), NewZypperRemover(false), NewSnapRemover(false), NewFlatpakRemover(),
 		NewWingetRemover(false), NewChocolateyRemover(true), NewScoopRemover(false)} {
 		for _, st := range r.PlanRemove(items) {
 			if st.Rollback == "" {
@@ -189,7 +190,7 @@ func TestNoAssumeYesPurgeOrDataFlags(t *testing.T) {
 			for _, c := range st.Commands {
 				for _, a := range c.Args {
 					switch a {
-					case "-y", "--yes", "--assumeyes", "--purge", "purge", "--delete-data", "--force", "--noninteractive", "--silent", "--accept-source-agreements":
+					case "-y", "--yes", "--assumeyes", "--purge", "purge", "--delete-data", "--force", "--noninteractive", "--non-interactive", "-n", "--clean-deps", "-u", "--silent", "--accept-source-agreements":
 						t.Errorf("%s: forbidden flag %q in %s", r.ID(), a, c.String())
 					}
 				}

@@ -9,6 +9,7 @@ import (
 	"github.com/deepakraj1207/atlas/internal/analysis"
 	"github.com/deepakraj1207/atlas/internal/core"
 	"github.com/deepakraj1207/atlas/internal/inventory"
+	"github.com/deepakraj1207/atlas/internal/platform"
 )
 
 // protectedNames are never removed: the operating system or ATLAS relies on
@@ -195,12 +196,20 @@ func managersOf(it core.SoftwareItem) []string {
 }
 
 // removerFor picks the remover for an item, or explains why there is none.
-func removerFor(it core.SoftwareItem) (string, string) {
+// RPM packages go to the distribution's own tool (rpm), never a guess.
+func removerFor(it core.SoftwareItem, rpm platform.RPMRoute) (string, string) {
 	switch it.Source {
 	case inventory.SourceDpkg:
 		return "apt", ""
 	case inventory.SourceRPM:
-		return "dnf", ""
+		if rpm.Manager == "" {
+			why := rpm.Reason
+			if why == "" {
+				why = "ATLAS doesn't know which tool manages RPM packages here, so it won't guess."
+			}
+			return "", why
+		}
+		return rpm.Manager, ""
 	case inventory.SourceSnap:
 		return "snap", ""
 	case inventory.SourceFlatpak:

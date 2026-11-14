@@ -5,6 +5,7 @@ package updates
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -352,5 +353,55 @@ func TestApplyActivityOutcomes(t *testing.T) {
 	}
 	if !strings.HasSuffix(listNames(many), "and 3 more") {
 		t.Error("long lists should be shortened")
+	}
+}
+
+// zypper list-updates output (LC_ALL=C), openSUSE Tumbleweed.
+const zypperFixture = `Loading repository data...
+Reading installed packages...
+S | Repository             | Name     | Current Version | Available Version | Arch
+--+------------------------+----------+-----------------+-------------------+-------
+v | Main Update Repository | curl     | 8.6.0-1.1       | 8.6.0-2.1         | x86_64
+v | Main Update Repository | libcurl4 | 8.6.0-1.1       | 8.6.0-2.1         | x86_64
+`
+
+func TestZypper(t *testing.T) {
+	ups, err := parseZypperListUpdates(zypperFixture)
+	if err != nil || len(ups) != 2 {
+		t.Fatalf("got %+v %v", ups, err)
+	}
+	if u := ups[0]; u.Name != "curl" || u.CurrentVersion != "8.6.0-1.1" || u.AvailableVersion != "8.6.0-2.1" || u.Origin != "Main Update Repository" || u.Manager != ManagerZypper {
+		t.Errorf("curl = %+v", u)
+	}
+	// Columns found by name: a reordered table still parses correctly.
+	reordered := "Name | S | Available Version | Current Version\n-----+---+---+---\nvim | v | 9.1-2 | 9.1-1\n"
+	if ups, err := parseZypperListUpdates(reordered); err != nil || len(ups) != 1 || ups[0].AvailableVersion != "9.1-2" || ups[0].CurrentVersion != "9.1-1" {
+		t.Errorf("reordered: %+v %v", ups, err)
+	}
+	if ups, err := parseZypperListUpdates("Loading repository data...\nReading installed packages...\nNo updates found.\n"); err != nil || len(ups) != 0 {
+		t.Errorf("no updates: %+v %v", ups, err)
+	}
+	if _, err := parseZypperListUpdates("Something unexpected\n"); err == nil {
+		t.Error("unrecognised output must be an error, not 'no updates'")
+	}
+	st := NewZypper(nil, false).PlanUpdates(ups)
+	if len(st) != 1 || st[0].Commands[0].String() != "sudo zypper update curl libcurl4" || st[0].Elevation != core.ElevationSudo {
+		t.Errorf("plan = %+v", st)
+	}
+	for _, a := range st[0].Commands[0].Args {
+		if a == "-y" || a == "--non-interactive" || a == "-n" {
+			t.Errorf("zypper must ask the user itself; found %q", a)
+		}
+	}
+	if inventorySource(ManagerZypper) != inventory.SourceRPM {
+		t.Error("zypper updates match RPM packages in the saved list")
+	}
+}
+
+func TestRPMRefusedSaysWhy(t *testing.T) {
+	_, err := NewRPMRefused("CentOS Linux 7 (Core) uses yum.").CheckUpdates(context.Background())
+	var se *core.SourceError
+	if !errors.As(err, &se) || !strings.Contains(se.Details, "uses yum") {
+		t.Errorf("got %v", err)
 	}
 }

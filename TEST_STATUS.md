@@ -111,6 +111,27 @@ code, where every case below allowed the removal (the step had a remove command)
 Verification: gofmt clean; `go vet ./...` (Linux and `GOOS=windows`); `go test ./...` all
 pass; `go test -race` on cleanup, analysis, inventory pass; Windows and Linux builds pass.
 
+**P0 — Linux package-manager routing.**
+
+| Test | Proves |
+|------|--------|
+| TestParseOSRelease, TestRouteRPMPerDistribution (platform) | real os-release files: Fedora 41, RHEL 9, Rocky 9, Amazon Linux 2023 → dnf; openSUSE Tumbleweed, Leap 15.6, SLES 15 → zypper (also with dnf installed); CentOS 7 (yum), missing native tool, Ubuntu/Arch with rpm or dnf present, unknown and missing os-release → refused with a reason |
+| TestRPMRemovalFollowsTheDistribution (cleanup) | openSUSE plans `sudo zypper remove`; Fedora `sudo dnf remove`; refused and unconfigured routes block with the reason and no command |
+| TestDnfProtectedListOnlyAppliesToDnf (cleanup) | DNF's protected list isn't applied to Zypper systems |
+| TestNoAssumeYesPurgeOrDataFlags (cleanup, extended) | Zypper removal has no `-y`, `--non-interactive`, `-n`, `--clean-deps` |
+| TestZypper, TestRPMRefusedSaysWhy (updates) | zypper table parsed by column name (also reordered), "No updates found", unknown output is an error, `sudo zypper update` without auto-confirm flags, matched to RPM inventory; refused RPM checks say why |
+| TestManagersFollowTheDistribution (updates) | Fedora: apt dnf snap flatpak; openSUSE: apt zypper snap flatpak; CentOS 7: a "not checked" RPM entry; Ubuntu: no RPM manager |
+| TestRPMInstallsFollowTheDistribution (discover) | an RPM scan offers DNF installs only where DNF is the distribution's tool |
+
+Real detection here (Ubuntu 24.04 with `rpm` installed): "RPM packages changed with: not
+changed: Ubuntu 24.04.5 LTS doesn't manage its software with RPM". The `linux` workflow
+runs the self-test inside real fedora:41, rockylinux:9, opensuse/tumbleweed,
+opensuse/leap:15.6, centos:7 and ubuntu:24.04 containers and checks each route.
+
+Verification: gofmt clean; `go vet ./...` (Linux and `GOOS=windows`); `go test ./...` all
+pass; `go test -race` on cleanup, updates, discover, platform pass; Windows amd64, Linux
+amd64 and arm64 builds pass.
+
 ## Real Windows 11 PC (DESKTOP-41IVS1K, Windows 11 Home build 26300, not administrator)
 
 Reached through Desktop Commander. ATLAS was built on the PC with a portable Go in

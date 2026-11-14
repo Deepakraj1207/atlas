@@ -172,6 +172,121 @@ func (d dnf) PlanUpdates(updates []core.Update) []core.UpdateStep {
 	}}
 }
 
+// ---- zypper (openSUSE, SLES) ----
+
+type zypper struct {
+	run      inventory.Runner
+	elevated bool
+}
+
+// NewZypper checks with "zypper list-updates" (cached repository data, no
+// refresh, changes nothing) and updates with "zypper update", which lists
+// what will change and asks first.
+func NewZypper(run inventory.Runner, elevated bool) core.PackageManager {
+	return zypper{run: run, elevated: elevated}
+}
+
+func (zypper) ID() string    { return ManagerZypper }
+func (zypper) Label() string { return "openSUSE/SUSE packages (Zypper)" }
+func (zypper) Detail() string {
+	return "Runs: zypper --non-interactive --no-refresh list-updates"
+}
+
+func (z zypper) CheckUpdates(ctx context.Context) ([]core.Update, error) {
+	out, err := z.run(ctx, "zypper", "--non-interactive", "--no-refresh", "list-updates")
+	if err != nil {
+		return nil, err
+	}
+	return parseZypperListUpdates(string(out))
+}
+
+var errZypperNoTable = errors.New("zypper's output had no update table")
+
+// parseZypperListUpdates reads zypper's table by its header names, so a
+// column added or moved in another zypper version doesn't shift values.
+func parseZypperListUpdates(out string) ([]core.Update, error) {
+	cols := map[string]int{}
+	var ups []core.Update
+	inTable := false
+	for _, l := range strings.Split(out, "\n") {
+		// The rule under the header is "--+----+---": no "|" in it.
+		if t := strings.TrimSpace(l); len(cols) > 0 && t != "" && strings.Trim(t, "-+") == "" {
+			inTable = true
+			continue
+		}
+		if !strings.Contains(l, "|") {
+			if strings.Contains(l, "No updates found") {
+				return nil, nil
+			}
+			continue
+		}
+		cells := strings.Split(l, "|")
+		for i := range cells {
+			cells[i] = strings.TrimSpace(cells[i])
+		}
+		if len(cols) == 0 {
+			for i, c := range cells {
+				cols[c] = i
+			}
+			if _, ok := cols["Name"]; !ok {
+				cols = map[string]int{}
+				continue
+			}
+			if _, ok := cols["Available Version"]; !ok {
+				return nil, errZypperNoTable
+			}
+			continue
+		}
+		if !inTable {
+			continue
+		}
+		get := func(name string) string {
+			if i, ok := cols[name]; ok && i < len(cells) {
+				return cells[i]
+			}
+			return ""
+		}
+		name := get("Name")
+		if name == "" {
+			continue
+		}
+		ups = append(ups, core.Update{Manager: ManagerZypper, PackageID: name, Name: name, CurrentVersion: get("Current Version"),
+			AvailableVersion: get("Available Version"), Origin: get("Repository"), Scope: "machine"})
+	}
+	if len(cols) == 0 && strings.TrimSpace(out) != "" && !strings.Contains(out, "No updates found") {
+		return nil, errZypperNoTable
+	}
+	return ups, nil
+}
+
+func (z zypper) PlanUpdates(updates []core.Update) []core.UpdateStep {
+	if len(updates) == 0 {
+		return nil
+	}
+	cmd, elev := privileged(z.elevated, core.Command{Program: "zypper", Args: append([]string{"update"}, ids(updates)...)})
+	return []core.UpdateStep{{
+		Manager: ManagerZypper, Label: z.Label(), Updates: updates, Commands: []core.Command{cmd}, Elevation: elev,
+		Rollback: "zypper install --oldpackage <package>-<version> can restore the previous version while the repository still has it.",
+	}}
+}
+
+// ---- RPM distributions ATLAS won't change ----
+
+type rpmRefused struct{ reason string }
+
+// NewRPMRefused stands in for the RPM tool on a distribution where ATLAS
+// won't change RPM packages (yum only, native tool missing), so the update
+// check says why instead of silently skipping them.
+func NewRPMRefused(reason string) core.PackageManager { return rpmRefused{reason: reason} }
+
+func (rpmRefused) ID() string     { return "rpm-refused" }
+func (rpmRefused) Label() string  { return "RPM packages" }
+func (rpmRefused) Detail() string { return "Not checked: no supported tool on this distribution" }
+func (r rpmRefused) CheckUpdates(context.Context) ([]core.Update, error) {
+	return nil, &core.SourceError{Message: "Not checked", Details: r.reason}
+}
+func (rpmRefused) PlanUpdates([]core.Update) []core.UpdateStep { return nil }
+
 // ---- snap ----
 
 type snap struct {

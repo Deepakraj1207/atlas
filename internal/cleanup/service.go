@@ -12,6 +12,7 @@ import (
 	"github.com/deepakraj1207/atlas/internal/core"
 	"github.com/deepakraj1207/atlas/internal/handover"
 	"github.com/deepakraj1207/atlas/internal/inventory"
+	"github.com/deepakraj1207/atlas/internal/platform"
 )
 
 // DefaultTimeout bounds each tidier and dependency source.
@@ -24,6 +25,7 @@ type Service struct {
 	deps         []analysis.Source
 	depTimeout   time.Duration
 	dnfProtected string
+	rpm          platform.RPMRoute
 	store        core.Store
 	log          *slog.Logger
 	now          func() time.Time
@@ -41,6 +43,9 @@ type Config struct {
 	Deps []analysis.Source
 	// DnfProtectedDir is DNF's protected-packages folder (optional).
 	DnfProtectedDir string
+	// RPM is the tool that may remove RPM packages on this distribution
+	// ("dnf" or "zypper"), or why none may. The zero value refuses.
+	RPM platform.RPMRoute
 }
 
 // NewService builds the cleanup service.
@@ -48,7 +53,7 @@ func NewService(cfg Config, store core.Store, log *slog.Logger) *Service {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	s := &Service{removers: map[string]Remover{}, tidiers: cfg.Tidiers, deps: cfg.Deps, depTimeout: DefaultTimeout, dnfProtected: cfg.DnfProtectedDir,
+	s := &Service{removers: map[string]Remover{}, tidiers: cfg.Tidiers, deps: cfg.Deps, depTimeout: DefaultTimeout, dnfProtected: cfg.DnfProtectedDir, rpm: cfg.RPM,
 		store: store, log: log, now: time.Now, start: handover.ExecStarter, notify: handover.NotifyInterrupt}
 	for _, r := range cfg.Removers {
 		s.removers[r.ID()] = r
@@ -98,7 +103,7 @@ func (s *Service) FindTidyUps(ctx context.Context, progress func(core.SourceEven
 // a step of their own carrying the reason.
 func (s *Service) PlanRemoval(ctx context.Context, items []core.SoftwareItem) ([]core.UpdateStep, error) {
 	g := gate{deps: map[string]depRecords{}, removing: map[string]bool{}, dnfProtected: map[string]bool{}}
-	if s.dnfProtected != "" {
+	if s.dnfProtected != "" && s.rpm.Manager == "dnf" {
 		g.dnfProtected = readDnfProtected(s.dnfProtected)
 	}
 	infos := make([]core.SourceInfo, len(s.deps))
@@ -153,7 +158,7 @@ func (s *Service) PlanRemoval(ctx context.Context, items []core.SoftwareItem) ([
 			Updates: []core.Update{target(manager, it)}, Blocked: reason})
 	}
 	for _, it := range items {
-		manager, why := removerFor(it)
+		manager, why := removerFor(it, s.rpm)
 		// Safety reasons come first: they matter more than which tool would run.
 		if reason, _ := g.check(it); reason != "" {
 			blockedStep(it, manager, reason)
