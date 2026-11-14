@@ -418,7 +418,7 @@ func freshnessFindings(in Inputs) []core.Finding {
 			Title:      "Updates haven't been checked yet",
 			Summary:    "ATLAS doesn't know yet whether newer versions of your software exist.",
 			Why:        "Newer versions fix bugs and security problems.",
-			Suggestion: "Check for updates from Home or Updates (3). Checking only reads information.",
+			Suggestion: "Check for updates from the Dashboard (1) or Updates (3). Checking only reads information.",
 		})
 	case pending > 0:
 		out = append(out, core.Finding{
@@ -435,7 +435,7 @@ func freshnessFindings(in Inputs) []core.Finding {
 			Title:      "Your last update check is more than two weeks old",
 			Summary:    "New versions may have come out since then.",
 			Why:        "Updates often include security fixes.",
-			Suggestion: "Check for updates again from Home or Updates (3).",
+			Suggestion: "Check for updates again from the Dashboard (1) or Updates (3).",
 		})
 	}
 	if in.Scan != nil && in.Now.Sub(in.Scan.FinishedAt) > StaleScanAfter {
@@ -444,7 +444,7 @@ func freshnessFindings(in Inputs) []core.Finding {
 			Title:      "Your software list is more than a month old",
 			Summary:    "This analysis is based on a scan from " + in.Scan.FinishedAt.Local().Format("2 Jan 2006") + ".",
 			Why:        "Software installed or removed since then isn't reflected here.",
-			Suggestion: "Scan again from Home, then analyze again.",
+			Suggestion: "Scan again from the Dashboard (1), then analyze again.",
 		})
 	}
 	return out
