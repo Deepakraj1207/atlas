@@ -519,3 +519,34 @@ func TestInstallerPairWithDifferentVersionsIsWordedCarefully(t *testing.T) {
 		t.Errorf("finding = %+v", f)
 	}
 }
+
+func TestGraphKeyAndCoverage(t *testing.T) {
+	for _, c := range []struct {
+		src  string
+		it   core.SoftwareItem
+		want string
+	}{
+		{inventory.SourceScoop, core.SoftwareItem{Name: "7zip", PackageID: "main/7zip"}, "7zip"},
+		{inventory.SourceScoop, core.SoftwareItem{Name: "fastfetch"}, "fastfetch"},
+		{inventory.SourceDpkg, core.SoftwareItem{Name: "python3", PackageID: "python3"}, "python3"},
+		{inventory.SourceChocolatey, core.SoftwareItem{Name: "7-Zip (Install)", PackageID: "7zip.install"}, "7zip.install"},
+	} {
+		if got := GraphKey(c.src, c.it); got != c.want {
+			t.Errorf("GraphKey(%s, %+v) = %q, want %q", c.src, c.it, got, c.want)
+		}
+	}
+	// Every dependency source says which records it covers, so a removal
+	// plan can refuse when that source fails instead of assuming none exist.
+	for _, c := range []struct {
+		src  Source
+		want string
+	}{
+		{NewDpkgDeps("x"), inventory.SourceDpkg}, {NewRPMDeps(nil), inventory.SourceRPM},
+		{NewChocolateyDeps("x"), inventory.SourceChocolatey}, {NewScoopDeps(nil), inventory.SourceScoop},
+	} {
+		ds, ok := c.src.(DependencySource)
+		if !ok || ds.Covers() != c.want {
+			t.Errorf("%s must cover %s", c.src.ID(), c.want)
+		}
+	}
+}

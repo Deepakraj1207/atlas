@@ -69,9 +69,50 @@ func readDnfProtected(dir string) map[string]bool {
 
 // gate decides whether an item may be removed.
 type gate struct {
-	graphs       map[string]analysis.Graph
+	// deps holds, per inventory source with a dependency source, what
+	// reading it produced: the graph, or why it couldn't be read.
+	deps         map[string]depRecords
 	dnfProtected map[string]bool
 	removing     map[string]bool // source|package key of everything in this plan
+}
+
+// depRecords is one dependency source's outcome for a removal plan.
+type depRecords struct {
+	result core.SourceResult
+	graph  analysis.Graph
+	read   bool // the graph arrived
+}
+
+// label names the records in a sentence: "package dependencies (dpkg)".
+func (r depRecords) label() string {
+	l := r.result.Label
+	if l == "" {
+		l = "Dependency records for " + r.result.Source
+	}
+	return strings.ToLower(l[:1]) + l[1:]
+}
+
+// unverified explains why records that were expected can't be relied on,
+// or returns "" when they can.
+func (r depRecords) unverified() string {
+	label := r.label()
+	switch {
+	case r.result.Status == core.SourceTimeout:
+		return "Reading the " + label + " took too long and was stopped, so ATLAS can't check what needs this. Nothing was removed; try again."
+	case r.result.Status == core.SourceUnavailable:
+		return "The " + label + " isn't available on this computer, although this was installed with that tool, so ATLAS can't check what needs it."
+	case r.result.Status == core.SourceCancelled:
+		return "The dependency check was stopped before the " + label + " were read, so ATLAS can't check what needs this."
+	case r.result.Status != core.SourceOK || !r.read:
+		why := r.result.Message
+		if why == "" {
+			why = "no result"
+		}
+		return "ATLAS couldn't read the " + label + " just now (" + why + "), so it can't check what needs this. Nothing was removed; try again."
+	case len(r.graph.Nodes) == 0:
+		return "The " + label + " came back empty, which can't be right while this is installed, so ATLAS can't check what needs it."
+	}
+	return ""
 }
 
 func itemKey(source, pkg string) string { return source + "|" + strings.ToLower(pkg) }
@@ -93,15 +134,27 @@ func (g gate) check(it core.SoftwareItem) (blocked, note string) {
 		return "DNF lists this as a protected package your system needs.", ""
 	}
 	_, _, isRuntime := analysis.DetectRuntime(it)
+	// Every source this item came from that keeps dependency records must
+	// be verified, and every one must agree nothing else needs it.
+	checked := 0
 	for _, src := range append([]string{it.Source}, it.AlsoFoundIn...) {
-		gr, ok := g.graphs[src]
-		if !ok || !gr.Has(pkgOf(it)) {
-			continue
+		rec, expected := g.deps[src]
+		if !expected {
+			continue // this tool keeps no dependency records
 		}
-		if r, ok := gr.ProtectedReason(pkgOf(it)); ok {
+		if why := rec.unverified(); why != "" {
+			return why, ""
+		}
+		pkg := analysis.GraphKey(src, it)
+		gr := rec.graph
+		if !gr.Has(pkg) {
+			return "The " + rec.label() +
+				" didn't list this package when ATLAS checked just now, so it can't tell what needs it. Scan again; if it's still missing, those records are incomplete.", ""
+		}
+		if r, ok := gr.ProtectedReason(pkg); ok {
 			return "Your system needs this: " + r + ".", ""
 		}
-		direct, _ := gr.Dependents(pkgOf(it))
+		direct, _ := gr.Dependents(pkg)
 		var still []string
 		for _, d := range direct {
 			if !g.removing[itemKey(src, d)] {
@@ -116,6 +169,9 @@ func (g gate) check(it core.SoftwareItem) (blocked, note string) {
 			}
 			return fmt.Sprintf("Needed by %s%s. Removing it would break them.", strings.Join(shown, ", "), more), ""
 		}
+		checked++
+	}
+	if checked > 0 {
 		return "", "Checked just now: nothing else installed needs it."
 	}
 	switch {

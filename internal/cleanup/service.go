@@ -22,6 +22,7 @@ type Service struct {
 	removers     map[string]Remover
 	tidiers      []Tidier
 	deps         []analysis.Source
+	depTimeout   time.Duration
 	dnfProtected string
 	store        core.Store
 	log          *slog.Logger
@@ -47,7 +48,7 @@ func NewService(cfg Config, store core.Store, log *slog.Logger) *Service {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	s := &Service{removers: map[string]Remover{}, tidiers: cfg.Tidiers, deps: cfg.Deps, dnfProtected: cfg.DnfProtectedDir,
+	s := &Service{removers: map[string]Remover{}, tidiers: cfg.Tidiers, deps: cfg.Deps, depTimeout: DefaultTimeout, dnfProtected: cfg.DnfProtectedDir,
 		store: store, log: log, now: time.Now, start: handover.ExecStarter, notify: handover.NotifyInterrupt}
 	for _, r := range cfg.Removers {
 		s.removers[r.ID()] = r
@@ -96,7 +97,7 @@ func (s *Service) FindTidyUps(ctx context.Context, progress func(core.SourceEven
 // dependency data and groups the allowed ones into steps. Blocked items get
 // a step of their own carrying the reason.
 func (s *Service) PlanRemoval(ctx context.Context, items []core.SoftwareItem) ([]core.UpdateStep, error) {
-	g := gate{graphs: map[string]analysis.Graph{}, removing: map[string]bool{}, dnfProtected: map[string]bool{}}
+	g := gate{deps: map[string]depRecords{}, removing: map[string]bool{}, dnfProtected: map[string]bool{}}
 	if s.dnfProtected != "" {
 		g.dnfProtected = readDnfProtected(s.dnfProtected)
 	}
@@ -104,26 +105,39 @@ func (s *Service) PlanRemoval(ctx context.Context, items []core.SoftwareItem) ([
 	for i, d := range s.deps {
 		infos[i] = core.SourceInfo{ID: d.ID(), Label: d.Label(), Detail: d.Detail()}
 	}
-	_, found := inventory.RunAll(ctx, infos, func(ctx context.Context, i int) ([]analysis.Input, error) {
+	results, found := inventory.RunAll(ctx, infos, func(ctx context.Context, i int) ([]analysis.Input, error) {
 		in, err := s.deps[i].Read(ctx)
 		if err != nil {
 			return nil, err
 		}
 		return []analysis.Input{in}, nil
-	}, func(string) time.Duration { return DefaultTimeout }, func(core.SourceEvent) {})
+	}, func(string) time.Duration { return s.depTimeout }, func(core.SourceEvent) {})
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	for _, ins := range found {
-		for _, in := range ins {
-			if in.GraphFor != "" {
-				g.graphs[in.GraphFor] = in.Graph
+	// Keep every source's outcome, not just the graphs that arrived: a
+	// source that failed or timed out must not look like one that keeps no
+	// records (the gate then refuses rather than guesses).
+	for i, d := range s.deps {
+		ds, ok := d.(analysis.DependencySource)
+		if !ok {
+			continue
+		}
+		rec := depRecords{result: results[i]}
+		for _, in := range found[i] {
+			if in.GraphFor == ds.Covers() {
+				rec.graph, rec.read = in.Graph, true
 			}
 		}
+		if results[i].Status == core.SourceOK && !rec.read {
+			rec.result.Status, rec.result.Message = core.SourceFailed, "returned no dependency records"
+		}
+		g.deps[ds.Covers()] = rec
+		s.log.Info("dependency source read for removal", "source", d.ID(), "status", string(rec.result.Status), "packages", len(rec.graph.Nodes))
 	}
 	for _, it := range items {
 		for _, src := range append([]string{it.Source}, it.AlsoFoundIn...) {
-			g.removing[itemKey(src, pkgOf(it))] = true
+			g.removing[itemKey(src, analysis.GraphKey(src, it))] = true
 		}
 	}
 

@@ -95,6 +95,22 @@ routes 7-Zip to `choco uninstall` and blocks .NET and Visual C++ runtimes; Disco
 recognises 7-Zip, Firefox, Git, GitHub CLI, Node.js and jq. The only failures are
 winget, for the reason above (16 passed, 2 failed: the scan and the update check).
 
+## Engineering audit remediation (2026-11-14)
+
+**P0 — cleanup dependency safety.** Regression tests written first and run against the old
+code, where every case below allowed the removal (the step had a remove command):
+
+| Test | Proves |
+|------|--------|
+| TestGateFailsClosedWhenDependenciesCantBeVerified | an app from dpkg is refused when its dependency source failed, timed out, was unavailable, came back empty, or didn't list the package; no command is planned |
+| TestGateStillAllowsAppsWhenEvidenceIsComplete | complete records still allow an app nothing needs, still block one something needs, a failure in an unrelated source doesn't block, winget apps unchanged |
+| TestGateMatchesScoopAppsByBareName | Scoop dependents are found (`main/7zip` needed by innounp), unneeded apps allowed, and removing both together allowed |
+| TestUnverifiedLabelWithoutName | messages never crash on a source without a label |
+| TestGraphKeyAndCoverage (analysis) | graph names per source; every real dependency source declares what it covers |
+
+Verification: gofmt clean; `go vet ./...` (Linux and `GOOS=windows`); `go test ./...` all
+pass; `go test -race` on cleanup, analysis, inventory pass; Windows and Linux builds pass.
+
 ## Real Windows 11 PC (DESKTOP-41IVS1K, Windows 11 Home build 26300, not administrator)
 
 Reached through Desktop Commander. ATLAS was built on the PC with a portable Go in

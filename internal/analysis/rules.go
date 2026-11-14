@@ -134,10 +134,7 @@ func detectRuntimes(in Inputs) []core.Runtime {
 		}
 		for _, src := range append([]string{it.Source}, it.AlsoFoundIn...) {
 			g, ok := in.Graphs[src]
-			pkg := it.PackageID
-			if pkg == "" {
-				pkg = it.Name
-			}
+			pkg := GraphKey(src, it)
 			if !ok || !g.Has(pkg) {
 				continue
 			}

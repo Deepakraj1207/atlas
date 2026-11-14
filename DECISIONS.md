@@ -282,3 +282,17 @@ Short, dated records of choices that shape the code.
   (or an `ant auth login` profile); ATLAS never stores it. Answers are labelled as written
   by AI, `x` stops a question, and every question (answered, failed or stopped) is
   recorded in Activity History with what was sent.
+
+## 2026-11-14 — Engineering audit remediation
+
+- **D77. Removal fails closed when dependency records can't be verified.** `PlanRemoval`
+  used to discard each dependency source's status, so a source that failed or timed out
+  looked like one that keeps no records, and an ordinary app was allowed through. Now every
+  dependency source declares the inventory source it covers (`analysis.DependencySource`),
+  its outcome is kept, and an item is refused when any source it came from that keeps
+  records was unavailable, failed, timed out, was stopped, came back empty, or doesn't list
+  the package. Every such source must agree nothing else needs the item. Items from sources
+  that keep no records (Windows' installed-programs list, winget, Snap, Flatpak) keep the
+  existing rule: apps allowed, runtimes and components refused. The same work fixed Scoop
+  matching: its graph uses bare app names while inventory uses `bucket/app`, so Scoop
+  dependents were never seen (`analysis.GraphKey`).

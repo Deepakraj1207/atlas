@@ -33,6 +33,30 @@ type Source interface {
 	Read(ctx context.Context) (Input, error)
 }
 
+// DependencySource is a Source that reads one package manager's dependency
+// records. Covers names that inventory source ("dpkg", "scoop", ...), so a
+// caller knows which records it expected even when the read fails.
+type DependencySource interface {
+	Source
+	Covers() string
+}
+
+// GraphKey is the name an item has in its source's dependency graph: the
+// package ID (or name), except Scoop, whose graph uses the bare app name
+// while inventory keeps "bucket/app".
+func GraphKey(source string, it core.SoftwareItem) string {
+	pkg := it.PackageID
+	if pkg == "" {
+		pkg = it.Name
+	}
+	if source == inventory.SourceScoop {
+		if i := strings.LastIndex(pkg, "/"); i >= 0 {
+			pkg = pkg[i+1:]
+		}
+	}
+	return pkg
+}
+
 // ---- dpkg ----
 
 type dpkgDeps struct{ statusPath string }
@@ -41,8 +65,9 @@ type dpkgDeps struct{ statusPath string }
 // resolving virtual packages through Provides.
 func NewDpkgDeps(statusPath string) Source { return dpkgDeps{statusPath: statusPath} }
 
-func (dpkgDeps) ID() string    { return "deps-dpkg" }
-func (dpkgDeps) Label() string { return "Package dependencies (dpkg)" }
+func (dpkgDeps) Covers() string { return inventory.SourceDpkg }
+func (dpkgDeps) ID() string     { return "deps-dpkg" }
+func (dpkgDeps) Label() string  { return "Package dependencies (dpkg)" }
 func (d dpkgDeps) Detail() string {
 	return "Reads Depends, Pre-Depends and Provides from " + d.statusPath
 }
@@ -130,8 +155,9 @@ type rpmDeps struct{ run inventory.Runner }
 // RPM database in two queries and resolves requirements to packages.
 func NewRPMDeps(run inventory.Runner) Source { return rpmDeps{run: run} }
 
-func (rpmDeps) ID() string    { return "deps-rpm" }
-func (rpmDeps) Label() string { return "Package dependencies (RPM)" }
+func (rpmDeps) Covers() string { return inventory.SourceRPM }
+func (rpmDeps) ID() string     { return "deps-rpm" }
+func (rpmDeps) Label() string  { return "Package dependencies (RPM)" }
 func (rpmDeps) Detail() string {
 	return "Runs: rpm -qa --qf '[%{NAME}\\t%{REQUIRENAME}\\n]' and the same for PROVIDENAME"
 }
@@ -179,8 +205,9 @@ type chocoDeps struct{ root string }
 // NewChocolateyDeps reads <dependency> entries from installed .nuspec files.
 func NewChocolateyDeps(root string) Source { return chocoDeps{root: root} }
 
-func (chocoDeps) ID() string    { return "deps-chocolatey" }
-func (chocoDeps) Label() string { return "Package dependencies (Chocolatey)" }
+func (chocoDeps) Covers() string { return inventory.SourceChocolatey }
+func (chocoDeps) ID() string     { return "deps-chocolatey" }
+func (chocoDeps) Label() string  { return "Package dependencies (Chocolatey)" }
 func (chocoDeps) Detail() string {
 	return "Reads <dependency> entries in <ChocolateyInstall>\\lib\\*\\*.nuspec"
 }
@@ -257,8 +284,9 @@ type scoopDeps struct{ roots []inventory.ScoopRoot }
 // NewScoopDeps reads "depends" from installed Scoop manifests.
 func NewScoopDeps(roots []inventory.ScoopRoot) Source { return scoopDeps{roots: roots} }
 
-func (scoopDeps) ID() string    { return "deps-scoop" }
-func (scoopDeps) Label() string { return "Package dependencies (Scoop)" }
+func (scoopDeps) Covers() string { return inventory.SourceScoop }
+func (scoopDeps) ID() string     { return "deps-scoop" }
+func (scoopDeps) Label() string  { return "Package dependencies (Scoop)" }
 func (scoopDeps) Detail() string {
 	return "Reads \"depends\" in <scoop>\\apps\\*\\current\\scoop-manifest.json (or manifest.json)"
 }
