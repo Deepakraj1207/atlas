@@ -148,6 +148,26 @@ deleted the saved record or the pending update even when the software was still 
 
 Verification: gofmt clean; `go vet ./...` (Linux and `GOOS=windows`); `go test ./...` all
 pass; `go test -race` on tui, cleanup, updates, inventory pass; Windows and Linux builds pass.
+CI on a9604ab: `windows` (run 43570476419) and `linux` (run 43570476398) passed.
+
+**P1 — deduplication robustness.** The scenarios from the audit were written as tests first.
+Against the old `merge.go`, 9 cases joined software that may be different installs:
+
+| Test | Proves |
+|------|--------|
+| TestMergeDoesNotJoinDifferentSoftware | kept apart: same name with different publishers; editions (Community/Professional, 32/64-bit Python); a Scoop portable copy beside an installed one at the same version*; different versions; localized Office installs; two winget package IDs with the same name*; a dpkg and a Snap Firefox*; an rpm and a Flatpak GIMP*; an unversioned Scoop app beside two installed versions*; a Chocolatey record fitting both Python editions*; a truncated winget name fitting both the x64 and x86 Visual C++ entries, in either order* |
+| TestMergeStillJoinsTheSameInstall | still joined: winget's read of a Windows entry; a truncated winget name with one candidate; the Chocolatey record of the same install; localized names spelled the same; case and spacing differences; a publisher written two ways ("inc." vs "Inc"); the same Windows entry seen twice |
+| TestWeakMatchKeepsTheHigherPrioritySource | a Windows entry without a version stays the primary record (its uninstaller is still used) and is filled in from winget |
+| TestNormPublisher | publisher suffixes (Inc, Corporation, Ltd…) and punctuation are ignored, nothing else |
+| TestMerge (updated) | its old expectation was the bug: an unversioned Scoop "Python" was joined to whichever of two Windows Pythons came first; now it stays separate |
+
+\* failed on the old code (also the publisher case). Existing merge tests (7-Zip/AWS CLI with
+Chocolatey, PyCharm/ONLYOFFICE/Safe Exam Browser read by winget, Edge twice, Tool at three
+versions, `< 3.10.3`) pass unchanged.
+
+Verification: gofmt clean; `go vet ./...` (Linux and `GOOS=windows`); `go test ./...` all
+pass; `go test -race` on inventory, cleanup, updates pass; Windows amd64 and Linux amd64
+builds pass.
 
 ## Real Windows 11 PC (DESKTOP-41IVS1K, Windows 11 Home build 26300, not administrator)
 

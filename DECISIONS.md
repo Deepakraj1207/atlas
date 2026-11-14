@@ -325,3 +325,19 @@ Short, dated records of choices that shape the code.
   exited 0. winget's "< 3.10.3" ("older than") is now kept by the scanner, because
   stripping it would have let a failed update look like it reached 3.10.3. Discover
   installs are not verified yet; the status already tells the user to scan again.
+
+- **D80. Merging keeps two entries whenever it can't be sure they're one install.** A wrong
+  merge hides an install, and removal then follows the surviving entry's source. Rules
+  now: (1) only sources that can report the same copy merge: the Windows installer
+  sources (Windows entries, winget, Chocolatey) with each other, and any source with
+  itself. Scoop apps are portable copies and dpkg, rpm, Snap and Flatpak each install
+  their own copy, so they never merge across managers (this was already intended for
+  Scoop but the first pass ignored it). (2) Within one source, different package IDs or
+  different publishers (ignoring "Inc", "Corporation", punctuation…) are different
+  software. Publishers aren't compared across sources: Chocolatey reports authors.
+  (3) A weak entry, with a name winget cut short or no version, joins only when exactly
+  one entry fits it, whatever the order. The Chocolatey/winget-to-Windows join and
+  winget's read of a Windows entry also need a one-to-one fit, so a record matching
+  both the x64 and x86 editions stays on its own. (4) When a weak entry from a
+  higher-priority source joins, it stays the primary record. The cost is an occasional
+  duplicate line, which is visible and harmless; a false merge isn't.

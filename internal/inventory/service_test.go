@@ -131,8 +131,8 @@ func TestMerge(t *testing.T) {
 	noVer := core.SoftwareItem{Name: "Python", Source: SourceScoop, Kind: core.KindApp}
 
 	out := Merge([]core.SoftwareItem{reg, git1, py311, py312, wg, git2, noVer})
-	if len(out) != 4 {
-		t.Fatalf("want 4 merged items, got %d: %+v", len(out), out)
+	if len(out) != 5 {
+		t.Fatalf("want 5 merged items, got %d: %+v", len(out), out)
 	}
 	if out[0].Name != "Git" || out[0].PackageID != "Git.Git" || out[0].Source != SourceRegistry || len(out[0].AlsoFoundIn) != 1 {
 		t.Errorf("git merge: %+v", out[0])
@@ -141,11 +141,16 @@ func TestMerge(t *testing.T) {
 	if !strings.HasSuffix(vc.Name, "(x64)") || vc.PackageID == "" || vc.Publisher != "Microsoft" {
 		t.Errorf("truncated name should merge into full one: %+v", vc)
 	}
-	if out[2].Version != "3.11.9" || out[3].Version != "3.12.3" {
-		t.Errorf("different versions must stay separate: %+v %+v", out[2], out[3])
+	// Audit fix: the unversioned Scoop "Python" used to be joined to whichever
+	// Windows Python came first. It's a separate portable copy, and with two
+	// candidates there's no way to pick one anyway.
+	if out[2].Source != SourceScoop || out[3].Version != "3.11.9" || out[4].Version != "3.12.3" {
+		t.Errorf("different versions and the Scoop copy must stay separate: %+v", out[2:])
 	}
-	if len(out[2].AlsoFoundIn) != 1 || out[2].AlsoFoundIn[0] != SourceScoop {
-		t.Errorf("unversioned item should merge into the first match: %+v", out[2])
+	for _, it := range out[3:] {
+		if len(it.AlsoFoundIn) != 0 {
+			t.Errorf("nothing should be joined to %s %s: %+v", it.Name, it.Version, it)
+		}
 	}
 }
 
