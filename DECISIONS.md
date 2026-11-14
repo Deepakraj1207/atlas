@@ -403,3 +403,32 @@ Short, dated records of choices that shape the code.
     terminals and is left out on small ones. (A six-row version for large windows was
     tried and removed: the owner preferred the three-row logo at every size.)
 
+## 2026-11-14 — Installing ATLAS
+
+- **D83. One-line installers instead of winget.** The owner chose a single command per
+  system over a winget package, which needs Microsoft's review before anyone can use it.
+  `install.ps1` (`irm …/install.ps1 | iex`, Windows PowerShell 5.1 and 7) and
+  `install.sh` (`curl -fsSL …/install.sh | sh`, POSIX sh, curl or wget) do the same
+  thing:
+  - **Download.** They fetch the latest release, or `ATLAS_VERSION`, for the processor
+    (x64 or ARM64).
+  - **Checksum.** They check the download against the release's `SHA256SUMS` and refuse
+    on any mismatch, leaving an existing install untouched.
+  - **Per-user install.** They install for the current user only, with no sudo or
+    administrator rights:
+    - Linux: `~/.local/bin`. If that folder isn't on PATH, the installer prints the line
+      to add rather than editing shell files.
+    - Windows: `%LOCALAPPDATA%\Programs\ATLAS`, added to the user PATH. The PATH is
+      read and written unexpanded, our entry is appended, and uninstall removes only that
+      entry, so the PATH is restored byte for byte.
+  - **Update and uninstall.** Running again updates; on Windows a running `atlas.exe` is
+    renamed aside, so it keeps working. `ATLAS_UNINSTALL=1` removes the program and,
+    on Windows, its PATH entry. Settings and data are always kept.
+  - **No partial runs.** All work happens inside one function or script block, so a
+    cut-off download runs nothing. On Windows, an error never closes the user's
+    PowerShell window.
+
+  winget support for the user's *other* software (scanning, updates, removal, Discover)
+  is unchanged. `tools/release` (winget manifests) and the `winget-check` workflow are
+  removed; `install-check` replaces it.
+

@@ -9,7 +9,6 @@ on:
     branches: ['**']
     paths:
       - 'packaging/**'
-      - 'tools/release/**'
       - '.github/workflows/release.yml'
   workflow_dispatch:
 
@@ -57,8 +56,6 @@ jobs:
         run: sudo apt-get update -q && sudo apt-get install -y -q rpm
       - name: Build release files
         run: packaging/build-release.sh "${{ steps.version.outputs.version }}" dist
-      - name: Bundle the winget manifests
-        run: cd dist/winget && zip -q -r ../winget-manifests.zip manifests
       - uses: actions/upload-artifact@v4
         with:
           name: release-files
@@ -83,13 +80,6 @@ jobs:
           if ($line -notlike "atlas $v (commit *") { throw "unexpected version line" }
           ./zipcheck/atlas.exe -selftest -report selftest.md
           Get-Content selftest.md -TotalCount 30
-      - name: winget accepts the manifests
-        shell: pwsh
-        run: |
-          $dir = (Get-ChildItem dist/winget/manifests -Recurse -Filter '*.installer.yaml' | Select-Object -First 1).DirectoryName
-          Get-ChildItem $dir | ForEach-Object { "== $($_.Name)"; Get-Content $_.FullName }
-          winget validate --manifest $dir --disable-interactivity
-          if ($LASTEXITCODE -ne 0) { throw "winget validate failed ($LASTEXITCODE)" }
 
   check-linux:
     needs: build

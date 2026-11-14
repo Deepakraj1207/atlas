@@ -43,7 +43,7 @@ for target in windows/amd64 windows/arm64 linux/amd64 linux/arm64; do
   GOOS="$os" GOARCH="$arch" go build -trimpath -ldflags "$ldflags" -o "$dir/$exe" ./cmd/atlas
   cp LICENSE README.md "$dir/"
   if [ "$os" = windows ]; then
-    # atlas.exe at the top of the zip: the winget manifest points there.
+    # atlas.exe at the top of the zip, where install.ps1 looks for it.
     (cd "$dir" && zip -q -X "$root/$out/$name.zip" "$exe" LICENSE README.md)
   else
     tar -C "$work" --owner=0 --group=0 --sort=name --mtime="$date" -czf "$out/$name.tar.gz" "$name"
@@ -55,11 +55,6 @@ for target in windows/amd64 windows/arm64 linux/amd64 linux/arm64; do
     fi
   fi
 done
-
-go run ./tools/release winget -version "$version" -date "$date" \
-  -x64 "$out/atlas_${version}_windows_amd64.zip" \
-  -arm64 "$out/atlas_${version}_windows_arm64.zip" \
-  -out "$out/winget"
 
 (cd "$out" && sha256sum -- *.zip *.tar.gz *.deb $(ls *.rpm 2>/dev/null) > SHA256SUMS)
 echo

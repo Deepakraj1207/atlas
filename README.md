@@ -6,14 +6,30 @@ for Windows 11 first; Linux stays supported.
 
 ## Install
 
+**Windows** (PowerShell):
+
 ```powershell
-winget install Deepakraj1207.ATLAS     # Windows, once the package is accepted
+irm https://raw.githubusercontent.com/Deepakraj1207/atlas/main/install.ps1 | iex
 ```
 
+**Linux:**
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Deepakraj1207/atlas/main/install.sh | sh
+```
+
+The installer downloads the latest release for your computer from GitHub, checks it
+against the release's checksums, and installs `atlas` for your user only (Windows:
+`%LOCALAPPDATA%\Programs\ATLAS`, added to your PATH; Linux: `~/.local/bin`). No
+administrator rights or sudo. **To update, run the same command again.** To remove it,
+run it with `ATLAS_UNINSTALL=1` (PowerShell: `$env:ATLAS_UNINSTALL = '1'` first). Your
+settings and saved data are kept either way. Prefer to read the script first? Open the
+URL in a browser, or download it and run it as a file.
+
 Or download a release from GitHub: a zip for Windows (x64 or ARM64), a `.deb`
-(Ubuntu/Debian) or `.rpm` (Fedora/RHEL) named `atlas-lifecycle`, or a tarball for any
-Linux. The command is `atlas` everywhere. `atlas -selftest` checks ATLAS against your
-computer without changing anything.
+(Ubuntu/Debian) or `.rpm` (Fedora/RHEL/openSUSE) named `atlas-lifecycle`, or a tarball
+for any Linux. The command is `atlas` everywhere. `atlas -selftest` checks ATLAS against
+your computer without changing anything.
 
 ## What it does
 
