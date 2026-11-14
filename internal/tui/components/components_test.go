@@ -126,3 +126,22 @@ func TestTruncateAndPad(t *testing.T) {
 		t.Errorf("PadRight wide = %q (width %d)", got, lipgloss.Width(got))
 	}
 }
+
+// Seen on Windows CI: the figures on the right cut off "See Activity
+// History (8)" at the end of a status message.
+func TestStatusMessageWinsOverFigures(t *testing.T) {
+	th := theme.New(theme.Dark)
+	facts := "83 apps · 12 updates · RAM 2.9 / 16.0 GB"
+	long := Status{Text: "Scan finished with gaps: 83 apps found; some sources couldn't be read. See Activity History (8).", Kind: StatusWarning}
+	row := StatusBar(th, 120, long, facts, nil, false)
+	if !strings.Contains(row, "See Activity History (8).") || strings.Contains(row, "RAM") {
+		t.Errorf("a long message must be shown in full, without the figures: %q", row)
+	}
+	short := StatusBar(th, 120, Status{Text: "System ready", Kind: StatusReady}, facts, nil, false)
+	if !strings.Contains(short, "System ready") || !strings.Contains(short, "RAM 2.9 / 16.0 GB") {
+		t.Errorf("a short message leaves room for the figures: %q", short)
+	}
+	if w := lipgloss.Width(row); w > 120 {
+		t.Errorf("row is %d wide", w)
+	}
+}

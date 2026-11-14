@@ -61,8 +61,10 @@ func StatusBar(t theme.Theme, width int, st Status, right string, hints []KeyHin
 	}
 	dot := t.Dot(st.Tone()) + " "
 	rightW := lipgloss.Width(right)
-	if rightW > width/2 {
-		right, rightW = "", 0 // a long message matters more than the facts
+	// The message matters more than the facts: they give way whenever the
+	// message wouldn't fit in full beside them.
+	if rightW > 0 && lipgloss.Width(dot)+lipgloss.Width(st.Text)+2+rightW > width {
+		right, rightW = "", 0
 	}
 	msgW := max(width-rightW-lipgloss.Width(dot)-1, 1)
 	msg := dot + style.Render(truncate(st.Text, msgW))

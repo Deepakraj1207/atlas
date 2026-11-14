@@ -212,6 +212,7 @@ pass.
 | TestUnknownSystemFactsAreLeftOut, TestDashboardFiguresAreRealOrMarkedUnknown (tui) | unknown memory and disk aren't shown; figures are "—" before a scan, real counts after; disk shown as "200 GB free of 500 GB on C:" |
 | TestViewNeverExceedsTerminalWidth (tui) | no line wider than the terminal at 8 sizes from 40×10 to 200×50, in every section, with and without section focus |
 | TestReadSystemInfoIsHonest, TestGBAndMemUsed, TestParseMeminfo (platform); TestWindowsName (platform, Windows only) | real system facts are consistent (available ≤ total); Windows 11 is recognised by build number; formatting |
+| TestStatusMessageWinsOverFigures (components) | found by Windows CI: the right-hand figures cut off "See Activity History (8)." at the end of a status message; now the figures give way whenever the message wouldn't fit in full (fails on the first version, passes now) |
 | TestDotsDifferByTone (theme) | each status tone has its own colour, and "unknown" (○) differs from "good" (●) even without colour |
 
 Updated for the new interface: help context "Dashboard:", narrow tab "1 Dashboard",
