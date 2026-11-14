@@ -396,4 +396,9 @@ Short, dated records of choices that shape the code.
     only state what the saved data shows. On wide terminals the actions and the glance
     sit side by side, so the important part fits Windows Terminal's default 120×30.
   - Memory use is read again every 15 seconds; nothing else polls.
+  - **Big logo.** ATLAS in its own three-row block letters, drawn only with `█ ▀ ▄`
+    (single width in every Windows console font, legacy conhost included), with a
+    gradient from the accent colour to the info colour. It sits beside the welcome on wide
+    terminals, so it costs no rows at 120×30. It goes above the welcome on narrow but tall
+    terminals and is left out on small ones.
 

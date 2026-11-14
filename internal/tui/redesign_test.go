@@ -191,3 +191,19 @@ func TestViewNeverExceedsTerminalWidth(t *testing.T) {
 		}
 	}
 }
+
+func TestBigLogoWhereThereIsRoom(t *testing.T) {
+	m := bootWithSystem(t, testSystem)
+	logoRow := "▄▀▀▄ ▀█▀ █    ▄▀▀▄ ▄▀▀▀"
+	if v := m.View(); !strings.Contains(v, logoRow) || !strings.Contains(v, "Welcome to ATLAS") {
+		t.Errorf("at 120×30 the big logo sits beside the welcome:\n%s", v)
+	}
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
+	if text := dashboardText(next.(Model)); strings.Contains(text, logoRow) || !strings.Contains(text, "Welcome to ATLAS") {
+		t.Errorf("a small terminal gets the plain welcome only:\n%s", text)
+	}
+	next, _ = m.Update(tea.WindowSizeMsg{Width: 60, Height: 40})
+	if text := dashboardText(next.(Model)); !strings.Contains(text, logoRow) {
+		t.Errorf("a narrow but tall terminal has room above the welcome:\n%s", text)
+	}
+}

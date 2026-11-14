@@ -76,13 +76,7 @@ func (h *Home) View(ctx Context) string {
 	d := ctx.Data
 	var b strings.Builder
 
-	greeting := "Welcome to ATLAS"
-	if d.Summary != nil {
-		greeting = "Welcome back"
-	}
-	b.WriteString(t.Title.Render(greeting))
-	b.WriteString("\n")
-	b.WriteString(t.Muted.Render(components.Wrap("Keep your software tidy, up to date and understood, in plain language. Nothing happens without your say-so.", w)))
+	b.WriteString(h.intro(ctx, w))
 	b.WriteString("\n\n")
 
 	wide := ctx.Layout.TwoColumn && w >= 84
@@ -128,6 +122,30 @@ func (h *Home) View(ctx Context) string {
 		b.WriteString(h.diagnostics(ctx))
 	}
 	return b.String()
+}
+
+// intro is the big ATLAS logo with the welcome beside it. Where there is
+// no room beside it, the logo goes above on tall terminals and is left out
+// on small ones.
+func (h *Home) intro(ctx Context, w int) string {
+	t := ctx.Theme
+	greeting := "Welcome to ATLAS"
+	if ctx.Data.Summary != nil {
+		greeting = "Welcome back"
+	}
+	const about = "Keep your software tidy, up to date and understood, in plain language. Nothing happens without your say-so."
+	text := func(width int) string {
+		return t.Title.Render(greeting) + "\n" + t.Muted.Render(components.Wrap(about, width))
+	}
+	logoW := components.BigLogoWidth
+	switch {
+	case w >= logoW+4+40:
+		return lipgloss.JoinHorizontal(lipgloss.Top, components.BigLogo(t), "    ", text(w-logoW-4))
+	case w >= logoW && ctx.Layout.Height >= 30:
+		return components.BigLogo(t) + "\n\n" + text(w)
+	default:
+		return text(w)
+	}
 }
 
 // actions is the "What would you like to do?" block.
