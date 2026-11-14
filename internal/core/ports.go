@@ -423,9 +423,9 @@ type UpdateService interface {
 	Plan(updates []Update) []UpdateStep
 	// NewJob prepares a terminal job for the steps. It runs nothing yet.
 	NewJob(steps []UpdateStep) TerminalJob
-	// RecordResults records the outcome in Activity History and removes
-	// applied updates from the saved list.
-	RecordResults(ctx context.Context, results []StepResult) error
+	// RecordResults checks installed versions again, drops an update from
+	// the saved list only when it is confirmed, and records the outcome.
+	RecordResults(ctx context.Context, results []StepResult) (RecordOutcome, error)
 }
 
 // Severity ranks a finding.
@@ -592,9 +592,10 @@ type CleanupService interface {
 	// the reason. It runs nothing.
 	PlanRemoval(ctx context.Context, items []SoftwareItem) ([]UpdateStep, error)
 	NewJob(steps []UpdateStep) TerminalJob
-	// RecordResults records the outcome and drops removed software from
-	// the saved list.
-	RecordResults(ctx context.Context, results []StepResult) error
+	// RecordResults checks the computer again, drops software from the
+	// saved list only when its removal is confirmed, and records the outcome
+	// and what was verified.
+	RecordResults(ctx context.Context, results []StepResult) (RecordOutcome, error)
 }
 
 // ActionInstall installs new software (a step action).
@@ -711,14 +712,37 @@ func CancelledByUser(code int) bool {
 	return false
 }
 
+// AIProvider says where explanations come from, for the preview and
+// Activity History.
+type AIProvider struct {
+	// Name is how the AI is called in sentences: "Claude" or "Ollama".
+	Name string
+	// Service names who runs it: "Anthropic" or "Ollama on this computer".
+	Service string
+	// Host is where the question is sent, e.g. "api.anthropic.com" or
+	// "localhost:11434".
+	Host string
+	// Local is true when the question never leaves this computer.
+	Local bool
+	// Billing says in plain language who pays and how much at most.
+	Billing string
+	// MaxOutputTokens caps each answer's length (and its cost).
+	MaxOutputTokens int
+}
+
 // Explainer asks an AI model for a plain-language explanation of one thing
 // ATLAS shows. Optional and off by default: nothing is sent until the user
-// has seen exactly what will be sent and confirmed.
+// has seen exactly what will be sent and confirmed. It is advisory only: an
+// explainer never runs commands or changes anything.
 type Explainer interface {
 	// Model is the model that is asked.
 	Model() string
 	// Instructions are the fixed instructions sent with every question.
 	Instructions() string
+	// Provider says where questions go and who pays.
+	Provider() AIProvider
+	// Ready is false when it can't be used yet; the reason says what to do.
+	Ready() (ok bool, reason string)
 	// Explain sends question and returns the answer. Errors are
 	// *SourceError with a plain-language Message.
 	Explain(ctx context.Context, question string) (Explanation, error)
@@ -731,6 +755,9 @@ type Explanation struct {
 	// when the service passed the question to a fallback model.
 	Model                     string
 	InputTokens, OutputTokens int64
+	// Truncated is true when the answer reached the output limit and was
+	// cut short.
+	Truncated bool
 }
 
 // ActivityRecorder adds an entry to Activity History.
@@ -740,12 +767,77 @@ type ActivityRecorder interface {
 
 // ExplainService asks the AI and records every question in Activity History.
 type ExplainService interface {
-	// Model and Instructions are shown in the preview (Advanced mode).
+	// Model, Instructions and Provider are shown in the preview.
 	Model() string
 	Instructions() string
-	// Ready is false when no credentials were found; Reason says what to do.
+	Provider() AIProvider
+	// Ready is false when it can't be used yet; Reason says what to do.
 	Ready() (ok bool, reason string)
+	// Prepare reduces a question to what needs sending: it removes the
+	// user's name, home folder and computer name and caps its length. The
+	// preview shows the prepared text, and that is what Explain sends.
+	Prepare(question string) string
 	// Explain sends question exactly as previewed. subject names it in
 	// Activity History.
 	Explain(ctx context.Context, subject, question string) (Explanation, error)
+}
+
+// Snapshot is what each software source reports right now, read without
+// saving anything: each source's result and its own, unmerged items.
+type Snapshot struct {
+	Sources  []SourceResult
+	BySource map[string][]SoftwareItem
+}
+
+// Result returns the named source's outcome.
+func (s Snapshot) Result(source string) (SourceResult, bool) {
+	for _, r := range s.Sources {
+		if r.Source == source {
+			return r, true
+		}
+	}
+	return SourceResult{}, false
+}
+
+// Verifier reads a fresh Snapshot, to check what an operation really changed.
+type Verifier interface {
+	Snapshot(ctx context.Context) Snapshot
+}
+
+// VerifyState is the outcome of checking one change on the computer.
+type VerifyState string
+
+const (
+	// VerifyConfirmed: the change is visible (gone, or the new version).
+	VerifyConfirmed VerifyState = "confirmed"
+	// VerifyNotDone: the old state is still there.
+	VerifyNotDone VerifyState = "not-done"
+	// VerifyUnknown: it couldn't be checked; saved records are kept.
+	VerifyUnknown VerifyState = "unknown"
+)
+
+// Verification is what checking one removed or updated item found.
+type Verification struct {
+	Name, Source string
+	State        VerifyState
+	// Detail says what was found, in plain language.
+	Detail string
+	// Version is the version installed now (updates).
+	Version string
+}
+
+// RecordOutcome is what RecordResults found when it checked the computer.
+type RecordOutcome struct {
+	Verifications []Verification
+}
+
+// Count returns how many verifications ended in state.
+func (o RecordOutcome) Count(state VerifyState) int {
+	n := 0
+	for _, v := range o.Verifications {
+		if v.State == state {
+			n++
+		}
+	}
+	return n
 }

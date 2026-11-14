@@ -198,6 +198,14 @@ func NewDnfRemover(elevated bool) Remover {
 		rollback: func(ids []string) string { return "To get it back: sudo dnf install " + strings.Join(ids, " ") }}
 }
 
+// NewZypperRemover removes with "zypper remove" (openSUSE, SLES), which
+// lists everything it will remove and asks first. No --clean-deps: it only
+// removes what was chosen and what zypper says must go with it.
+func NewZypperRemover(elevated bool) Remover {
+	return linuxRemover{id: "zypper", label: "openSUSE/SUSE packages (Zypper)", program: "zypper", args: []string{"remove"}, privileged: true, elevated: elevated,
+		rollback: func(ids []string) string { return "To get it back: sudo zypper install " + strings.Join(ids, " ") }}
+}
+
 // NewSnapRemover removes with "snap remove", which keeps a snapshot of the
 // app's data for 31 days.
 func NewSnapRemover(elevated bool) Remover {

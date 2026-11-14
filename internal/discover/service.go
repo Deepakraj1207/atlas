@@ -26,6 +26,10 @@ type Config struct {
 	Run inventory.Runner
 	// Windows overrides runtime.GOOS (tests).
 	Windows *bool
+	// RPMManager is the distribution's own tool for RPM packages ("dnf",
+	// "zypper") or "" when ATLAS won't change them. Only "dnf" installs are
+	// in the catalogue, so openSUSE gets no RPM installs rather than wrong ones.
+	RPMManager string
 }
 
 // Service implements core.DiscoverService.
@@ -81,7 +85,11 @@ func (s *Service) Discover(ctx context.Context) (core.Discovery, error) {
 			return core.Discovery{}, err
 		}
 		for _, src := range sum.Sources {
-			if m, ok := sourceToManager[src.Source]; ok && src.Status != core.SourceUnavailable {
+			m, ok := sourceToManager[src.Source]
+			if src.Source == inventory.SourceRPM {
+				m, ok = s.cfg.RPMManager, s.cfg.RPMManager != ""
+			}
+			if ok && src.Status != core.SourceUnavailable {
 				here.Managers[m] = true
 			}
 		}

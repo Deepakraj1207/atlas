@@ -5,15 +5,22 @@ import (
 	"strings"
 
 	"github.com/deepakraj1207/atlas/internal/core"
+	"github.com/deepakraj1207/atlas/internal/tui/nav"
 )
 
-// QuickAction is one of the Home screen buttons. Navigate buttons just open
-// a section; they change nothing, so they need no preview.
+// QuickAction is one entry of the Dashboard's "What would you like to do?"
+// list. Plan actions open a preview first; the others open a section.
 type QuickAction struct {
-	Label    string
-	Plan     core.ActionPlan
-	Confirm  any
+	Label string
+	// Desc is a few words on what it does, shown beside the label.
+	Desc    string
+	Plan    core.ActionPlan
+	Confirm any
+	// Navigate opens Section instead of previewing a plan.
 	Navigate bool
+	Section  nav.Section
+	// Search opens My Software with the search box active.
+	Search bool
 }
 
 // ScanPlan describes "Scan My System" for the current state.
@@ -224,13 +231,17 @@ func ClearPlan(ctx Context) core.ActionPlan {
 	return p
 }
 
-// quickActions are the Home buttons. Find New Tools opens Discover Apps.
+// quickActions are the Dashboard's actions. The first three preview a
+// read-only task; the rest open the section that does the job.
 func quickActions(ctx Context) []QuickAction {
 	return []QuickAction{
-		{Label: "Scan My System", Plan: ScanPlan(ctx), Confirm: StartScanMsg{}},
-		{Label: "Check for Updates", Plan: CheckPlan(ctx), Confirm: StartCheckMsg{}},
-		{Label: "Analyze My Software", Plan: AnalyzePlan(ctx), Confirm: StartAnalysisMsg{}},
-		{Label: "Find New Tools", Navigate: true},
+		{Label: "Scan my system", Desc: "Find what's installed. Only reads", Plan: ScanPlan(ctx), Confirm: StartScanMsg{}},
+		{Label: "Check for updates", Desc: "Newer versions from your package managers", Plan: CheckPlan(ctx), Confirm: StartCheckMsg{}},
+		{Label: "Analyze installed software", Desc: "Support status, duplicates, dependencies", Plan: AnalyzePlan(ctx), Confirm: StartAnalysisMsg{}},
+		{Label: "Find unused applications", Desc: "Not opened in a year · Smart Analysis", Navigate: true, Section: nav.SmartAnalysis},
+		{Label: "Clean unnecessary files", Desc: "Caches, old versions, leftovers · Cleanup", Navigate: true, Section: nav.Cleanup},
+		{Label: "Discover useful applications", Desc: "Free tools that fit what you use", Navigate: true, Section: nav.DiscoverApps},
+		{Label: "Search software", Desc: "Find anything installed · /", Search: true},
 	}
 }
 

@@ -282,3 +282,124 @@ Short, dated records of choices that shape the code.
   (or an `ant auth login` profile); ATLAS never stores it. Answers are labelled as written
   by AI, `x` stops a question, and every question (answered, failed or stopped) is
   recorded in Activity History with what was sent.
+
+## 2026-11-14 — Engineering audit remediation
+
+- **D77. Removal fails closed when dependency records can't be verified.** `PlanRemoval`
+  used to discard each dependency source's status, so a source that failed or timed out
+  looked like one that keeps no records, and an ordinary app was allowed through. Now every
+  dependency source declares the inventory source it covers (`analysis.DependencySource`),
+  its outcome is kept, and an item is refused when any source it came from that keeps
+  records was unavailable, failed, timed out, was stopped, came back empty, or doesn't list
+  the package. Every such source must agree nothing else needs the item. Items from sources
+  that keep no records (Windows' installed-programs list, winget, Snap, Flatpak) keep the
+  existing rule: apps allowed, runtimes and components refused. The same work fixed Scoop
+  matching: its graph uses bare app names while inventory uses `bucket/app`, so Scoop
+  dependents were never seen (`analysis.GraphKey`).
+- **D78. RPM packages are changed with the distribution's own tool.** RPM used to be
+  mapped straight to DNF for removals, updates, installs and clean-up, so openSUSE got
+  `sudo dnf remove …`. `platform.RouteRPM` reads `/etc/os-release` (`ID`, `ID_LIKE`):
+  Fedora, RHEL and relatives (Rocky, Alma, CentOS Stream, Amazon Linux) use DNF;
+  openSUSE and SLES use Zypper, even when DNF is also installed. It goes by the
+  distribution, not by whichever tool is on PATH. It refuses, with the reason shown,
+  on yum-only systems, when the native tool is missing, on non-RPM distributions (an
+  `rpm` binary on Ubuntu is never used to change packages) and on unrecognised
+  systems. Zypper support: removal (`zypper remove`), update checks
+  (`zypper --non-interactive --no-refresh list-updates`, read by column name) and
+  updates (`zypper update`), never with `-y`/`--non-interactive`/`--clean-deps` on a
+  changing command. DNF's protected list and tidiers apply only where DNF is the tool.
+  Discover offers RPM installs only through DNF, since the catalogue has no Zypper
+  names; openSUSE falls back to Flatpak rather than guessing names. The self-test
+  report shows the detected distribution and route.
+- **D79. Removals and updates are verified on the computer before they count.**
+  `RecordResults` used to trust exit codes: a removal deleted the saved record and an
+  update left the updates list as soon as the package manager exited 0. Now inventory
+  takes a read-only snapshot of every source afterwards (`inventory.Service.Snapshot`,
+  unmerged, not saved). A removal is confirmed only when no source lists the item any
+  more (by package ID or name) and every source it came from was read. An update is
+  confirmed when its manager's source shows the offered version, or a version different
+  from before. Otherwise the saved record or update stays, and the activity becomes
+  "…, but not all confirmed" with what was found ("Still installed: listed by …",
+  "Not updated: still version …", "Couldn't check: … Their records are kept"). Without a
+  verifier nothing is confirmed. The status line reports what was confirmed, not what
+  exited 0. winget's "< 3.10.3" ("older than") is now kept by the scanner, because
+  stripping it would have let a failed update look like it reached 3.10.3. Discover
+  installs are not verified yet; the status already tells the user to scan again.
+
+- **D80. Merging keeps two entries whenever it can't be sure they're one install.** A wrong
+  merge hides an install, and removal then follows the surviving entry's source. Rules
+  now: (1) only sources that can report the same copy merge: the Windows installer
+  sources (Windows entries, winget, Chocolatey) with each other, and any source with
+  itself. Scoop apps are portable copies and dpkg, rpm, Snap and Flatpak each install
+  their own copy, so they never merge across managers (this was already intended for
+  Scoop but the first pass ignored it). (2) Within one source, different package IDs or
+  different publishers (ignoring "Inc", "Corporation", punctuation…) are different
+  software. Publishers aren't compared across sources: Chocolatey reports authors.
+  (3) A weak entry, with a name winget cut short or no version, joins only when exactly
+  one entry fits it, whatever the order. The Chocolatey/winget-to-Windows join and
+  winget's read of a Windows entry also need a one-to-one fit, so a record matching
+  both the x64 and x86 editions stays on its own. (4) When a weak entry from a
+  higher-priority source joins, it stays the primary record. The cost is an occasional
+  duplicate line, which is visible and harmless; a false merge isn't.
+
+- **D81. AI explanations: local option, explicit billing, minimised data, a cost cap.**
+  Still off by default, previewed every time (even with read-only previews turned
+  off), recorded in Activity History, and advisory only: the explainer port has no way
+  to run anything. Changes:
+  (1) **Ollama** as a second provider (`ai.provider: ollama`, `ai.model`,
+  `ai.ollama_url`), through Ollama's documented `/api/chat` HTTP API with the standard
+  library: no new dependency. It connects straight to the address shown (no proxy, no
+  redirects). A loopback address is described as "doesn't leave your computer" and
+  free; any other host is named as such, never called local. Ollama is never picked
+  automatically and a bad address never falls back to Anthropic.
+  (2) **Billing** is spelled out in the preview's "What will change" and in Settings:
+  billed to the user's Anthropic API account by the token, not covered by a Claude.ai
+  subscription, with the worst case for one question at the default model's published
+  price (US$4/US$20 per million tokens, Nov 2026: at most about US$0.09 with the default
+  limit). No price is invented for other models.
+  (3) **Minimised data.** `ExplainService.Prepare` replaces the home folder with `~`
+  and the user and computer names (whole words, 3+ characters, not generic names like
+  root) with `[user]` / `[computer]`. It caps each line at 300 characters and the
+  question at 2,000. The preview shows the prepared text and that exact text is sent.
+  (4) **`ai.max_output_tokens`** (default 4096, allowed 1024–16000) replaces the
+  hard-coded 16000. The floor exists because Claude's reasoning counts towards the
+  limit and can't be turned off on the default model; the ceiling keeps a request
+  without streaming under the SDK's timeout. An answer that hits the limit is kept and
+  marked "cut short"; one with no text says how to raise the limit.
+
+## 2026-11-14 — Interface redesign
+
+- **D82. A quieter, modern terminal look, with the same features and keys.** Inspired by
+  current AI command-line tools (no copied branding or text). Same Bubble Tea, Bubbles and
+  Lip Gloss; no new dependency.
+  - **Look.** Dark-first palette with one accent (periwinkle) and status colours used only
+    for status. Text weight and dim/bright carry the hierarchy, and boxes are kept for the
+    few places that need them. Only symbols already confirmed to render in Windows Terminal
+    and conhost are used (`◆ › ● ○ • │ ─`), no emoji, because those are double width.
+  - **Shell.** A one-line header (`◆ ATLAS`, version, a status dot with plain words, the
+    computer, the mode) over a thin rule. A borderless sidebar with `›` on the current
+    section. A footer without a box: `● message` with real figures on the right (apps,
+    updates, memory in use), then key hints.
+  - **Focus.** Esc is "back": it closes what a screen has open (a search, the details
+    view), then moves focus to the section list, where ↑ ↓ move and Enter, → or Esc
+    return. Digits, Tab and `/` work everywhere, as before. Focus starts on the screen,
+    so every existing key keeps its meaning. A screen keeps Esc for itself only while
+    `HandlesBack` says it has something open.
+  - **Dashboard** (Home, renamed in the interface only). A "What would you like to do?"
+    list (scan, check for updates, analyze, find unused apps, clean up, discover,
+    search); the first three still preview first. The computer at a glance comes from
+    the new read-only `platform.ReadSystemInfo`: Windows name from the registry (build
+    22000 and later is Windows 11), memory from `GlobalMemoryStatusEx`, disk from
+    `GetDiskFreeSpaceEx`, and on Linux `/etc/os-release`, `/proc/meminfo` and statfs.
+    Figures are real or shown as "—" (not known yet), never 0 by default. The health
+    words ("Not scanned yet", "Last scan had gaps", "N need attention", "System ready")
+    only state what the saved data shows. On wide terminals the actions and the glance
+    sit side by side, so the important part fits Windows Terminal's default 120×30.
+  - Memory use is read again every 15 seconds; nothing else polls.
+  - **Big logo.** ATLAS in its own three-row block letters, drawn only with `█ ▀ ▄`
+    (single width in every Windows console font, legacy conhost included), with a
+    gradient from the accent colour to the info colour. It sits beside the welcome on wide
+    terminals, so it costs no rows at 120×30. It goes above the welcome on narrow but tall
+    terminals and is left out on small ones. (A six-row version for large windows was
+    tried and removed: the owner preferred the three-row logo at every size.)
+

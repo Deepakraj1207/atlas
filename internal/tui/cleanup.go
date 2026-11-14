@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -28,6 +29,7 @@ type cleanupFinishedMsg struct {
 
 type cleanupRecordedMsg struct {
 	results []core.StepResult
+	outcome core.RecordOutcome
 	err     error
 }
 
@@ -70,9 +72,11 @@ func planCleanup(cln core.CleanupService, req screens.RequestCleanupMsg) tea.Cmd
 
 func recordCleanup(cln core.CleanupService, results []core.StepResult) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		// Long enough to re-read every source (winget alone can take 10 s).
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
-		return cleanupRecordedMsg{results: results, err: cln.RecordResults(ctx, results)}
+		out, err := cln.RecordResults(ctx, results)
+		return cleanupRecordedMsg{results: results, outcome: out, err: err}
 	}
 }
 
@@ -115,7 +119,7 @@ func tidyResultStatus(r core.TidyReport) components.Status {
 	return components.Status{Text: text + ". Nothing was changed; review them in Cleanup (6).", Kind: components.StatusSuccess}
 }
 
-func cleanupResultStatus(results []core.StepResult, recordErr error) components.Status {
+func cleanupResultStatus(results []core.StepResult, out core.RecordOutcome, recordErr error) components.Status {
 	count := map[core.StepStatus]int{}
 	var freed int64
 	for _, r := range results {
@@ -139,6 +143,15 @@ func cleanupResultStatus(results []core.StepResult, recordErr error) components.
 		st = components.Status{Text: "Cleanup didn't work. The package manager's message is in Activity History (8).", Kind: components.StatusError}
 	default:
 		st = components.Status{Text: "Nothing was removed.", Kind: components.StatusWarning}
+	}
+	if n := len(out.Verifications); n > 0 {
+		if missed := n - out.Count(core.VerifyConfirmed); missed > 0 {
+			st = components.Status{Kind: components.StatusWarning, Text: fmt.Sprintf(
+				"Removal ran, but %s couldn't be confirmed (still installed, or ATLAS couldn't check), so the record is kept. See Activity History (8).",
+				components.Plural(missed, "item"))}
+		} else if st.Kind == components.StatusSuccess {
+			st.Text = strings.Replace(st.Text, "Cleanup finished", "Cleanup finished and checked", 1)
+		}
 	}
 	if recordErr != nil {
 		st = components.Status{Text: st.Text + " (The result couldn't be recorded: " + recordErr.Error() + ")", Kind: components.StatusError}

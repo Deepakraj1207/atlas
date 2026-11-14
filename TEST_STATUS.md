@@ -95,6 +95,136 @@ routes 7-Zip to `choco uninstall` and blocks .NET and Visual C++ runtimes; Disco
 recognises 7-Zip, Firefox, Git, GitHub CLI, Node.js and jq. The only failures are
 winget, for the reason above (16 passed, 2 failed: the scan and the update check).
 
+## Engineering audit remediation (2026-11-14)
+
+**P0 — cleanup dependency safety.** Regression tests written first and run against the old
+code, where every case below allowed the removal (the step had a remove command):
+
+| Test | Proves |
+|------|--------|
+| TestGateFailsClosedWhenDependenciesCantBeVerified | an app from dpkg is refused when its dependency source failed, timed out, was unavailable, came back empty, or didn't list the package; no command is planned |
+| TestGateStillAllowsAppsWhenEvidenceIsComplete | complete records still allow an app nothing needs, still block one something needs, a failure in an unrelated source doesn't block, winget apps unchanged |
+| TestGateMatchesScoopAppsByBareName | Scoop dependents are found (`main/7zip` needed by innounp), unneeded apps allowed, and removing both together allowed |
+| TestUnverifiedLabelWithoutName | messages never crash on a source without a label |
+| TestGraphKeyAndCoverage (analysis) | graph names per source; every real dependency source declares what it covers |
+
+Verification: gofmt clean; `go vet ./...` (Linux and `GOOS=windows`); `go test ./...` all
+pass; `go test -race` on cleanup, analysis, inventory pass; Windows and Linux builds pass.
+
+**P0 — Linux package-manager routing.**
+
+| Test | Proves |
+|------|--------|
+| TestParseOSRelease, TestRouteRPMPerDistribution (platform) | real os-release files: Fedora 41, RHEL 9, Rocky 9, Amazon Linux 2023 → dnf; openSUSE Tumbleweed, Leap 15.6, SLES 15 → zypper (also with dnf installed); CentOS 7 (yum), missing native tool, Ubuntu/Arch with rpm or dnf present, unknown and missing os-release → refused with a reason |
+| TestRPMRemovalFollowsTheDistribution (cleanup) | openSUSE plans `sudo zypper remove`; Fedora `sudo dnf remove`; refused and unconfigured routes block with the reason and no command |
+| TestDnfProtectedListOnlyAppliesToDnf (cleanup) | DNF's protected list isn't applied to Zypper systems |
+| TestNoAssumeYesPurgeOrDataFlags (cleanup, extended) | Zypper removal has no `-y`, `--non-interactive`, `-n`, `--clean-deps` |
+| TestZypper, TestRPMRefusedSaysWhy (updates) | zypper table parsed by column name (also reordered), "No updates found", unknown output is an error, `sudo zypper update` without auto-confirm flags, matched to RPM inventory; refused RPM checks say why |
+| TestManagersFollowTheDistribution (updates) | Fedora: apt dnf snap flatpak; openSUSE: apt zypper snap flatpak; CentOS 7: a "not checked" RPM entry; Ubuntu: no RPM manager |
+| TestRPMInstallsFollowTheDistribution (discover) | an RPM scan offers DNF installs only where DNF is the distribution's tool |
+
+Real detection here (Ubuntu 24.04 with `rpm` installed): "RPM packages changed with: not
+changed: Ubuntu 24.04.5 LTS doesn't manage its software with RPM". The `linux` workflow
+runs the self-test inside real fedora:41, rockylinux:9, opensuse/tumbleweed,
+opensuse/leap:15.6, centos:7 and ubuntu:24.04 containers and checks each route.
+
+Verification: gofmt clean; `go vet ./...` (Linux and `GOOS=windows`); `go test ./...` all
+pass; `go test -race` on cleanup, updates, discover, platform pass; Windows amd64, Linux
+amd64 and arm64 builds pass.
+
+**P0 — post-operation verification.** Tests show that before this change an exit code of 0
+deleted the saved record or the pending update even when the software was still there.
+
+| Test | Proves |
+|------|--------|
+| TestVerifyRemoved (inventory) | gone everywhere → confirmed; still listed by winget (package ID) or another copy by name → not done; one of its sources failed, timed out, unavailable or not checked → unknown |
+| TestVerifyUpdated (inventory) | new version → confirmed; same version (also written differently) → not done; a different version → confirmed; no longer listed or unreadable → unknown; with no previous version, only the offered version confirms and "< 3.10.3" doesn't |
+| TestWingetKeepsOlderThanMarker (inventory) | the scanner keeps "< 3.10.3"; merging still pairs it with the Windows entry |
+| TestSnapshotReadsEverySourceWithoutSaving (inventory) | every source read, failed ones contribute nothing, nothing saved as a scan |
+| TestRemovalIsVerifiedBeforeTheRecordGoes (cleanup) | exit 0 but still installed → record kept, activity "Removed 1 item, but not all confirmed" with "Still installed: listed by …"; source unreadable → kept, "Couldn't check … records are kept"; no verifier → kept; confirmed → deleted, success |
+| TestUpdatesAreVerifiedBeforeLeavingTheList (updates) | still the old version → stays in Updates, partial, "still version 1"; unreadable or no verifier → stays; confirmed → removed, success |
+| TestResultStatusReflectsVerification (tui) | status lines say how many were confirmed instead of reporting success from exit codes |
+| TestUpdateAllPreviewsThenRunsAndRecords, TestRemoveFromMySoftwareNeedsDeliberateConfirmation (tui, updated) | end to end: "Installed and confirmed 2 updates", "Cleanup finished and checked" |
+
+Verification: gofmt clean; `go vet ./...` (Linux and `GOOS=windows`); `go test ./...` all
+pass; `go test -race` on tui, cleanup, updates, inventory pass; Windows and Linux builds pass.
+CI on a9604ab: `windows` (run 43570476419) and `linux` (run 43570476398) passed.
+
+**P1 — deduplication robustness.** The scenarios from the audit were written as tests first.
+Against the old `merge.go`, 9 cases joined software that may be different installs:
+
+| Test | Proves |
+|------|--------|
+| TestMergeDoesNotJoinDifferentSoftware | kept apart: same name with different publishers; editions (Community/Professional, 32/64-bit Python); a Scoop portable copy beside an installed one at the same version*; different versions; localized Office installs; two winget package IDs with the same name*; a dpkg and a Snap Firefox*; an rpm and a Flatpak GIMP*; an unversioned Scoop app beside two installed versions*; a Chocolatey record fitting both Python editions*; a truncated winget name fitting both the x64 and x86 Visual C++ entries, in either order* |
+| TestMergeStillJoinsTheSameInstall | still joined: winget's read of a Windows entry; a truncated winget name with one candidate; the Chocolatey record of the same install; localized names spelled the same; case and spacing differences; a publisher written two ways ("inc." vs "Inc"); the same Windows entry seen twice |
+| TestWeakMatchKeepsTheHigherPrioritySource | a Windows entry without a version stays the primary record (its uninstaller is still used) and is filled in from winget |
+| TestNormPublisher | publisher suffixes (Inc, Corporation, Ltd…) and punctuation are ignored, nothing else |
+| TestMerge (updated) | its old expectation was the bug: an unversioned Scoop "Python" was joined to whichever of two Windows Pythons came first; now it stays separate |
+
+\* failed on the old code (also the publisher case). Existing merge tests (7-Zip/AWS CLI with
+Chocolatey, PyCharm/ONLYOFFICE/Safe Exam Browser read by winget, Edge twice, Tool at three
+versions, `< 3.10.3`) pass unchanged.
+
+Verification: gofmt clean; `go vet ./...` (Linux and `GOOS=windows`); `go test ./...` all
+pass; `go test -race` on inventory, cleanup, updates pass; Windows amd64 and Linux amd64
+builds pass.
+CI on 927a99e: `windows` (run 43570907369) and `linux` (run 43570907907) passed.
+
+**P1 — AI privacy and local inference.** Gaps confirmed in the old code: the answer limit
+was hard-coded at 16,000 tokens; an answer cut off at that limit was shown as complete;
+a user or computer name inside a software name was sent as is; billing was one clause
+("may be charged a small amount"); only Anthropic was possible.
+
+| Test | Proves |
+|------|--------|
+| TestPrepareRemovesIdentifyingDetails (ai) | home folder (either slash, any case) becomes `~`, user name `[user]`, computer name `[computer]`, as whole words only ("Priya.Ramanathan Ltd" kept); generic names (root, short names) untouched; idempotent; long lines and questions shortened visibly to 300 / 2,000 characters |
+| TestExplainSendsWhatThePreviewShows (ai, extended) | default `max_tokens` is 4096, not 16000 |
+| TestAnswerLimitIsConfigurable (ai) | `WithMaxOutputTokens(2048)` is sent; a `max_tokens` stop keeps the text and marks it cut short; with no text, the error names `ai.max_output_tokens` |
+| TestClaudeBillingIsExplicit (ai) | billed to the Anthropic API account by the token, not covered by a Claude.ai subscription, the cap, and at most about US$0.09 at claude-opus-5-5's price; no price invented for other models |
+| TestOllamaSendsWhatThePreviewShows (ai) | `POST /api/chat` with the model, the same instructions and the question, `stream: false`, `num_predict` = the limit, and nothing else; `<think>` blocks removed from the answer |
+| TestOllamaProblemsArePlainLanguage (ai) | model not pulled → "Run "ollama pull llama3.2" first"; server error; not Ollama; limit reached with and without text; not running → "Is Ollama running?" |
+| TestOllamaDoesNotFollowRedirects (ai) | the question never goes to a host other than the one shown |
+| TestOllamaProviderAndReady (ai) | localhost, 127.0.0.1 and ::1 are local and free; a LAN host is named and never called local or free; no model → not ready, says to set `ai.model`; only http(s) addresses |
+| TestServiceNamesTheProviderAndCutAnswers, TestServiceRecordsEveryQuestion (ai) | Activity History names the provider and host and the answer limit, and notes a cut-short answer; a local model gets 5 minutes |
+| TestAIProviderAndLimits (config) | defaults; Ollama settings load and survive saving; unknown provider, wrong model format per provider, limits below 1024 or above 16000, non-http and credential-bearing Ollama addresses → warning and safe value |
+| TestNewExplainerFollowsSettings (app) | settings pick the provider and limit; an unusable Ollama address is never ready and never falls back to Anthropic |
+| TestAIExplanationPreviewsExactlyWhatIsSent (tui, extended) | the preview shows the prepared text, the destination, "Cost: … billed …", "user name and computer name are replaced", "ATLAS never runs anything it suggests"; the prepared text is what's sent |
+| TestLocalAIPreviewSaysNothingLeavesTheComputer (tui) | with Ollama: "It doesn't leave your computer", "Cost: Free", no mention of Anthropic, answer labelled "Ollama's explanation" |
+| TestAIExplanationIsOffByDefault, …NeedsAKey, …ErrorIsExplained, TestSettingsTurnsAIOnAndOff (tui) | unchanged and passing: off by default, nothing sent without the preview and Enter |
+
+Not verified here: a real Ollama server and model (none can be installed or downloaded in
+this environment). The Ollama adapter is tested over real HTTP against a server that
+answers in the documented `/api/chat` format.
+
+Verification: gofmt clean; `go vet ./...` (Linux and `GOOS=windows`); `go test ./...` all
+pass; `go test -race` on ai, tui, config pass; Windows amd64, Linux amd64 and arm64 builds
+pass.
+
+## Interface redesign (2026-11-14)
+
+| Test | Proves |
+|------|--------|
+| TestEscMovesFocusToTheSectionsAndBack (tui) | the screen has focus at start (↓ moves the Dashboard list); Esc moves focus to the sections, where ↓ ↓ ↑ moves and keys don't reach the screen; Enter opens; a digit jumps and returns focus; Esc again returns |
+| TestNarrowTerminalsMoveThroughTabs (tui) | with the tab bar, ← → move between sections |
+| TestEscClosesTheScreensOwnThingsFirst (tui) | `/` from the Dashboard opens My Software's search; Esc clears the search, then closes the details view, and only then moves to the sections |
+| TestSearchActionOpensMySoftwareSearch, TestDashboardActionsOpenTheirSections (tui) | each Dashboard action opens its section (Smart Analysis, Cleanup, Discover Apps, the search) without a preview; scan, check and analyze still preview first |
+| TestHeaderAndStatusBarShowRealFacts (tui) | header shows `◆ ATLAS`, `v0.1.0`, "Not scanned yet", the computer and the mode; footer shows memory in use; no app or update counts before a scan or check; after a scan "● System ready" and "2 apps" |
+| TestUnknownSystemFactsAreLeftOut, TestDashboardFiguresAreRealOrMarkedUnknown (tui) | unknown memory and disk aren't shown; figures are "—" before a scan, real counts after; disk shown as "200 GB free of 500 GB on C:" |
+| TestViewNeverExceedsTerminalWidth (tui) | no line wider than the terminal at 8 sizes from 40×10 to 200×50, in every section, with and without section focus |
+| TestReadSystemInfoIsHonest, TestGBAndMemUsed, TestParseMeminfo (platform); TestWindowsName (platform, Windows only) | real system facts are consistent (available ≤ total); Windows 11 is recognised by build number; formatting |
+| TestStatusMessageWinsOverFigures (components) | found by Windows CI: the right-hand figures cut off "See Activity History (8)." at the end of a status message; now the figures give way whenever the message wouldn't fit in full (fails on the first version, passes now) |
+| TestBigLogoWhereThereIsRoom (tui), TestBigLogoShape (components) | the block-letter logo sits beside the welcome at 120×30, above it at 60×40, is left out at 60×20, and stays the same on large windows (160×45); every row is exactly as wide as the logo, uses only `█ ▀ ▄`, in both themes |
+| TestDotsDifferByTone (theme) | each status tone has its own colour, and "unknown" (○) differs from "good" (●) even without colour |
+
+Updated for the new interface: help context "Dashboard:", narrow tab "1 Dashboard",
+Dashboard content checks read the whole Dashboard (it scrolls at 120×30), the
+"Find New Tools" test became TestDashboardActionsOpenTheirSections. The conharness script
+`ui-basics.txt` waits for "1 Dashboard".
+
+Real binary in a pseudo-terminal (120×30, true colour): Dashboard and header shown,
+Esc then ↓ moves to My Software with the section hints, Enter and `/` open the search,
+q exits with 0.
+
 ## Real Windows 11 PC (DESKTOP-41IVS1K, Windows 11 Home build 26300, not administrator)
 
 Reached through Desktop Commander. ATLAS was built on the PC with a portable Go in

@@ -13,9 +13,10 @@ import (
 	"github.com/deepakraj1207/atlas/internal/tui/theme"
 )
 
-// answerView is Claude's answer, shown in an overlay until closed.
+// answerView is the AI's answer, shown in an overlay until closed.
 type answerView struct {
 	subject string
+	name    string // who answered: "Claude" or "Ollama"
 	ex      core.Explanation
 	sent    int
 }
@@ -32,7 +33,7 @@ func (m Model) aiStatus() screens.AIStatus {
 		return screens.AIStatus{}
 	}
 	ready, reason := m.explain.Ready()
-	return screens.AIStatus{Available: true, Ready: ready, Reason: reason, Model: m.explain.Model(), Instructions: m.explain.Instructions()}
+	return screens.AIStatus{Available: true, Ready: ready, Reason: reason, Model: m.explain.Model(), Instructions: m.explain.Instructions(), Provider: m.explain.Provider()}
 }
 
 // requestExplain shows the preview, or says why nothing can be sent.
@@ -46,15 +47,17 @@ func (m Model) requestExplain(msg screens.RequestExplainMsg) (tea.Model, tea.Cmd
 	case m.explain == nil:
 		return warn("AI explanations aren't available in this session. Nothing was sent.")
 	case m.explaining != nil:
-		return warn("Already asking Claude. Wait for the answer, or press x to stop.")
+		return warn("Already asking " + m.explain.Provider().Name + ". Wait for the answer, or press x to stop.")
 	}
 	if ok, reason := m.explain.Ready(); !ok {
 		return warn(reason + ". Nothing was sent.")
 	}
-	plan := screens.ExplainPlan(m.ctx(), msg.Subject, msg.Question)
-	// Sending text off the computer is always previewed: the plan lists it
-	// under "What will change", so "preview read-only actions" can't skip it.
-	return m.Update(screens.ShowActionPreviewMsg{Plan: plan, Confirm: screens.StartExplainMsg(msg)})
+	// Minimise first, so the preview shows exactly what will be sent.
+	question := m.explain.Prepare(msg.Question)
+	plan := screens.ExplainPlan(m.ctx(), msg.Subject, question)
+	// Sending text to an AI is always previewed: the plan lists it under
+	// "What will change", so "preview read-only actions" can't skip it.
+	return m.Update(screens.ShowActionPreviewMsg{Plan: plan, Confirm: screens.StartExplainMsg{Subject: msg.Subject, Question: question}})
 }
 
 // startExplain sends the question the user just confirmed.
@@ -67,7 +70,7 @@ func (m Model) startExplain(msg screens.StartExplainMsg) (tea.Model, tea.Cmd) {
 		ex, err := svc.Explain(ctx, msg.Subject, msg.Question)
 		return explainDoneMsg{subject: msg.Subject, question: msg.Question, ex: ex, err: err}
 	}
-	return m, tea.Batch(m.setStatus(components.Status{Text: "Asking Claude about " + msg.Subject + "… Press x to stop."}), ask)
+	return m, tea.Batch(m.setStatus(components.Status{Text: "Asking " + svc.Provider().Name + " about " + msg.Subject + "… Press x to stop."}), ask)
 }
 
 func (m Model) explainDone(msg explainDoneMsg) (tea.Model, tea.Cmd) {
@@ -77,7 +80,7 @@ func (m Model) explainDone(msg explainDoneMsg) (tea.Model, tea.Cmd) {
 	}
 	reload := loadData(m.inv) // Activity History has a new entry
 	if msg.err != nil {
-		text := "Claude couldn't answer"
+		text := m.explain.Provider().Name + " couldn't answer"
 		var se *core.SourceError
 		if errors.As(msg.err, &se) {
 			text = se.Message
@@ -88,22 +91,27 @@ func (m Model) explainDone(msg explainDoneMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Batch(m.setStatus(components.Status{Text: text + ". See Activity History (8).", Kind: kind}), reload)
 	}
-	m.answer = &answerView{subject: msg.subject, ex: msg.ex, sent: len([]rune(msg.question))}
+	name := m.explain.Provider().Name
+	m.answer = &answerView{subject: msg.subject, name: name, ex: msg.ex, sent: len([]rune(msg.question))}
 	m.overlayScroll = 0
-	return m, tea.Batch(m.setStatus(components.Status{Text: "Claude answered. Esc to close.", Kind: components.StatusSuccess}), reload)
+	return m, tea.Batch(m.setStatus(components.Status{Text: name + " answered. Esc to close.", Kind: components.StatusSuccess}), reload)
 }
 
 // renderAnswer shows the answer, clearly labelled as written by AI.
 func renderAnswer(t theme.Theme, width int, a answerView, advanced bool) string {
 	w := max(width-2, 10)
 	var b strings.Builder
-	b.WriteString(t.Title.Render("Claude's explanation: " + a.subject))
+	b.WriteString(t.Title.Render(a.name + "'s explanation: " + a.subject))
 	b.WriteString("\n")
 	b.WriteString(t.Warning.Render(components.Wrap("Written by AI, not by ATLAS. It can be wrong: check anything important before acting on it.", w)))
 	b.WriteString("\n\n")
 	text := strings.ReplaceAll(a.ex.Text, "**", "")
 	b.WriteString(t.Body.Render(components.Wrap(text, w)))
 	b.WriteString("\n\n")
+	if a.ex.Truncated {
+		b.WriteString(t.Warning.Render(components.Wrap("The answer reached its length limit and was cut short. You can raise ai.max_output_tokens in the settings file.", w)))
+		b.WriteString("\n")
+	}
 	note := "The question and this answer are recorded in Activity History (8)."
 	if advanced {
 		note += " Model: " + a.ex.Model + "."

@@ -1,0 +1,58 @@
+name: linux
+
+# Tests on Linux, and checks package-manager routing inside real
+# distribution containers: each one's own /etc/os-release and tools decide
+# which tool ATLAS would use for RPM packages (read-only self-test).
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GOTOOLCHAIN: local
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go vet ./...
+      - run: go test -count=1 ./...
+      - run: go test -count=1 -race ./internal/tui/... ./internal/inventory/ ./internal/updates/ ./internal/analysis/ ./internal/cleanup/ ./internal/handover/ ./internal/discover/ ./internal/ai/
+
+  routing:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: fedora:41
+            want: "RPM packages changed with | dnf |"
+          - image: rockylinux:9
+            want: "RPM packages changed with | dnf |"
+          - image: opensuse/tumbleweed
+            want: "RPM packages changed with | zypper |"
+          - image: opensuse/leap:15.6
+            want: "RPM packages changed with | zypper |"
+          - image: centos:7
+            want: "uses yum"
+          - image: ubuntu:24.04
+            want: "doesn't manage its software with RPM"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: CGO_ENABLED=0 go build -o atlas ./cmd/atlas
+      - name: Routing in ${{ matrix.image }}
+        run: |
+          docker run --rm -v "$PWD/atlas:/atlas:ro" ${{ matrix.image }} /atlas -selftest > report.md || true
+          sed -n '1,20p' report.md
+          grep -F "${{ matrix.want }}" report.md

@@ -107,7 +107,10 @@ func key(s string) tea.KeyMsg {
 	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)}
 }
 
-func init() { statusClearAfter = 0 }
+func init() {
+	statusClearAfter = 0
+	systemRefreshEvery = 0 // the drain helper would wait for every refresh
+}
 
 // drain runs commands synchronously, feeding each message back in until
 // none remain, so persisted side effects are observable. Timer messages
@@ -135,6 +138,14 @@ func drain(t *testing.T, m Model, first tea.Cmd) Model {
 		queue = append(queue, c)
 	}
 	return m
+}
+
+// dashboardText is the Dashboard's whole content, including what a short
+// terminal would scroll to.
+func dashboardText(m Model) string {
+	ctx := m.ctx()
+	ctx.Layout.ContentHeight = 10000
+	return m.screens[nav.Home].View(ctx)
 }
 
 // press sends a key and drains the resulting commands.
@@ -205,14 +216,14 @@ func TestModeTogglePersistsToConfigFile(t *testing.T) {
 	if res.Err != nil || res.Config.UI.Mode != config.ModeAdvanced {
 		t.Errorf("mode not persisted: %+v err=%v", res.Config, res.Err)
 	}
-	if !strings.Contains(m.View(), "Diagnostics") {
+	if !strings.Contains(dashboardText(m), "Diagnostics") {
 		t.Error("Advanced mode should reveal diagnostics on Home")
 	}
 	m = press(t, m, "m")
 	if m.Config().UI.Mode != config.ModeSimple {
 		t.Error("second m should return to Simple")
 	}
-	if strings.Contains(m.View(), "Diagnostics") {
+	if strings.Contains(dashboardText(m), "Diagnostics") {
 		t.Error("Simple mode should hide diagnostics")
 	}
 }
@@ -272,7 +283,7 @@ func TestHelpOverlayOpensAndCloses(t *testing.T) {
 		t.Fatal("? should open help")
 	}
 	view := m.View()
-	if !strings.Contains(view, "Keyboard help") || !strings.Contains(view, "Home:") {
+	if !strings.Contains(view, "Keyboard help") || !strings.Contains(view, "Dashboard:") {
 		t.Error("help should be context sensitive and visible")
 	}
 	// Navigation keys are swallowed while help is open.
@@ -308,14 +319,18 @@ func TestQuickActionOpensPreviewAndChangesNothing(t *testing.T) {
 	}
 }
 
-func TestFindNewToolsOpensDiscoverWithoutPreview(t *testing.T) {
-	m, _ := newTestModel(t)
-	for i := 0; i < 3; i++ {
-		m = press(t, m, "right")
-	}
-	m = press(t, m, "enter")
-	if m.PreviewOpen() || m.Section() != nav.DiscoverApps {
-		t.Errorf("Find New Tools should just open Discover Apps (preview open: %v, section %v)", m.PreviewOpen(), m.Section())
+// The Dashboard's last four actions open the section that does the job,
+// without a preview: opening a screen changes nothing.
+func TestDashboardActionsOpenTheirSections(t *testing.T) {
+	for i, want := range map[int]nav.Section{3: nav.SmartAnalysis, 4: nav.Cleanup, 5: nav.DiscoverApps, 6: nav.MySoftware} {
+		m, _ := newTestModel(t)
+		for j := 0; j < i; j++ {
+			m = press(t, m, "down")
+		}
+		m = press(t, m, "enter")
+		if m.PreviewOpen() || m.Section() != want || m.NavFocused() {
+			t.Errorf("action %d: preview open %v, section %v, nav focused %v; want %v", i, m.PreviewOpen(), m.Section(), m.NavFocused(), want)
+		}
 	}
 }
 
@@ -351,7 +366,7 @@ func TestResizeChangesLayoutAndTooSmallMessage(t *testing.T) {
 	if m.Layout().Breakpoint != layout.Narrow || m.Layout().ShowSidebar {
 		t.Errorf("60 columns should be narrow without sidebar: %+v", m.Layout())
 	}
-	if !strings.Contains(m.View(), "1 Home") {
+	if !strings.Contains(m.View(), "1 Dashboard") {
 		t.Error("narrow layout should render the tab bar")
 	}
 	next, _ = m.Update(tea.WindowSizeMsg{Width: 30, Height: 8})

@@ -49,24 +49,66 @@ func versionsMatch(a, b core.SoftwareItem) bool {
 
 // Merge combines reports of the same software from different sources.
 // Items are processed in order, so earlier items (higher-priority sources)
-// provide the primary record and later ones fill gaps. Two items merge when
-// their names match and their versions match or one is unknown; the same
-// program at two different versions stays as two entries.
+// provide the primary record and later ones fill gaps.
+//
+// Merging is deliberately conservative: when ATLAS can't tell whether two
+// entries are one install, it keeps both. Two entries merge only when:
+//   - their sources can report the same installed copy (sameInstallSources):
+//     a Scoop, Snap or Flatpak app, or a dpkg/rpm package, is its own copy and
+//     never merges with another manager's entry;
+//   - they don't contradict each other: one source never merges two different
+//     package IDs or two different publishers (distinctWithinSource);
+//   - their names and versions match. The same program at two different
+//     versions stays as two entries.
+//
+// An entry whose name was cut short by winget ("…") or that has no version
+// is a weak match. It's joined only when exactly one entry fits it, so
+// "Microsoft Visual C++ 2015-2022 Redistributable…" stays on its own when
+// both the x64 and x86 editions are installed.
 func Merge(items []core.SoftwareItem) []core.SoftwareItem {
 	var out []core.SoftwareItem
-	for _, it := range items {
+	var first []int // input position of each out entry's primary record
+	var weak []int
+	for k, it := range items {
+		if weakEntry(it) {
+			weak = append(weak, k)
+			continue
+		}
 		idx := -1
 		for i := range out {
-			if namesMatch(out[i], it) && versionsMatch(out[i], it) {
+			if canMerge(out[i], it) {
 				idx = i
 				break
 			}
 		}
 		if idx < 0 {
 			out = append(out, it)
+			first = append(first, k)
 			continue
 		}
 		mergeInto(&out[idx], it)
+	}
+	for _, k := range weak {
+		it := items[k]
+		var cands []int
+		for i := range out {
+			if canMerge(out[i], it) {
+				cands = append(cands, i)
+			}
+		}
+		if len(cands) != 1 {
+			out = append(out, it)
+			first = append(first, k)
+			continue
+		}
+		c := cands[0]
+		if k < first[c] { // the weak entry came from a higher-priority source
+			primary := it
+			mergeInto(&primary, out[c])
+			out[c], first[c] = primary, k
+			continue
+		}
+		mergeInto(&out[c], it)
 	}
 	out = mergeInstallerRecords(out)
 	slices.SortStableFunc(out, func(a, b core.SoftwareItem) int {
@@ -76,6 +118,59 @@ func Merge(items []core.SoftwareItem) []core.SoftwareItem {
 		return strings.Compare(a.Version, b.Version)
 	})
 	return out
+}
+
+// weakEntry reports whether an entry lacks enough detail to be matched on
+// its own: a truncated name, or a missing or truncated version.
+func weakEntry(it core.SoftwareItem) bool {
+	return truncated(it.Name) || normVersion(it.Version) == "" || truncated(it.Version)
+}
+
+func canMerge(a, b core.SoftwareItem) bool {
+	return sameInstallSources(a, b) && !distinctWithinSource(a, b) && namesMatch(a, b) && versionsMatch(a, b)
+}
+
+// windowsInstallerSource reports sources that describe programs installed
+// by a normal installer: the Windows "installed programs" list, and winget
+// and Chocolatey, which run those installers and so report the same copy.
+func windowsInstallerSource(s string) bool {
+	return s == SourceRegistry || s == SourceWinget || s == SourceChocolatey
+}
+
+// sameInstallSources reports whether a and b could be two reports of one
+// installed copy. A source can list the same copy twice (Windows keeps
+// 32-bit, 64-bit and per-user lists); across sources only the Windows
+// installer sources overlap. Scoop apps are portable copies, and Linux
+// package managers (dpkg, rpm, Snap, Flatpak) each install their own copy.
+func sameInstallSources(a, b core.SoftwareItem) bool {
+	sa, sb := a.Source, b.Source
+	return sa == sb || (windowsInstallerSource(sa) && windowsInstallerSource(sb))
+}
+
+// distinctWithinSource reports whether a and b, from the same source, are
+// plainly different software: different package IDs, or different
+// publishers. (Across sources these fields aren't comparable: Chocolatey
+// reports a package's authors, not the program's publisher.)
+func distinctWithinSource(a, b core.SoftwareItem) bool {
+	if a.Source != b.Source {
+		return false
+	}
+	if a.PackageID != "" && b.PackageID != "" && !strings.EqualFold(a.PackageID, b.PackageID) {
+		return true
+	}
+	pa, pb := normPublisher(a.Publisher), normPublisher(b.Publisher)
+	return pa != "" && pb != "" && pa != pb
+}
+
+var publisherSuffixes = []string{"inc", "incorporated", "corp", "corporation", "co", "company", "ltd", "limited", "llc", "gmbh", "ag", "sa", "bv", "srl", "plc"}
+
+// normPublisher lets "Devolutions inc." and "Devolutions Inc" compare equal.
+func normPublisher(p string) string {
+	words := strings.Fields(reNonAlnum.ReplaceAllString(strings.ToLower(p), " "))
+	for len(words) > 1 && slices.Contains(publisherSuffixes, words[len(words)-1]) {
+		words = words[:len(words)-1]
+	}
+	return strings.Join(words, " ")
 }
 
 func mergeInto(dst *core.SoftwareItem, src core.SoftwareItem) {
@@ -184,7 +279,7 @@ func joinWingetReadsOfRegistry(items []core.SoftwareItem, used []bool) {
 				wgs = append(wgs, j)
 			}
 		}
-		if len(regs) == 1 && len(wgs) == 1 {
+		if len(regs) == 1 && len(wgs) == 1 && registryNameMatches(items, used, wgs[0]) == 1 {
 			mergeInto(&items[i], items[wgs[0]])
 			used[wgs[0]] = true
 		}
@@ -206,6 +301,7 @@ func mergeInstallerRecords(items []core.SoftwareItem) []core.SoftwareItem {
 		if len(key) < 3 {
 			continue
 		}
+		var cands []int
 		for j := range items {
 			if used[j] || i == j {
 				continue
@@ -215,11 +311,17 @@ func mergeInstallerRecords(items []core.SoftwareItem) []core.SoftwareItem {
 				continue
 			}
 			if ProductKey(b.Name) == key && VersionsEquivalent(items[i].Version, b.Version) {
-				mergeInto(&items[i], b)
-				used[j] = true
-				break
+				cands = append(cands, j)
 			}
 		}
+		// Join only a one-to-one pair: if two installer records fit, or the
+		// record also fits another Windows entry (the x64 and x86 editions),
+		// ATLAS can't tell which install it describes.
+		if len(cands) != 1 || installerKeyMatches(items, used, cands[0]) != 1 {
+			continue
+		}
+		mergeInto(&items[i], items[cands[0]])
+		used[cands[0]] = true
 	}
 	joinWingetReadsOfRegistry(items, used)
 	out := items[:0:0]
@@ -229,4 +331,29 @@ func mergeInstallerRecords(items []core.SoftwareItem) []core.SoftwareItem {
 		}
 	}
 	return out
+}
+
+// installerKeyMatches counts the unjoined Windows entries that the installer
+// record items[j] fits by product name and version.
+func installerKeyMatches(items []core.SoftwareItem, used []bool, j int) int {
+	key, n := ProductKey(items[j].Name), 0
+	for i := range items {
+		if !used[i] && items[i].Source == SourceRegistry && ProductKey(items[i].Name) == key &&
+			VersionsEquivalent(items[i].Version, items[j].Version) {
+			n++
+		}
+	}
+	return n
+}
+
+// registryNameMatches counts the unjoined Windows entries whose name fits
+// items[j]: a name winget cut short can fit several.
+func registryNameMatches(items []core.SoftwareItem, used []bool, j int) int {
+	n := 0
+	for i := range items {
+		if !used[i] && items[i].Source == SourceRegistry && namesMatch(items[i], items[j]) {
+			n++
+		}
+	}
+	return n
 }

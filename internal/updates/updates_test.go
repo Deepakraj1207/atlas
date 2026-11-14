@@ -5,6 +5,7 @@ package updates
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -312,8 +313,14 @@ func TestRecordResultsRemovesAppliedAndLogsActivity(t *testing.T) {
 		{Step: core.UpdateStep{Label: "APT", Updates: ups[:1]}, Status: core.StepDone, Command: "apt-get install a", Duration: time.Second},
 		{Step: core.UpdateStep{Label: "APT", Updates: ups[1:]}, Status: core.StepFailed, ExitCode: 100},
 	}
-	if err := svc.RecordResults(ctx, results); err != nil {
+	// dpkg now shows a at version 2: the update is confirmed.
+	svc.WithVerifier(snapVerifier{dpkgAt(map[string]string{"a": "2", "b": "1"})})
+	out, err := svc.RecordResults(ctx, results)
+	if err != nil {
 		t.Fatal(err)
+	}
+	if out.Count(core.VerifyConfirmed) != 1 {
+		t.Errorf("verification = %+v", out)
 	}
 	_, left, _, _ := svc.LatestCheck(ctx)
 	if len(left) != 1 || left[0].Name != "b" {
@@ -352,5 +359,107 @@ func TestApplyActivityOutcomes(t *testing.T) {
 	}
 	if !strings.HasSuffix(listNames(many), "and 3 more") {
 		t.Error("long lists should be shortened")
+	}
+}
+
+// zypper list-updates output (LC_ALL=C), openSUSE Tumbleweed.
+const zypperFixture = `Loading repository data...
+Reading installed packages...
+S | Repository             | Name     | Current Version | Available Version | Arch
+--+------------------------+----------+-----------------+-------------------+-------
+v | Main Update Repository | curl     | 8.6.0-1.1       | 8.6.0-2.1         | x86_64
+v | Main Update Repository | libcurl4 | 8.6.0-1.1       | 8.6.0-2.1         | x86_64
+`
+
+func TestZypper(t *testing.T) {
+	ups, err := parseZypperListUpdates(zypperFixture)
+	if err != nil || len(ups) != 2 {
+		t.Fatalf("got %+v %v", ups, err)
+	}
+	if u := ups[0]; u.Name != "curl" || u.CurrentVersion != "8.6.0-1.1" || u.AvailableVersion != "8.6.0-2.1" || u.Origin != "Main Update Repository" || u.Manager != ManagerZypper {
+		t.Errorf("curl = %+v", u)
+	}
+	// Columns found by name: a reordered table still parses correctly.
+	reordered := "Name | S | Available Version | Current Version\n-----+---+---+---\nvim | v | 9.1-2 | 9.1-1\n"
+	if ups, err := parseZypperListUpdates(reordered); err != nil || len(ups) != 1 || ups[0].AvailableVersion != "9.1-2" || ups[0].CurrentVersion != "9.1-1" {
+		t.Errorf("reordered: %+v %v", ups, err)
+	}
+	if ups, err := parseZypperListUpdates("Loading repository data...\nReading installed packages...\nNo updates found.\n"); err != nil || len(ups) != 0 {
+		t.Errorf("no updates: %+v %v", ups, err)
+	}
+	if _, err := parseZypperListUpdates("Something unexpected\n"); err == nil {
+		t.Error("unrecognised output must be an error, not 'no updates'")
+	}
+	st := NewZypper(nil, false).PlanUpdates(ups)
+	if len(st) != 1 || st[0].Commands[0].String() != "sudo zypper update curl libcurl4" || st[0].Elevation != core.ElevationSudo {
+		t.Errorf("plan = %+v", st)
+	}
+	for _, a := range st[0].Commands[0].Args {
+		if a == "-y" || a == "--non-interactive" || a == "-n" {
+			t.Errorf("zypper must ask the user itself; found %q", a)
+		}
+	}
+	if inventorySource(ManagerZypper) != inventory.SourceRPM {
+		t.Error("zypper updates match RPM packages in the saved list")
+	}
+}
+
+func TestRPMRefusedSaysWhy(t *testing.T) {
+	_, err := NewRPMRefused("CentOS Linux 7 (Core) uses yum.").CheckUpdates(context.Background())
+	var se *core.SourceError
+	if !errors.As(err, &se) || !strings.Contains(se.Details, "uses yum") {
+		t.Errorf("got %v", err)
+	}
+}
+
+type snapVerifier struct{ snap core.Snapshot }
+
+func (v snapVerifier) Snapshot(context.Context) core.Snapshot { return v.snap }
+
+func dpkgAt(versions map[string]string) core.Snapshot {
+	var items []core.SoftwareItem
+	for n, v := range versions {
+		items = append(items, core.SoftwareItem{Name: n, PackageID: n, Version: v, Source: inventory.SourceDpkg})
+	}
+	return core.Snapshot{Sources: []core.SourceResult{{Source: inventory.SourceDpkg, Label: "Debian packages", Status: core.SourceOK}},
+		BySource: map[string][]core.SoftwareItem{inventory.SourceDpkg: items}}
+}
+
+// The audit's P0: an update with exit code 0 left the list as if it had
+// installed. Now the installed version is read again first.
+func TestUpdatesAreVerifiedBeforeLeavingTheList(t *testing.T) {
+	run := func(t *testing.T, v core.Verifier) (core.RecordOutcome, []core.Update, core.Activity) {
+		t.Helper()
+		svc, db := newService(t, fakeManager{id: "apt", ups: []core.Update{{Manager: "apt", PackageID: "a", Name: "a", CurrentVersion: "1", AvailableVersion: "2"}}})
+		if v != nil {
+			svc.WithVerifier(v)
+		}
+		ctx := context.Background()
+		svc.Check(ctx, nil)
+		_, ups, _, _ := svc.LatestCheck(ctx)
+		out, err := svc.RecordResults(ctx, []core.StepResult{{Step: core.UpdateStep{Label: "APT", Updates: ups}, Status: core.StepDone}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, left, _, _ := svc.LatestCheck(ctx)
+		acts, _ := db.RecentActivity(ctx, 1)
+		return out, left, acts[0]
+	}
+	out, left, act := run(t, snapVerifier{dpkgAt(map[string]string{"a": "1"})})
+	if out.Count(core.VerifyNotDone) != 1 || len(left) != 1 || act.Outcome != core.OutcomePartial || !strings.Contains(act.Summary, "still version 1") {
+		t.Errorf("still the old version: keep it in the list and say so: %+v / %d / %+v", out, len(left), act)
+	}
+	failed := core.Snapshot{Sources: []core.SourceResult{{Source: inventory.SourceDpkg, Status: core.SourceTimeout}}}
+	out, left, _ = run(t, snapVerifier{failed})
+	if out.Count(core.VerifyUnknown) != 1 || len(left) != 1 {
+		t.Errorf("couldn't re-read: keep it: %+v / %d", out, len(left))
+	}
+	out, left, _ = run(t, nil)
+	if out.Count(core.VerifyUnknown) != 1 || len(left) != 1 {
+		t.Errorf("no verifier: keep it: %+v / %d", out, len(left))
+	}
+	out, left, act = run(t, snapVerifier{dpkgAt(map[string]string{"a": "2"})})
+	if out.Count(core.VerifyConfirmed) != 1 || len(left) != 0 || act.Outcome != core.OutcomeSuccess || !strings.Contains(act.Details, "Verified a: confirmed") {
+		t.Errorf("confirmed: %+v / %d / %+v", out, len(left), act)
 	}
 }

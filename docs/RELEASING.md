@@ -13,17 +13,17 @@ To build the same files on your own machine (Linux, with Go 1.27.4, `zip`, `dpkg
 and `rpmbuild`):
 
 ```bash
-packaging/build-release.sh 0.1.0 dist
+packaging/build-release.sh 0.2.0 dist
 ```
 
 ## 2. Tag the version
 
 ```bash
-git tag -a v0.1.0 -m "ATLAS 0.1.0"
+git tag -a v0.2.0 -m "ATLAS 0.2.0"
 ```
 
 ```bash
-git push origin v0.1.0
+git push origin v0.2.0
 ```
 
 The **release** workflow then:

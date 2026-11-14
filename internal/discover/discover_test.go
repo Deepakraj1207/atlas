@@ -293,3 +293,30 @@ func TestRecordResults(t *testing.T) {
 		t.Errorf("summary = %q", a.Summary)
 	}
 }
+
+// The audit's P0: an RPM scan made Discover offer DNF installs even on
+// openSUSE. Only the distribution's own tool counts as available.
+func TestRPMInstallsFollowTheDistribution(t *testing.T) {
+	no := false
+	scan := []core.SourceResult{ok(inventory.SourceRPM)}
+	for _, c := range []struct {
+		name, rpm string
+		wantDnf   bool
+	}{{"fedora", "dnf", true}, {"opensuse", "zypper", false}, {"unknown", "", false}} {
+		s, _ := newService(t, Config{Windows: &no, RPMManager: c.rpm}, scan, nil)
+		d, err := s.Discover(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		hasDnf := false
+		for _, m := range d.ManagersHere {
+			hasDnf = hasDnf || m == "dnf"
+		}
+		if hasDnf != c.wantDnf {
+			t.Errorf("%s: dnf available = %v, want %v (%v)", c.name, hasDnf, c.wantDnf, d.ManagersHere)
+		}
+		if v := find(d, "vlc"); !c.wantDnf && v.Via == "dnf" {
+			t.Errorf("%s: vlc must not install with dnf", c.name)
+		}
+	}
+}

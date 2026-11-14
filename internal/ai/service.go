@@ -17,7 +17,8 @@ import (
 type Service struct {
 	exp     core.Explainer
 	rec     core.ActivityRecorder
-	ready   func() bool
+	ready   func() (bool, string)
+	redact  redactor
 	log     *slog.Logger
 	now     func() time.Time
 	timeout time.Duration
@@ -29,18 +30,24 @@ func NewService(exp core.Explainer, rec core.ActivityRecorder, log *slog.Logger)
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	return &Service{exp: exp, rec: rec, ready: CredentialsAvailable, log: log, now: time.Now, timeout: 2 * time.Minute}
+	timeout := 2 * time.Minute
+	if exp.Provider().Local {
+		timeout = 5 * time.Minute // a local model can be slow on an ordinary PC
+	}
+	return &Service{exp: exp, rec: rec, ready: exp.Ready, redact: currentRedactor(), log: log, now: time.Now, timeout: timeout}
 }
 
-func (s *Service) Model() string        { return s.exp.Model() }
-func (s *Service) Instructions() string { return s.exp.Instructions() }
+func (s *Service) Model() string             { return s.exp.Model() }
+func (s *Service) Instructions() string      { return s.exp.Instructions() }
+func (s *Service) Provider() core.AIProvider { return s.exp.Provider() }
 
-// Ready reports whether credentials were found.
-func (s *Service) Ready() (bool, string) {
-	if s.ready() {
-		return true, ""
-	}
-	return false, "No Anthropic API key found. Set ANTHROPIC_API_KEY (or sign in with \"ant auth login\") and restart ATLAS"
+// Ready reports whether the explainer can be used, or what to do first.
+func (s *Service) Ready() (bool, string) { return s.ready() }
+
+// Prepare removes the user's home folder, user name and computer name, and
+// caps the length. The TUI previews the result, and that is what is sent.
+func (s *Service) Prepare(question string) string {
+	return shorten(s.redact.apply(question))
 }
 
 // Explain sends question and records the attempt.
@@ -50,13 +57,17 @@ func (s *Service) Explain(ctx context.Context, subject, question string) (core.E
 	start := s.now()
 	ex, err := s.exp.Explain(ctx, question)
 
-	a := core.Activity{At: start, Kind: "ai.explain", Title: "Asked Claude about " + subject}
-	sent := fmt.Sprintf("Sent %d characters to Anthropic.", utf8.RuneCountInString(question))
-	details := []string{"Model asked: " + s.exp.Model(), "Sent:", question}
+	p := s.exp.Provider()
+	a := core.Activity{At: start, Kind: "ai.explain", Title: "Asked " + p.Name + " about " + subject}
+	sent := fmt.Sprintf("Sent %d characters to %s (%s).", utf8.RuneCountInString(question), p.Service, p.Host)
+	details := []string{"Model asked: " + s.exp.Model(), fmt.Sprintf("Answer limit: %d tokens", p.MaxOutputTokens), "Sent:", question}
 	switch {
 	case err == nil:
 		a.Outcome = core.OutcomeSuccess
-		a.Summary = sent + " Claude answered; the answer is below in Advanced mode."
+		a.Summary = sent + " " + p.Name + " answered; the answer is below in Advanced mode."
+		if ex.Truncated {
+			a.Summary += " The answer reached the limit and was cut short."
+		}
 		details = append(details, fmt.Sprintf("Answered by %s (%d input and %d output tokens):", ex.Model, ex.InputTokens, ex.OutputTokens), ex.Text)
 	case errors.Is(ctx.Err(), context.Canceled):
 		a.Outcome = core.OutcomeCancelled
@@ -67,7 +78,7 @@ func (s *Service) Explain(ctx context.Context, subject, question string) (core.E
 		details = append(details, "Error: "+err.Error())
 	}
 	a.Details = strings.Join(details, "\n")
-	s.log.Info("ai explain", "subject", subject, "outcome", string(a.Outcome), "chars", utf8.RuneCountInString(question), "model", s.exp.Model())
+	s.log.Info("ai explain", "subject", subject, "outcome", string(a.Outcome), "chars", utf8.RuneCountInString(question), "provider", p.Service, "model", s.exp.Model())
 	if s.rec != nil {
 		if _, rerr := s.rec.AddActivity(context.WithoutCancel(ctx), a); rerr != nil {
 			s.log.Error("record ai explain", "error", rerr)

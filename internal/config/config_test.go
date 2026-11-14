@@ -199,3 +199,44 @@ func TestAIIsOffByDefaultAndValidated(t *testing.T) {
 		t.Error("enabled lost on save")
 	}
 }
+
+func TestAIProviderAndLimits(t *testing.T) {
+	d := Default().AI
+	if d.AIProviderName() != AIProviderAnthropic || d.OutputTokens() != DefaultAIMaxOutputTokens || d.OllamaEndpoint() != DefaultOllamaURL {
+		t.Errorf("defaults: %s %d %s", d.AIProviderName(), d.OutputTokens(), d.OllamaEndpoint())
+	}
+	path := filepath.Join(t.TempDir(), FileName)
+	load := func(yaml string) Result {
+		os.WriteFile(path, []byte(yaml), 0o644)
+		return Load(path)
+	}
+	res := load("ai:\n  enabled: true\n  provider: ollama\n  model: \"qwen2.5:7b-instruct\"\n  max_output_tokens: 2048\n  ollama_url: http://127.0.0.1:11434/\n")
+	a := res.Config.AI
+	if len(res.Warnings) != 0 || a.AIProviderName() != AIProviderOllama || a.Model != "qwen2.5:7b-instruct" || a.OutputTokens() != 2048 || a.OllamaEndpoint() != "http://127.0.0.1:11434" {
+		t.Errorf("ollama settings: %+v %v", a, res.Warnings)
+	}
+	if err := Save(path, res.Config, false); err != nil {
+		t.Fatal(err)
+	}
+	if again := Load(path).Config.AI; again != a {
+		t.Errorf("save lost settings: %+v vs %+v", again, a)
+	}
+
+	for _, c := range []struct {
+		yaml, warn string
+		check      func(AIConfig) bool
+	}{
+		{"ai:\n  provider: openai\n", "Unknown AI provider", func(a AIConfig) bool { return a.AIProviderName() == AIProviderAnthropic }},
+		{"ai:\n  provider: ollama\n  model: claude-opus-5-5 && x\n", "Ollama model name", func(a AIConfig) bool { return a.Model == "" }},
+		{"ai:\n  model: llama3.2\n", "Claude model ID", func(a AIConfig) bool { return a.Model == "" }},
+		{"ai:\n  max_output_tokens: 100\n", "too small", func(a AIConfig) bool { return a.OutputTokens() == MinAIMaxOutputTokens }},
+		{"ai:\n  max_output_tokens: 128000\n", "more than", func(a AIConfig) bool { return a.OutputTokens() == MaxAIMaxOutputTokens }},
+		{"ai:\n  ollama_url: file:///etc/passwd\n", "Ollama address", func(a AIConfig) bool { return a.OllamaEndpoint() == DefaultOllamaURL }},
+		{"ai:\n  ollama_url: http://user:pw@host:11434\n", "Ollama address", func(a AIConfig) bool { return a.OllamaEndpoint() == DefaultOllamaURL }},
+	} {
+		res := load(c.yaml)
+		if len(res.Warnings) != 1 || !strings.Contains(res.Warnings[0], c.warn) || !c.check(res.Config.AI) {
+			t.Errorf("%q: %+v %v", c.yaml, res.Config.AI, res.Warnings)
+		}
+	}
+}

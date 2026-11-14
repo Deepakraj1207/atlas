@@ -19,10 +19,23 @@ type fakeExplain struct {
 	ready bool
 	err   error
 	asked []string
+	local bool
 }
 
 func (f *fakeExplain) Model() string        { return "claude-opus-5-5" }
 func (f *fakeExplain) Instructions() string { return "Explain plainly." }
+func (f *fakeExplain) Provider() core.AIProvider {
+	if f.local {
+		return core.AIProvider{Name: "Ollama", Service: "Ollama on this computer", Host: "localhost:11434", Local: true,
+			Billing: "Free: Ollama runs the model on your own computer.", MaxOutputTokens: 4096}
+	}
+	return core.AIProvider{Name: "Claude", Service: "Anthropic", Host: "api.anthropic.com",
+		Billing: "Each question is billed to your Anthropic API account by the token.", MaxOutputTokens: 4096}
+}
+
+// Prepare stands in for the real minimisation: the preview and the sent
+// text must both be the prepared version.
+func (f *fakeExplain) Prepare(q string) string { return strings.ReplaceAll(q, "Alpha Co", "[user]") }
 func (f *fakeExplain) Ready() (bool, string) {
 	if f.ready {
 		return true, ""
@@ -90,9 +103,11 @@ func TestAIExplanationPreviewsExactlyWhatIsSent(t *testing.T) {
 		t.Fatal("e must open a preview before anything is sent")
 	}
 	v := m.View()
-	flat := strings.Join(strings.Fields(v), " ")
+	flat := paneText(v)
 	for _, want := range []string{"Ask Claude about Alpha Editor 1.0", "exact text is sent, nothing else from your computer", "Installed software (app): Alpha Editor",
-		"Publisher: Alpha Co", "Package ID: Alpha.Editor", "leaves your computer", "check anything important before acting on it"} {
+		"Publisher: [user]", "Package ID: Alpha.Editor", "leaves your computer and goes to Anthropic (api.anthropic.com)",
+		"Cost: Each question is billed to your Anthropic API account", "user name and computer name are replaced",
+		"ATLAS never runs anything it suggests", "check anything important before acting on it"} {
 		if !strings.Contains(flat, want) {
 			t.Errorf("preview missing %q:\n%s", want, v)
 		}
@@ -108,7 +123,8 @@ func TestAIExplanationPreviewsExactlyWhatIsSent(t *testing.T) {
 
 	m = press(t, m, "e")
 	m = press(t, m, "enter")
-	if len(svc.asked) != 1 || !strings.HasPrefix(svc.asked[0], "Installed software (app): Alpha Editor\nVersion: 1.0") {
+	if len(svc.asked) != 1 || !strings.HasPrefix(svc.asked[0], "Installed software (app): Alpha Editor\nVersion: 1.0") ||
+		!strings.Contains(svc.asked[0], "Publisher: [user]") || strings.Contains(svc.asked[0], "Alpha Co") {
 		t.Fatalf("sent = %q", svc.asked)
 	}
 	v = m.View()
@@ -123,6 +139,25 @@ func TestAIExplanationPreviewsExactlyWhatIsSent(t *testing.T) {
 	m = press(t, m, "esc")
 	if strings.Contains(m.View(), "Written by AI") {
 		t.Error("Esc should close the answer")
+	}
+}
+
+func TestLocalAIPreviewSaysNothingLeavesTheComputer(t *testing.T) {
+	svc := &fakeExplain{ready: true, local: true}
+	m := bootAI(t, svc, "ai:\n  enabled: true\n")
+	m = press(t, m, "e")
+	flat := paneText(m.View())
+	for _, want := range []string{"Ask Ollama about Alpha Editor 1.0", "goes to Ollama on this computer (localhost:11434). It doesn't leave your computer.", "Cost: Free"} {
+		if !strings.Contains(flat, want) {
+			t.Errorf("preview missing %q:\n%s", want, m.View())
+		}
+	}
+	if strings.Contains(flat, "Anthropic") {
+		t.Errorf("a local model's preview mustn't mention Anthropic:\n%s", m.View())
+	}
+	m = press(t, m, "enter")
+	if v := m.View(); !strings.Contains(v, "Ollama's explanation: Alpha Editor 1.0") {
+		t.Errorf("answer should be labelled with the provider:\n%s", v)
 	}
 }
 
@@ -173,3 +208,15 @@ func TestFindingQuestionLeavesOutTechnicalDetails(t *testing.T) {
 }
 
 var screensFindingQuestion = screens.FindingQuestion
+
+// paneText is the right-hand pane's text with line wrapping undone, so a
+// phrase can be found wherever the preview wrapped it.
+func paneText(v string) string {
+	var words []string
+	for _, line := range strings.Split(v, "\n") {
+		if _, after, ok := strings.Cut(line, "│"); ok {
+			words = append(words, strings.Fields(after)...)
+		}
+	}
+	return strings.Join(words, " ")
+}

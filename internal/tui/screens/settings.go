@@ -68,26 +68,41 @@ func (s *Settings) rows(ctx Context) []settingRow {
 			},
 		},
 		{
-			label: "AI explanations",
-			value: aiValue(ctx),
-			help: "Off unless you turn it on. When on, press e on a Smart Analysis finding or an app in My Software to ask Claude, Anthropic's AI, to explain it. " +
-				"You always see exactly what will be sent first, and nothing else leaves your computer. Needs an Anthropic API key in ANTHROPIC_API_KEY (or \"ant auth login\").",
+			label:  "AI explanations",
+			value:  aiValue(ctx),
+			help:   aiHelp(ctx),
 			toggle: func(ctx Context) tea.Msg { return SetAIEnabledMsg{Enabled: !ctx.Config.AI.Enabled} },
 		},
 	}
 }
 
 func aiValue(ctx Context) string {
+	via := ""
+	if p := ctx.AI.Provider; p.Service != "" {
+		via = " · " + p.Service
+	}
 	switch {
 	case !ctx.Config.AI.Enabled:
 		return "Off"
 	case !ctx.AI.Available:
 		return "On · not available in this session"
-	case !ctx.AI.Ready:
+	case !ctx.AI.Ready && ctx.AI.Provider.Name == "Claude":
 		return "On · no API key found"
+	case !ctx.AI.Ready:
+		return "On" + via + " · not set up"
 	default:
-		return "On"
+		return "On" + via
 	}
+}
+
+func aiHelp(ctx Context) string {
+	help := "Off unless you turn it on. When on, press e on a Smart Analysis finding or an app in My Software to ask an AI to explain it. " +
+		"You always see exactly what will be sent first, and nothing else from your computer is sent. Answers are advice only; ATLAS never runs what they suggest. "
+	if ctx.AI.Provider.Local {
+		return help + "It uses Ollama on this computer: free, and nothing goes over the internet (ai.provider: ollama)."
+	}
+	return help + "It uses Claude, Anthropic's AI, billed to your Anthropic API account by the token (not covered by a Claude.ai subscription); needs ANTHROPIC_API_KEY or \"ant auth login\". " +
+		"To use a free local model instead, set ai.provider: ollama and ai.model in the settings file."
 }
 
 func savedListValue(ctx Context) string {

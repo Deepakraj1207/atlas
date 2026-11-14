@@ -114,3 +114,6 @@ type RequestExplainMsg struct{ Subject, Question string }
 
 // StartExplainMsg sends the question. Only sent after the preview.
 type StartExplainMsg struct{ Subject, Question string }
+
+// SearchMsg opens My Software with its search box active.
+type SearchMsg struct{}

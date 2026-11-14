@@ -109,6 +109,18 @@ func Run(ctx context.Context, w io.Writer, version string) (Result, error) {
 	r.printf("# ATLAS self-test\n\nRead-only. Nothing on this computer was changed, and your own ATLAS data was not used.\n\n")
 	r.printf("| | |\n|---|---|\n| Version | %s |\n| Date | %s |\n| Platform | %s/%s |\n| Administrator/root | %v |\n| Terminal | %s |\n",
 		version, time.Now().Format(time.RFC3339), runtime.GOOS, runtime.GOARCH, elevated, cell(terminalInfo()))
+	if runtime.GOOS == "linux" {
+		distro := "unknown (no /etc/os-release)"
+		if d, err := platform.ReadOSRelease(); err == nil {
+			distro = strings.TrimSpace(d.Name + " (" + d.ID + ")")
+		}
+		route := platform.LinuxRPMRoute()
+		rpm := route.Manager
+		if rpm == "" {
+			rpm = "not changed: " + route.Reason
+		}
+		r.printf("| Linux distribution | %s |\n| RPM packages changed with | %s |\n", cell(distro), cell(rpm))
+	}
 	for _, p := range []struct {
 		name string
 		fn   func() (string, error)

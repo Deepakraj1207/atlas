@@ -126,3 +126,49 @@ func TestTruncateAndPad(t *testing.T) {
 		t.Errorf("PadRight wide = %q (width %d)", got, lipgloss.Width(got))
 	}
 }
+
+// Seen on Windows CI: the figures on the right cut off "See Activity
+// History (8)" at the end of a status message.
+func TestStatusMessageWinsOverFigures(t *testing.T) {
+	th := theme.New(theme.Dark)
+	facts := "83 apps · 12 updates · RAM 2.9 / 16.0 GB"
+	long := Status{Text: "Scan finished with gaps: 83 apps found; some sources couldn't be read. See Activity History (8).", Kind: StatusWarning}
+	row := StatusBar(th, 120, long, facts, nil, false)
+	if !strings.Contains(row, "See Activity History (8).") || strings.Contains(row, "RAM") {
+		t.Errorf("a long message must be shown in full, without the figures: %q", row)
+	}
+	short := StatusBar(th, 120, Status{Text: "System ready", Kind: StatusReady}, facts, nil, false)
+	if !strings.Contains(short, "System ready") || !strings.Contains(short, "RAM 2.9 / 16.0 GB") {
+		t.Errorf("a short message leaves room for the figures: %q", short)
+	}
+	if w := lipgloss.Width(row); w > 120 {
+		t.Errorf("row is %d wide", w)
+	}
+}
+
+func TestBigLogoShape(t *testing.T) {
+	for _, c := range []struct {
+		render func(theme.Theme) string
+		w, h   int
+	}{{BigLogo, BigLogoWidth, BigLogoHeight}} {
+		for _, th := range []theme.Theme{theme.New(theme.Dark), theme.New(theme.Light)} {
+			lines := strings.Split(c.render(th), "\n")
+			if len(lines) != c.h {
+				t.Fatalf("logo has %d rows, want %d", len(lines), c.h)
+			}
+			for i, l := range lines {
+				if w := lipgloss.Width(l); w != c.w {
+					t.Errorf("row %d is %d wide, want %d", i, w, c.w)
+				}
+				for _, r := range l {
+					if r >= 0x80 && r != '█' && r != '▀' && r != '▄' { // ASCII is spaces and colour codes
+						t.Errorf("row %d uses %q; only block characters render reliably everywhere", i, r)
+					}
+				}
+			}
+		}
+	}
+	if mix([3]float64{0, 0, 0}, [3]float64{255, 255, 255}, 0.5) != "#808080" {
+		t.Error("gradient midpoint")
+	}
+}

@@ -14,7 +14,8 @@ type KeyHint struct {
 	Desc string
 }
 
-// HintRow renders hints on one line, dropping trailing hints that do not fit.
+// HintRow renders hints on one line ("↑↓ navigate  enter select"),
+// dropping trailing hints that do not fit.
 func HintRow(t theme.Theme, width int, hints []KeyHint) string {
 	var parts []string
 	used := 0
@@ -31,7 +32,7 @@ func HintRow(t theme.Theme, width int, hints []KeyHint) string {
 		parts = append(parts, s)
 		used += sep + w
 	}
-	return strings.Join(parts, t.Subtle.Render(" · "))
+	return strings.Join(parts, "   ")
 }
 
 // HelpGroup is a titled set of hints for the help overlay.
@@ -44,7 +45,7 @@ type HelpGroup struct {
 // be taller than the screen; the caller scrolls it.
 func Help(t theme.Theme, width int, context string, groups []HelpGroup) string {
 	var b strings.Builder
-	b.WriteString(t.Title.Render("Keyboard help"))
+	b.WriteString(t.Logo.Render("?") + " " + t.Title.Render("Keyboard help"))
 	if context != "" {
 		b.WriteString("  ")
 		b.WriteString(t.Muted.Render(context))
@@ -68,10 +69,10 @@ func Help(t theme.Theme, width int, context string, groups []HelpGroup) string {
 		b.WriteString("\n")
 		for _, h := range g.Hints {
 			b.WriteString("  ")
-			b.WriteString(t.Key.Width(keyW + 2).Render(h.Key))
+			b.WriteString(t.Accent.Width(keyW + 2).Render(h.Key))
 			desc := Wrap(h.Desc, max(width-keyW-4, 10))
 			desc = strings.ReplaceAll(desc, "\n", "\n"+strings.Repeat(" ", keyW+4))
-			b.WriteString(t.KeyDesc.Render(desc))
+			b.WriteString(t.Muted.Render(desc))
 			b.WriteString("\n")
 		}
 	}

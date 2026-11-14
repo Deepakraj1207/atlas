@@ -22,6 +22,7 @@ const (
 	ManagerScoop      = inventory.SourceScoop
 	ManagerApt        = "apt"
 	ManagerDnf        = "dnf"
+	ManagerZypper     = "zypper"
 	ManagerSnap       = inventory.SourceSnap
 	ManagerFlatpak    = inventory.SourceFlatpak
 )
@@ -32,7 +33,7 @@ func inventorySource(manager string) string {
 	switch manager {
 	case ManagerApt:
 		return inventory.SourceDpkg
-	case ManagerDnf:
+	case ManagerDnf, ManagerZypper:
 		return inventory.SourceRPM
 	}
 	return manager

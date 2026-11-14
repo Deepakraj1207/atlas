@@ -59,6 +59,7 @@ type updatesFinishedMsg struct {
 
 type updatesRecordedMsg struct {
 	results []core.StepResult
+	outcome core.RecordOutcome
 	err     error
 }
 
@@ -211,7 +212,7 @@ func checkResultStatus(c core.UpdateCheck, err error) components.Status {
 }
 
 // applyResultStatus explains a finished update run in one line.
-func applyResultStatus(results []core.StepResult, recordErr error) components.Status {
+func applyResultStatus(results []core.StepResult, out core.RecordOutcome, recordErr error) components.Status {
 	count := map[core.StepStatus]int{}
 	restart := false
 	for _, r := range results {
@@ -231,6 +232,16 @@ func applyResultStatus(results []core.StepResult, recordErr error) components.St
 	default:
 		st = components.Status{Text: "Nothing was updated.", Kind: components.StatusWarning}
 	}
+	if n := len(out.Verifications); n > 0 {
+		confirmed := out.Count(core.VerifyConfirmed)
+		if confirmed < n {
+			st = components.Status{Kind: components.StatusWarning, Text: fmt.Sprintf(
+				"Checked afterwards: %d of %d updates confirmed. The others still show the old version or couldn't be checked; they stay in Updates (3).",
+				confirmed, n)}
+		} else if st.Kind == components.StatusSuccess {
+			st.Text = fmt.Sprintf("Installed and confirmed %s. Scan again to refresh version numbers in My Software.", components.Plural(confirmed, "update"))
+		}
+	}
 	if restart {
 		st.Text += " Restart your computer to finish."
 	}
@@ -242,9 +253,11 @@ func applyResultStatus(results []core.StepResult, recordErr error) components.St
 
 func recordResults(upd core.UpdateService, results []core.StepResult) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		// Long enough to re-read every source and confirm the new versions.
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
-		return updatesRecordedMsg{results: results, err: upd.RecordResults(ctx, results)}
+		out, err := upd.RecordResults(ctx, results)
+		return updatesRecordedMsg{results: results, outcome: out, err: err}
 	}
 }
 

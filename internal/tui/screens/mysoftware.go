@@ -183,6 +183,12 @@ func (s *MySoftware) Update(msg tea.Msg, ctx Context) (Screen, tea.Cmd) {
 	return s, nil
 }
 
+// HandlesBack is true while Esc has something to close here: the details
+// view or a search filter.
+func (s *MySoftware) HandlesBack(ctx Context) bool {
+	return s.detail || s.search.Value() != ""
+}
+
 // Hints lists My Software keys for the current state.
 func (s *MySoftware) Hints(ctx Context) []components.KeyHint {
 	switch {

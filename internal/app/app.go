@@ -5,6 +5,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"path/filepath"
 	"runtime"
 
@@ -94,10 +95,15 @@ func Run(opts Options) error {
 		} else {
 			defer db.Close()
 			rec = db
-			inv = inventory.NewService(inventory.DefaultScanners(), db, logger, inventory.DefaultTimeouts())
-			upd = updates.NewService(updates.DefaultManagers(elevated), db, logger, updates.DefaultTimeouts())
+			invSvc := inventory.NewService(inventory.DefaultScanners(), db, logger, inventory.DefaultTimeouts())
+			inv = invSvc
+			// After removals and updates, the inventory re-reads every
+			// source to confirm what really changed.
+			upd = updates.NewService(updates.DefaultManagers(elevated), db, logger, updates.DefaultTimeouts()).WithVerifier(invSvc)
 			ana = analysis.NewService(analysis.DefaultSources(), db, logger, analysis.UsageSupported)
-			cln = cleanup.NewService(cleanup.DefaultConfig(elevated), db, logger)
+			clnCfg := cleanup.DefaultConfig(elevated)
+			clnCfg.Verifier = invSvc
+			cln = cleanup.NewService(clnCfg, db, logger)
 			if d, err := discover.NewService(discover.DefaultConfig(elevated), db, logger); err != nil {
 				logger.Error("discover catalogue", "error", err)
 			} else {
@@ -113,7 +119,7 @@ func Run(opts Options) error {
 
 	// AI explanations: the service exists either way, but nothing is sent
 	// unless the setting is on and the user confirms a preview.
-	explain := ai.NewService(ai.New(res.Config.AI.Model), rec, logger)
+	explain := ai.NewService(newExplainer(res.Config.AI, logger), rec, logger)
 
 	model := tui.New(tui.Options{
 		ConfigResult: res,
@@ -138,4 +144,32 @@ func Run(opts Options) error {
 	}
 	logger.Info("atlas exited")
 	return nil
+}
+
+// newExplainer picks the AI provider from settings. Settings are validated
+// on load, so an Ollama address that still doesn't parse means Ollama can't
+// be used; that is reported, never replaced by another provider.
+func newExplainer(c config.AIConfig, logger *slog.Logger) core.Explainer {
+	if c.AIProviderName() == config.AIProviderOllama {
+		o, err := ai.NewOllama(c.OllamaEndpoint(), c.Model, c.OutputTokens())
+		if err != nil {
+			logger.Error("ollama address", "error", err)
+			return unusableExplainer{reason: "The Ollama address in your settings (ai.ollama_url) isn't usable"}
+		}
+		return o
+	}
+	return ai.New(c.Model).WithMaxOutputTokens(c.OutputTokens())
+}
+
+// unusableExplainer is never Ready, so nothing can be sent.
+type unusableExplainer struct{ reason string }
+
+func (u unusableExplainer) Model() string        { return "" }
+func (u unusableExplainer) Instructions() string { return "" }
+func (u unusableExplainer) Provider() core.AIProvider {
+	return core.AIProvider{Name: "AI", Service: "no AI service"}
+}
+func (u unusableExplainer) Ready() (bool, string) { return false, u.reason }
+func (u unusableExplainer) Explain(context.Context, string) (core.Explanation, error) {
+	return core.Explanation{}, &core.SourceError{Message: u.reason}
 }

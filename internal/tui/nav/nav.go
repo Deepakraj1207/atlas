@@ -7,7 +7,7 @@ package nav
 type Section int
 
 // Sections in display order. The order is the navigation order and the
-// number shortcut (Home = 1 ... Settings = 9).
+// number shortcut (Home, shown as "Dashboard", = 1 ... Settings = 9).
 const (
 	Home Section = iota
 	MySoftware
@@ -47,9 +47,9 @@ type Info struct {
 
 var infos = [sectionCount]Info{
 	Home: {
-		Title:   "Home",
-		Short:   "Home",
-		Summary: "Your starting point: quick actions and what needs attention.",
+		Title:   "Dashboard",
+		Short:   "Dashboard",
+		Summary: "Your starting point: what to do next, your system at a glance, and what needs attention.",
 	},
 	MySoftware: {
 		Title:   "My Software",

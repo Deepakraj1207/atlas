@@ -38,8 +38,8 @@ const (
 	NarrowMax = 79  // widths below 80 are Narrow
 	MediumMax = 109 // widths below 110 are Medium
 
-	SidebarWidth = 26
-	HeaderHeight = 2 // title line + blank spacer
+	SidebarWidth = 24
+	HeaderHeight = 3 // title line, thin rule, blank gutter
 	FooterHeight = 2 // message line + hints line
 	// TabBarHeight is used instead of the sidebar on Narrow/Medium.
 	TabBarHeight = 2
@@ -67,6 +67,9 @@ type Layout struct {
 	ContentWidth, ContentHeight int
 	// SidebarWidth is 0 when the sidebar is hidden.
 	SidebarWidth int
+	// ContentPad is the blank margin on each side of the content area:
+	// more room to breathe on wide terminals, less when space is tight.
+	ContentPad int
 }
 
 // Compute derives a Layout from the terminal size. It never returns negative
@@ -112,8 +115,10 @@ func Compute(width, height int) Layout {
 	if l.ShowSidebar {
 		l.SidebarWidth = SidebarWidth
 		l.ContentWidth = max(width-SidebarWidth, 1)
+		l.ContentPad = 2
 	} else {
 		l.ContentWidth = width
+		l.ContentPad = 1
 	}
 	return l
 }
