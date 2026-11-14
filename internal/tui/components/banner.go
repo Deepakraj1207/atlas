@@ -19,46 +19,15 @@ var bigLogo = []string{
 	"▀  ▀  ▀  ▀▀▀▀ ▀  ▀ ▀▀▀ ",
 }
 
-// largeLogo is the same lettering six rows tall, with double-width strokes
-// so the letters keep their shape in tall terminal cells.
-var largeLogo = joinLetters(
-	[]string{" ▄█████▄ ", "██     ██", "██     ██", "█████████", "██     ██", "██     ██"},
-	[]string{"██████████", "    ██    ", "    ██    ", "    ██    ", "    ██    ", "    ██    "},
-	[]string{"██       ", "██       ", "██       ", "██       ", "██       ", "█████████"},
-	[]string{" ▄█████▄ ", "██     ██", "██     ██", "█████████", "██     ██", "██     ██"},
-	[]string{" ▄███████▄", "██        ", " ▀██████▄ ", "        ██", "        ██", " ▀███████▀"},
-)
-
-func joinLetters(letters ...[]string) []string {
-	out := make([]string, len(letters[0]))
-	for r := range out {
-		parts := make([]string, len(letters))
-		for i, l := range letters {
-			parts[i] = l[r]
-		}
-		out[r] = strings.Join(parts, "  ")
-	}
-	return out
-}
-
 // BigLogoWidth and BigLogoHeight are the three-row logo's size.
 var (
 	BigLogoWidth  = lipgloss.Width(bigLogo[0])
 	BigLogoHeight = len(bigLogo)
 )
 
-// LargeLogoWidth and LargeLogoHeight are the six-row logo's size.
-var (
-	LargeLogoWidth  = lipgloss.Width(largeLogo[0])
-	LargeLogoHeight = len(largeLogo)
-)
-
 // BigLogo renders the three-row block-letter logo with a left-to-right
 // gradient from the theme's accent to its info colour.
 func BigLogo(t theme.Theme) string { return gradient(t, bigLogo) }
-
-// LargeLogo renders the six-row logo for large windows, in the same colours.
-func LargeLogo(t theme.Theme) string { return gradient(t, largeLogo) }
 
 func gradient(t theme.Theme, art []string) string {
 	from, okF := hexRGB(string(t.Palette.Accent))

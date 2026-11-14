@@ -150,7 +150,7 @@ func TestBigLogoShape(t *testing.T) {
 	for _, c := range []struct {
 		render func(theme.Theme) string
 		w, h   int
-	}{{BigLogo, BigLogoWidth, BigLogoHeight}, {LargeLogo, LargeLogoWidth, LargeLogoHeight}} {
+	}{{BigLogo, BigLogoWidth, BigLogoHeight}} {
 		for _, th := range []theme.Theme{theme.New(theme.Dark), theme.New(theme.Light)} {
 			lines := strings.Split(c.render(th), "\n")
 			if len(lines) != c.h {
@@ -167,9 +167,6 @@ func TestBigLogoShape(t *testing.T) {
 				}
 			}
 		}
-	}
-	if LargeLogoHeight != 6 || LargeLogoWidth <= BigLogoWidth {
-		t.Errorf("large logo is %dx%d", LargeLogoWidth, LargeLogoHeight)
 	}
 	if mix([3]float64{0, 0, 0}, [3]float64{255, 255, 255}, 0.5) != "#808080" {
 		t.Error("gradient midpoint")

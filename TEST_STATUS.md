@@ -213,8 +213,7 @@ pass.
 | TestViewNeverExceedsTerminalWidth (tui) | no line wider than the terminal at 8 sizes from 40×10 to 200×50, in every section, with and without section focus |
 | TestReadSystemInfoIsHonest, TestGBAndMemUsed, TestParseMeminfo (platform); TestWindowsName (platform, Windows only) | real system facts are consistent (available ≤ total); Windows 11 is recognised by build number; formatting |
 | TestStatusMessageWinsOverFigures (components) | found by Windows CI: the right-hand figures cut off "See Activity History (8)." at the end of a status message; now the figures give way whenever the message wouldn't fit in full (fails on the first version, passes now) |
-| TestBigLogoWhereThereIsRoom (tui), TestBigLogoShape (components) | the block-letter logo sits beside the welcome at 120×30, above it at 60×40, and is left out at 60×20; every row is exactly as wide as the logo, uses only `█ ▀ ▄`, in both themes |
-| TestLargeLogoOnLargeWindows (tui) | the six-row logo appears beside the welcome at 160×45 and above it at 90×50; 120×30 keeps the three-row logo; TestBigLogoShape checks both sizes |
+| TestBigLogoWhereThereIsRoom (tui), TestBigLogoShape (components) | the block-letter logo sits beside the welcome at 120×30, above it at 60×40, is left out at 60×20, and stays the same on large windows (160×45); every row is exactly as wide as the logo, uses only `█ ▀ ▄`, in both themes |
 | TestDotsDifferByTone (theme) | each status tone has its own colour, and "unknown" (○) differs from "good" (●) even without colour |
 
 Updated for the new interface: help context "Dashboard:", narrow tab "1 Dashboard",
