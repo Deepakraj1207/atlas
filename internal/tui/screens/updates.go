@@ -145,6 +145,9 @@ func (u *Updates) Update(msg tea.Msg, ctx Context) (Screen, tea.Cmd) {
 		if u.cursor < len(vis) {
 			return u, send(StatusMsg{Status: components.Status{Text: vis[u.cursor].Name + " is held back: " + vis[u.cursor].Note + ".", Kind: components.StatusWarning}})
 		}
+		if len(vis) == 0 {
+			return u, requestCheck(ctx) // nothing listed: Enter checks (with a preview first)
+		}
 	}
 	u.clamp(len(u.visible(all)), h)
 	return u, nil
@@ -153,7 +156,7 @@ func (u *Updates) Update(msg tea.Msg, ctx Context) (Screen, tea.Cmd) {
 // Hints lists the Updates keys for the current state.
 func (u *Updates) Hints(ctx Context) []components.KeyHint {
 	if ctx.Data.UpdateSummary == nil || len(ctx.Data.Updates) == 0 {
-		return []components.KeyHint{{Key: "c", Desc: "check for updates"}}
+		return []components.KeyHint{{Key: "enter", Desc: "check for updates"}}
 	}
 	enter := "update this"
 	if len(u.selected) > 0 {
@@ -199,7 +202,7 @@ func (u *Updates) View(ctx Context) string {
 				"Update everything at once, or pick what to update",
 				"See exactly what will run, and how to go back, before anything changes",
 			},
-			Hint: "Press c to check for updates.",
+			Hint: "Press Enter to check for updates.",
 		}.Render(t, w)
 	}
 

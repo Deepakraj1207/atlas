@@ -146,6 +146,9 @@ func (c *Cleanup) Update(msg tea.Msg, ctx Context) (Screen, tea.Cmd) {
 		if len(chosen) > 0 {
 			return c, c.request(chosen)
 		}
+		if len(all) == 0 {
+			return c, requestTidyFind(ctx) // nothing listed: Enter looks (with a preview first)
+		}
 	}
 	c.cursor = min(max(c.cursor, 0), max(len(all)-1, 0))
 	return c, nil
@@ -154,6 +157,9 @@ func (c *Cleanup) Update(msg tea.Msg, ctx Context) (Screen, tea.Cmd) {
 // Hints lists the keys.
 func (c *Cleanup) Hints(ctx Context) []components.KeyHint {
 	h := []components.KeyHint{}
+	if len(c.all(ctx)) == 0 {
+		return []components.KeyHint{{Key: "enter", Desc: "look for things to tidy"}, {Key: "a", Desc: "analyze"}}
+	}
 	if len(c.all(ctx)) > 0 {
 		enter := "review this"
 		if n := len(c.selected); n > 0 {

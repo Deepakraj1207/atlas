@@ -382,7 +382,9 @@ Short, dated records of choices that shape the code.
     updates, memory in use), then key hints.
   - **Focus.** Esc is "back": it closes what a screen has open (a search, the details
     view), then moves focus to the section list, where ↑ ↓ move and Enter, → or Esc
-    return. Digits, Tab and `/` work everywhere, as before. Focus starts on the screen,
+    return. Digits, Tab and `/` work everywhere, as before. A screen with nothing to show
+    yet does its suggested action on Enter (scan, analyze, check, look for things to tidy),
+    always through its preview (0.2.1, after "Smart analysis not working" on Windows). Focus starts on the screen,
     so every existing key keeps its meaning. A screen keeps Esc for itself only while
     `HandlesBack` says it has something open.
   - **Dashboard** (Home, renamed in the interface only). A "What would you like to do?"

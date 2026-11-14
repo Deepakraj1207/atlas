@@ -38,6 +38,11 @@ func (a *SmartAnalysis) Update(msg tea.Msg, ctx Context) (Screen, tea.Cmd) {
 	}
 	n := a.entries(ctx)
 	switch key.String() {
+	case "enter", " ":
+		// With nothing to show yet, Enter does what the screen suggests.
+		if cmd := emptyAction(ctx); cmd != nil {
+			return a, cmd
+		}
 	case "a":
 		return a, requestAnalysis(ctx)
 	case "s":
@@ -68,11 +73,8 @@ func (a *SmartAnalysis) Update(msg tea.Msg, ctx Context) (Screen, tea.Cmd) {
 
 // Hints lists the keys.
 func (a *SmartAnalysis) Hints(ctx Context) []components.KeyHint {
-	switch {
-	case ctx.Data.Summary == nil:
-		return []components.KeyHint{{Key: "s", Desc: "scan first"}}
-	case ctx.Data.Analysis == nil:
-		return []components.KeyHint{{Key: "a", Desc: "analyze"}}
+	if h := emptyHints(ctx); h != nil {
+		return h
 	}
 	return append([]components.KeyHint{{Key: "↑/↓", Desc: "choose"}}, append(explainHint(ctx), components.KeyHint{Key: "a", Desc: "analyze again"})...)
 }
@@ -99,7 +101,7 @@ func (a *SmartAnalysis) View(ctx Context) string {
 		return head + components.EmptyState{
 			Title:   "Scan your system first",
 			Message: "Analysis works from the list of software a scan finds.",
-			Hint:    "Press s to scan. It only reads information.",
+			Hint:    "Press Enter to scan. It only reads information.",
 		}.Render(t, w)
 	case d.Analysis == nil:
 		return head + components.EmptyState{
@@ -110,7 +112,7 @@ func (a *SmartAnalysis) View(ctx Context) string {
 				"Apps installed twice by different tools, or in several versions",
 				"Runtimes nothing else needs any more, and updates still waiting",
 			},
-			Hint: "Press a to analyze.",
+			Hint: "Press Enter to analyze.",
 		}.Render(t, w)
 	}
 
@@ -257,6 +259,10 @@ func (dp *Dependencies) Update(msg tea.Msg, ctx Context) (Screen, tea.Cmd) {
 		n = len(ctx.Data.Analysis.Runtimes)
 	}
 	switch key.String() {
+	case "enter", " ":
+		if cmd := emptyAction(ctx); cmd != nil {
+			return dp, cmd
+		}
 	case "a":
 		return dp, requestAnalysis(ctx)
 	case "s":
@@ -282,11 +288,8 @@ func (dp *Dependencies) Update(msg tea.Msg, ctx Context) (Screen, tea.Cmd) {
 
 // Hints lists the keys.
 func (dp *Dependencies) Hints(ctx Context) []components.KeyHint {
-	if ctx.Data.Analysis == nil {
-		if ctx.Data.Summary == nil {
-			return []components.KeyHint{{Key: "s", Desc: "scan first"}}
-		}
-		return []components.KeyHint{{Key: "a", Desc: "analyze"}}
+	if h := emptyHints(ctx); h != nil {
+		return h
 	}
 	return []components.KeyHint{{Key: "↑/↓", Desc: "choose runtime"}, {Key: "a", Desc: "analyze again"}}
 }
@@ -312,7 +315,7 @@ func (dp *Dependencies) View(ctx Context) string {
 		return head + components.EmptyState{
 			Title:   "Dependencies haven't been mapped yet",
 			Message: "Analyzing your software also maps which runtimes other software needs, using your package managers' own records.",
-			Hint:    "Press a to analyze.",
+			Hint:    "Press Enter to analyze.",
 		}.Render(t, w)
 	case len(d.Analysis.Runtimes) == 0:
 		return head + components.EmptyState{
@@ -434,4 +437,32 @@ func staleNotes(ctx Context, r *core.AnalysisResult) string {
 		b.WriteString(t.Warning.Render(components.Wrap("Some data couldn't be read; see What ATLAS checked at the end.", w)) + "\n")
 	}
 	return b.String()
+}
+
+// emptyAction is what Enter does on Smart Analysis and Dependencies while
+// there is nothing to show: scan first, or analyze. Both preview before
+// anything runs. Nil once there are results (or a task is running).
+func emptyAction(ctx Context) tea.Cmd {
+	d := ctx.Data
+	switch {
+	case d.Busy() || d.Analysis != nil:
+		return nil
+	case d.Summary == nil:
+		return requestScan(ctx)
+	default:
+		return requestAnalysis(ctx)
+	}
+}
+
+// emptyHints are the keys for those empty states.
+func emptyHints(ctx Context) []components.KeyHint {
+	d := ctx.Data
+	switch {
+	case d.Analysis != nil:
+		return nil
+	case d.Summary == nil:
+		return []components.KeyHint{{Key: "enter", Desc: "scan first"}}
+	default:
+		return []components.KeyHint{{Key: "enter", Desc: "analyze"}}
+	}
 }

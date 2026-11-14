@@ -155,6 +155,8 @@ func (s *MySoftware) Update(msg tea.Msg, ctx Context) (Screen, tea.Cmd) {
 	case "enter", "right", "l":
 		if len(visible) > 0 {
 			s.detail = true
+		} else if ctx.Data.Summary == nil && key.String() == "enter" {
+			return s, requestScan(ctx) // nothing scanned yet: Enter does what the screen suggests
 		}
 	case "/":
 		if ctx.Data.Summary != nil {
@@ -197,7 +199,7 @@ func (s *MySoftware) Hints(ctx Context) []components.KeyHint {
 	case s.detail:
 		return append([]components.KeyHint{{Key: "esc", Desc: "back to list"}, {Key: "r", Desc: "remove…"}}, explainHint(ctx)...)
 	case ctx.Data.Summary == nil:
-		return []components.KeyHint{{Key: "s", Desc: "scan"}}
+		return []components.KeyHint{{Key: "enter", Desc: "scan"}}
 	}
 	filter := "show system components"
 	if s.showAll {
@@ -249,7 +251,7 @@ func (s *MySoftware) View(ctx Context) string {
 				"Show where each one came from and which version you have",
 				"Search and filter without needing to know package manager names",
 			},
-			Hint: "Press s to scan your system.",
+			Hint: "Press Enter to scan your system.",
 		}.Render(t, w)
 	}
 

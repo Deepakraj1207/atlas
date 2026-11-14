@@ -211,3 +211,69 @@ func TestBigLogoWhereThereIsRoom(t *testing.T) {
 		t.Errorf("large windows keep the three-row logo:\n%s", v)
 	}
 }
+
+// Reported on Windows: "Smart analysis not working". The Dashboard teaches
+// Enter, but an empty Smart Analysis only answered to "a", so Enter did
+// nothing. Now Enter does what each empty screen suggests, with the usual
+// preview first.
+func TestEnterDoesWhatAnEmptyScreenSuggests(t *testing.T) {
+	m := bootAnalysis(t, runtimeItems())
+	for _, section := range []string{"2", "4", "5"} {
+		m = press(t, m, section)
+		m = press(t, m, "enter")
+		if !m.PreviewOpen() || !strings.Contains(m.View(), "Scan My System") {
+			t.Errorf("section %s before a scan: Enter should offer the scan:\n%s", section, m.View())
+		}
+		m = press(t, m, "esc")
+	}
+
+	m = scanFromHome(t, m)
+	for _, section := range []string{"4", "5"} {
+		m = press(t, m, section)
+		if v := m.View(); !strings.Contains(v, "Press Enter to analyze") || !strings.Contains(v, "enter analyze") {
+			t.Errorf("section %s should say Enter analyzes:\n%s", section, v)
+		}
+		m = press(t, m, "enter")
+		if !m.PreviewOpen() || !strings.Contains(m.View(), "Analyze My Software") {
+			t.Errorf("section %s: Enter should offer the analysis:\n%s", section, m.View())
+		}
+		m = press(t, m, "esc")
+	}
+
+	m = press(t, m, "3")
+	m = press(t, m, "enter")
+	if !m.PreviewOpen() || !strings.Contains(m.View(), "Check for Updates") {
+		t.Errorf("Updates with nothing listed: Enter should offer the check:\n%s", m.View())
+	}
+	m = press(t, m, "esc")
+	m = press(t, m, "6")
+	m = press(t, m, "enter")
+	if !m.PreviewOpen() || !strings.Contains(m.View(), "Look for things to tidy") {
+		t.Errorf("Cleanup with nothing listed: Enter should offer to look:\n%s", m.View())
+	}
+}
+
+// The path from the report: Dashboard → "Find unused applications" → Enter
+// starts the analysis (after its preview), and the results appear.
+func TestFindUnusedAppsThenEnterAnalyzes(t *testing.T) {
+	m := scanFromHome(t, bootAnalysis(t, runtimeItems()))
+	m = press(t, m, "1")
+	for i := 0; i < 3; i++ {
+		m = press(t, m, "down")
+	}
+	m = press(t, m, "enter")
+	if m.Section() != nav.SmartAnalysis {
+		t.Fatalf("Find unused applications should open Smart Analysis, got %v", m.Section())
+	}
+	m = press(t, m, "enter")
+	if !m.PreviewOpen() {
+		t.Fatalf("Enter should preview the analysis:\n%s", m.View())
+	}
+	m = press(t, m, "enter")
+	if m.Analyzing() || m.Data().Analysis == nil {
+		t.Fatalf("the analysis should have run")
+	}
+	if v := m.View(); !strings.Contains(v, "What ATLAS checked") {
+		t.Errorf("Smart Analysis should show its results:\n%s", v)
+	}
+}

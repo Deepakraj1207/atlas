@@ -225,6 +225,19 @@ Real binary in a pseudo-terminal (120×30, true colour): Dashboard and header sh
 Esc then ↓ moves to My Software with the section hints, Enter and `/` open the search,
 q exits with 0.
 
+## Enter on empty screens (2026-11-14)
+
+Reported on Windows: "Smart analysis not working". Reproduced: after "Find unused
+applications" on the Dashboard, Smart Analysis said "Press a to analyze" and Enter did
+nothing.
+
+| Test | Proves |
+|------|--------|
+| TestFindUnusedAppsThenEnterAnalyzes (tui) | the reported path: Dashboard → Find unused applications → Enter previews the analysis → Enter runs it → results ("What ATLAS checked") |
+| TestEnterDoesWhatAnEmptyScreenSuggests (tui) | before a scan, Enter on My Software, Smart Analysis and Dependencies offers the scan; after it, Smart Analysis and Dependencies say "Press Enter to analyze" and Enter offers it; Updates and Cleanup with nothing listed offer the check and the search for things to tidy. Every case opens a preview first |
+
+Both fail on 0.2.0 and pass now.
+
 ## One-line installers (2026-11-14)
 
 `install.sh` run with `dash` (what `| sh` uses on Ubuntu) against the published v0.2.0

@@ -2,6 +2,14 @@ ATLAS shows what is installed on your computer and helps you keep it tidy and up
 date, in plain language. Nothing happens without a preview you confirm, and every
 action is recorded in Activity History.
 
+## What's new in 0.2.1
+
+**Enter works on empty screens.** Smart Analysis looked broken before its first run:
+it only answered to the `a` key, while the Dashboard teaches Enter. Now, when a screen
+has nothing to show yet, Enter does what it suggests: Smart Analysis and Dependencies
+analyze (or scan first), My Software scans, Updates checks, Cleanup looks for things to
+tidy. Each still shows its preview first, and the letter keys work as before.
+
 ## What's new in 0.2.0
 
 **A new look.** ATLAS opens on a Dashboard: a "What would you like to do?" list of
