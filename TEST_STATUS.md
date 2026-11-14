@@ -225,6 +225,28 @@ Real binary in a pseudo-terminal (120×30, true colour): Dashboard and header sh
 Esc then ↓ moves to My Software with the section hints, Enter and `/` open the search,
 q exits with 0.
 
+## One-line installers (2026-11-14)
+
+`install.sh` run with `dash` (what `| sh` uses on Ubuntu) against the published v0.2.0
+release, in a throwaway home folder:
+
+| Case | Result |
+|------|--------|
+| Fresh install, piped into `dash` like `curl … \| sh` | "Checksum OK", `atlas 0.2.0 (commit 705166f, built 2026-11-14)` runs |
+| Install folder not on PATH | prints the exact line to add; nothing else edited |
+| Run again | updates in place |
+| `ATLAS_VERSION=9.9.9` | "couldn't download …", exit 1 |
+| Tampered download (one byte appended, served locally) | "doesn't match its checksum, so it wasn't installed", exit 1; installed program byte-identical |
+| `ATLAS_UNINSTALL=1`, then again | removes `atlas`; second run says nothing to remove |
+| `ATLAS_INSTALL_DIR` | installs there |
+
+`install.ps1`: the PATH editing was simulated for an empty PATH, `%USERPROFILE%` entries, a
+trailing `;`, empty entries and a leading `;`. In every case install followed by uninstall
+restores the PATH exactly. The **install-check** workflow runs both installers on clean
+Windows (Windows PowerShell 5.1 and PowerShell 7), Ubuntu 24.04, Fedora 41 and Alpine 3.20
+(busybox, wget only): install, `atlas -version`, install again, uninstall, PATH restored,
+missing version fails without closing the session.
+
 ## Real Windows 11 PC (DESKTOP-41IVS1K, Windows 11 Home build 26300, not administrator)
 
 Reached through Desktop Commander. ATLAS was built on the PC with a portable Go in

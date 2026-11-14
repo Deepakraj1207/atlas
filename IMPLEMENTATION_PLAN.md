@@ -120,16 +120,15 @@ Changes from the plan:
 |------|--------|
 | MIT licence; version, commit and date in `atlas -version` | done |
 | `packaging/build-release.sh`: Windows zips, Linux tarballs, `.deb` (dpkg-deb) and `.rpm` (rpmbuild), SHA256SUMS | done |
-| `tools/release`: winget manifests (zip + nested portable, moniker `atlas`), validated by `winget validate` on Windows 11 | done |
+| ~~`tools/release`: winget manifests~~ | removed (D83): installs use the one-line installers instead |
+| `install.ps1` / `install.sh`: one-line installers, checksum-verified, per-user, update by re-running; `install-check.yml` on clean Windows (PowerShell 5.1 and 7), Ubuntu, Fedora, Alpine | done |
 | `release.yml`: tests, build, checks on Windows/Ubuntu/Fedora, draft release on `v*` tags | done (dry run on every packaging change) |
-| `winget-check.yml`: install a published release from its manifests on clean Windows | done (runs after publishing) |
 | `tools/catalogcheck` + `catalog-check.yml` (manual) | done |
 | Go 1.27.4 | done |
 | AI explanations: config, Settings row, `e` in Smart Analysis and My Software, preview of exact text, answer overlay, Activity History, plain-language errors | done |
 | Docs: `docs/RELEASING.md`, README install section | done |
 
-Not done, needing the user: tagging and publishing v0.1.0, submitting the manifests to
-microsoft/winget-pkgs, code signing (needs a certificate in the user's name), and a live
+Not done, needing the user: code signing (needs a certificate in the user's name), and a live
 AI request with the user's own API key.
 
 ## Later (not started)

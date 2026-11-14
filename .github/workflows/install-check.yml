@@ -1,0 +1,103 @@
+name: install-check
+
+# The one-line installers, run the way users run them, against the latest
+# published release: on clean Windows (Windows PowerShell 5.1 and PowerShell 7)
+# and in Ubuntu, Fedora and Alpine (no curl there, so wget is used). Each run
+# installs, starts atlas, installs again (the update path) and uninstalls.
+on:
+  push:
+    branches: ['**']
+    paths:
+      - 'install.sh'
+      - 'install.ps1'
+      - '.github/workflows/install-check.yml'
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-2025
+    strategy:
+      fail-fast: false
+      matrix:
+        shell: [powershell, pwsh]
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install, update and uninstall
+        run: |
+          $ErrorActionPreference = 'Stop'
+          "PowerShell $($PSVersionTable.PSVersion)"
+          function UserPath { (Get-Item HKCU:\Environment).GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames) }
+          $before = UserPath
+          $dir = Join-Path $env:LOCALAPPDATA 'Programs\ATLAS'
+          $script = Get-Content -Raw install.ps1
+
+          "--- install"
+          Invoke-Expression $script
+          if (-not (Test-Path "$dir\atlas.exe")) { throw "atlas.exe wasn't installed" }
+          if (-not ((UserPath) -split ';' -contains $dir)) { throw "$dir wasn't added to the user PATH" }
+          $line = (& atlas -version) -join ' '
+          $line
+          if ($line -notlike 'atlas * (commit *') { throw "atlas -version printed '$line'" }
+          if ($before -and -not (UserPath).StartsWith($before)) { throw "existing PATH entries were changed" }
+
+          "--- install again (update)"
+          Invoke-Expression $script
+          if (((UserPath) -split ';' | Where-Object { $_ -eq $dir }).Count -ne 1) { throw "PATH entry added twice" }
+
+          "--- uninstall"
+          $env:ATLAS_UNINSTALL = '1'
+          Invoke-Expression $script
+          Remove-Item Env:ATLAS_UNINSTALL
+          if (Test-Path "$dir\atlas.exe") { throw "atlas.exe is still there" }
+          if ((UserPath) -ne $before) { throw "user PATH not restored: '$(UserPath)' vs '$before'" }
+          "PATH restored exactly."
+
+          "--- a version that doesn't exist fails without closing the session"
+          $env:ATLAS_VERSION = '9.9.9'
+          Invoke-Expression $script
+          Remove-Item Env:ATLAS_VERSION
+          if (Test-Path "$dir\atlas.exe") { throw "something was installed" }
+          "still running: ok"
+
+  linux:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ['ubuntu:24.04', 'fedora:41', 'alpine:3.20']
+    container: ${{ matrix.image }}
+    steps:
+      - name: Tools the installer needs (as a user would have them)
+        run: |
+          case "${{ matrix.image }}" in
+            ubuntu*) apt-get update -q && apt-get install -y -q curl ca-certificates >/dev/null ;;
+            fedora*) dnf install -y -q tar gzip >/dev/null ;;
+            alpine*) : ;; # busybox: sh, wget, tar, sha256sum
+          esac
+      - uses: actions/checkout@v4
+      - name: Install, update and uninstall
+        shell: sh
+        run: |
+          set -eu
+          export HOME="$(mktemp -d)"
+          export PATH="$HOME/.local/bin:$PATH"
+          echo "--- install"
+          sh < install.sh
+          atlas -version | tee line.txt
+          grep -q '^atlas .* (commit ' line.txt
+          echo "--- install again (update)"
+          sh install.sh
+          echo "--- uninstall"
+          ATLAS_UNINSTALL=1 sh install.sh
+          test ! -e "$HOME/.local/bin/atlas"
+          echo "--- a version that doesn't exist fails"
+          if ATLAS_VERSION=9.9.9 sh install.sh; then echo "should have failed"; exit 1; fi
+          test ! -e "$HOME/.local/bin/atlas"

@@ -37,14 +37,25 @@ managers), it now shows both instead of hiding one.
 
 ## Install
 
-**Windows** (once the winget package is accepted):
+**Windows** (PowerShell):
 
 ```powershell
-winget install Deepakraj1207.ATLAS
+irm https://raw.githubusercontent.com/Deepakraj1207/atlas/main/install.ps1 | iex
 ```
 
-Or download `atlas_<version>_windows_amd64.zip` (or `_arm64`), unzip it, and run
-`atlas.exe` in Windows Terminal.
+**Linux:**
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Deepakraj1207/atlas/main/install.sh | sh
+```
+
+These download this release's file for your computer, check it against `SHA256SUMS`,
+and install `atlas` for your user only. No administrator rights or sudo.
+
+**Or by hand:**
+
+**Windows:** download `atlas_<version>_windows_amd64.zip` (or `_arm64`), unzip it, and
+run `atlas.exe` in Windows Terminal.
 
 **Ubuntu / Debian:** `sudo apt install ./atlas-lifecycle_<version>_amd64.deb`
 
@@ -58,7 +69,7 @@ The command is `atlas` everywhere. Check a download with `SHA256SUMS`.
 
 ## Update
 
-- **winget:** `winget upgrade Deepakraj1207.ATLAS` (quit ATLAS first).
+- **Installed with the one-line command:** run the same command again.
 - **.deb / .rpm:** download the new file and install it the same way; it replaces the
   old version and keeps your settings and saved data.
 - **zip / tarball:** replace the `atlas` program with the new one.
@@ -68,7 +79,7 @@ ATLAS never updates itself or checks for new versions in the background.
 ## Notes
 
 - The Windows build isn't code-signed yet, so SmartScreen may warn the first time you
-  run a downloaded `atlas.exe`. Installing through winget avoids the warning.
+  run an `atlas.exe` downloaded with a web browser.
 - The Linux package is called `atlas-lifecycle` because Fedora already has a package
   named `atlas` (a maths library).
 - `atlas -selftest` checks ATLAS against your computer without changing anything.

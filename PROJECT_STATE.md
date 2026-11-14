@@ -6,18 +6,18 @@ Windows 11. Linux stays compatible.
 
 ## Current phase
 
-**Next release: 0.2.0, prepared.** It adds the engineering audit fixes and the new
-interface (D77–D82) to 0.1.0. Release notes are in `packaging/release-notes.md`. The
-v0.1.0 draft release was never published. Next, by the owner: merge the working branch
-into `main`, tag `v0.2.0`, publish the draft release, let `winget-check` pass, then submit
-the winget manifests (see `docs/RELEASING.md`).
+**ATLAS 0.2.0 is published** (tag v0.2.0 on `main`, 705166f). It adds the engineering
+audit fixes and the new interface (D77–D82). Users install it with one command (D83):
+`irm …/install.ps1 | iex` on Windows, `curl -fsSL …/install.sh | sh` on Linux; running it
+again updates. winget packaging was dropped. The installers reach users once they are on
+`main`.
 
 - MIT licence; `atlas -version` shows version, commit and build date.
 - Release workflow: Windows zips (x64, ARM64), Linux tarballs, `.deb` and `.rpm`
-  (`atlas-lifecycle`), checksums and winget manifests, all checked automatically; a
-  version tag creates a draft release for a person to publish.
-- winget package `Deepakraj1207.ATLAS` (moniker and command `atlas`); manifests pass
-  `winget validate` on the user's Windows 11 PC. Submitting to winget is manual.
+  (`atlas-lifecycle`) and checksums, all checked automatically; a version tag creates a
+  draft release for a person to publish.
+- One-line installers `install.ps1` and `install.sh` (D83), tested by `install-check` on
+  clean Windows (PowerShell 5.1 and 7), Ubuntu, Fedora and Alpine.
 - Catalogue check: a manual workflow confirms every Discover package ID still exists.
 - AI explanations: off by default; `e` on a finding or an app, after a preview of exactly
   what is sent, asks Claude (official Anthropic Go SDK, `claude-opus-5-5`, billed to the
@@ -61,7 +61,7 @@ fixed one at a time, each with regression tests that fail on the old code:
 | 4. Smart Analysis and Dependencies | done |
 | 5. Cleanup: remove software and tidy caches, with a fresh dependency gate | done |
 | 6. Discover Apps: curated catalogue, local suggestions, install with preview | done |
-| 7. Release packaging, winget, catalogue check, AI explanations | done; v0.1.0 draft release created |
+| 7. Release packaging, installers, catalogue check, AI explanations | done; v0.2.0 published |
 
 ## What exists now
 

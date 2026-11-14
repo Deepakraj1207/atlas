@@ -66,9 +66,11 @@ public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, UIntPtr wP
             } else {
                 Say "Nothing to remove: $exe isn't there."
             }
-            $entries = Split-PathList (Get-UserPath)
-            $kept = @($entries | Where-Object { -not (Same-Dir $_ $dir) })
-            if ($kept.Count -ne $entries.Count) {
+            # Remove only our entry; every other entry stays exactly as it was.
+            $raw = Get-UserPath
+            $parts = $raw -split ';'
+            $kept = @($parts | Where-Object { $_ -eq '' -or -not (Same-Dir $_ $dir) })
+            if ($kept.Count -ne $parts.Count) {
                 Set-UserPath ($kept -join ';')
                 Say "Removed $dir from your PATH."
             }
@@ -140,9 +142,11 @@ public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, UIntPtr wP
         Say "Installed: $installed"
         Say "Location:  $exe"
 
-        $entries = Split-PathList (Get-UserPath)
-        if (-not ($entries | Where-Object { Same-Dir $_ $dir })) {
-            Set-UserPath ((@($entries) + $dir) -join ';')
+        # Append our entry and leave the rest of the user PATH exactly as it is.
+        $raw = Get-UserPath
+        if (-not (Split-PathList $raw | Where-Object { Same-Dir $_ $dir })) {
+            $updated = if ($raw -eq '') { $dir } elseif ($raw.EndsWith(';')) { "$raw$dir;" } else { "$raw;$dir" }
+            Set-UserPath $updated
             Say "Added $dir to your PATH."
         }
         if (-not (Split-PathList $env:Path | Where-Object { Same-Dir $_ $dir })) {
