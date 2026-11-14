@@ -72,6 +72,54 @@ func TestExplainSendsWhatThePreviewShows(t *testing.T) {
 	if _, ok := req["thinking"]; ok {
 		t.Error("thinking can't be turned off on this model; leave it unset")
 	}
+	if req["max_tokens"] != float64(DefaultMaxOutputTokens) {
+		t.Errorf("max_tokens = %v, want the default %d", req["max_tokens"], DefaultMaxOutputTokens)
+	}
+}
+
+func TestAnswerLimitIsConfigurable(t *testing.T) {
+	srv, got, _ := fakeAnthropic(t, 200, `{"id":"m","type":"message","role":"assistant","model":"claude-opus-5-5",
+		"content":[{"type":"text","text":"Node.js runs"}],"stop_reason":"max_tokens","usage":{"input_tokens":1,"output_tokens":2048}}`)
+	c := newTestClaude(srv.URL).WithMaxOutputTokens(2048)
+	ex, err := c.Explain(context.Background(), "x")
+	if err != nil || (*got)["max_tokens"] != float64(2048) {
+		t.Fatalf("max_tokens = %v, err %v", (*got)["max_tokens"], err)
+	}
+	if !ex.Truncated || ex.Text != "Node.js runs" {
+		t.Errorf("a cut-short answer is kept and marked: %+v", ex)
+	}
+	if p := c.Provider(); p.MaxOutputTokens != 2048 || !strings.Contains(p.Billing, "capped at 2048 output tokens") {
+		t.Errorf("provider = %+v", p)
+	}
+
+	srv, _, _ = fakeAnthropic(t, 200, `{"id":"m","type":"message","role":"assistant","model":"claude-opus-5-5",
+		"content":[],"stop_reason":"max_tokens","usage":{"input_tokens":1,"output_tokens":4096}}`)
+	_, err = newTestClaude(srv.URL).Explain(context.Background(), "x")
+	var se *core.SourceError
+	if !errors.As(err, &se) || !strings.Contains(se.Message, "answer limit (4096 tokens)") || !strings.Contains(se.Message, "ai.max_output_tokens") {
+		t.Errorf("no text at the limit: %v", err)
+	}
+}
+
+// External use is billed: the preview must say so, and how much at most.
+func TestClaudeBillingIsExplicit(t *testing.T) {
+	p := New("").Provider()
+	for _, want := range []string{"billed to your Anthropic API account", "doesn't cover it", "capped at 4096 output tokens", "claude-opus-5-5's published price", "usually much less"} {
+		if !strings.Contains(p.Billing, want) {
+			t.Errorf("billing text missing %q: %s", want, p.Billing)
+		}
+	}
+	if p.Local || p.Host != "api.anthropic.com" || p.Name != "Claude" {
+		t.Errorf("provider = %+v", p)
+	}
+	// 4096 output tokens at $20/M is $0.082; the longest question with the
+	// instructions, at 3 characters per token, adds under half a cent.
+	if !strings.Contains(p.Billing, "at most about US$0.09") {
+		t.Errorf("worst case should be about US$0.09: %s", p.Billing)
+	}
+	if other := New("claude-sonnet-5-5").Provider().Billing; strings.Contains(other, "US$") || !strings.Contains(other, "see Anthropic's pricing for claude-sonnet-5-5") {
+		t.Errorf("no made-up price for other models: %s", other)
+	}
 }
 
 func TestExplainErrorsArePlainLanguage(t *testing.T) {

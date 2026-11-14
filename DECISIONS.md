@@ -341,3 +341,28 @@ Short, dated records of choices that shape the code.
   both the x64 and x86 editions stays on its own. (4) When a weak entry from a
   higher-priority source joins, it stays the primary record. The cost is an occasional
   duplicate line, which is visible and harmless; a false merge isn't.
+
+- **D81. AI explanations: local option, explicit billing, minimised data, a cost cap.**
+  Still off by default, previewed every time (even with read-only previews turned
+  off), recorded in Activity History, and advisory only: the explainer port has no way
+  to run anything. Changes:
+  (1) **Ollama** as a second provider (`ai.provider: ollama`, `ai.model`,
+  `ai.ollama_url`), through Ollama's documented `/api/chat` HTTP API with the standard
+  library: no new dependency. It connects straight to the address shown (no proxy, no
+  redirects). A loopback address is described as "doesn't leave your computer" and
+  free; any other host is named as such, never called local. Ollama is never picked
+  automatically and a bad address never falls back to Anthropic.
+  (2) **Billing** is spelled out in the preview's "What will change" and in Settings:
+  billed to the user's Anthropic API account by the token, not covered by a Claude.ai
+  subscription, with the worst case for one question at the default model's published
+  price (US$4/US$20 per million tokens, Nov 2026: at most about US$0.09 with the default
+  limit). No price is invented for other models.
+  (3) **Minimised data.** `ExplainService.Prepare` replaces the home folder with `~`
+  and the user and computer names (whole words, 3+ characters, not generic names like
+  root) with `[user]` / `[computer]`. It caps each line at 300 characters and the
+  question at 2,000. The preview shows the prepared text and that exact text is sent.
+  (4) **`ai.max_output_tokens`** (default 4096, allowed 1024–16000) replaces the
+  hard-coded 16000. The floor exists because Claude's reasoning counts towards the
+  limit and can't be turned off on the default model; the ceiling keeps a request
+  without streaming under the SDK's timeout. An answer that hits the limit is kept and
+  marked "cut short"; one with no text says how to raise the limit.

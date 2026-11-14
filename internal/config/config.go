@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -95,8 +96,60 @@ type Config struct {
 // only after a preview of exactly what will be sent.
 type AIConfig struct {
 	Enabled bool `yaml:"enabled"`
-	// Model is the Claude model asked. Empty means the built-in default.
+	// Provider is who answers: "anthropic" (Claude, the default; billed to
+	// the user's Anthropic API account) or "ollama" (a model running
+	// locally in Ollama; free and nothing leaves the computer).
+	Provider string `yaml:"provider,omitempty"`
+	// Model is the model asked. Empty means the built-in default for
+	// Anthropic; Ollama needs one the user has pulled.
 	Model string `yaml:"model,omitempty"`
+	// MaxOutputTokens caps each answer's length, and so its cost. Empty
+	// means DefaultAIMaxOutputTokens.
+	MaxOutputTokens int `yaml:"max_output_tokens,omitempty"`
+	// OllamaURL is where Ollama listens. Empty means DefaultOllamaURL.
+	OllamaURL string `yaml:"ollama_url,omitempty"`
+}
+
+// AI providers.
+const (
+	AIProviderAnthropic = "anthropic"
+	AIProviderOllama    = "ollama"
+)
+
+// AI defaults and limits.
+const (
+	DefaultAIMaxOutputTokens = 4096
+	// MinAIMaxOutputTokens leaves room for the model's reasoning, which
+	// counts towards the limit on current Claude models.
+	MinAIMaxOutputTokens = 1024
+	// MaxAIMaxOutputTokens keeps a single request under the SDK's HTTP
+	// timeout without streaming.
+	MaxAIMaxOutputTokens = 16000
+	DefaultOllamaURL     = "http://localhost:11434"
+)
+
+// AIProviderName is the configured provider, defaulting to Anthropic.
+func (a AIConfig) AIProviderName() string {
+	if a.Provider == "" {
+		return AIProviderAnthropic
+	}
+	return a.Provider
+}
+
+// OutputTokens is the configured answer limit, or the default.
+func (a AIConfig) OutputTokens() int {
+	if a.MaxOutputTokens == 0 {
+		return DefaultAIMaxOutputTokens
+	}
+	return a.MaxOutputTokens
+}
+
+// OllamaEndpoint is the configured Ollama address, or the default.
+func (a AIConfig) OllamaEndpoint() string {
+	if a.OllamaURL == "" {
+		return DefaultOllamaURL
+	}
+	return a.OllamaURL
 }
 
 // UIConfig holds presentation preferences.
@@ -223,14 +276,7 @@ func merge(base, raw Config, data []byte) (Config, []string) {
 		warnings = append(warnings, fmt.Sprintf("Unknown mode %q ignored; using %s", raw.UI.Mode, base.UI.Mode))
 	}
 
-	if raw.AI.Model != "" {
-		if reModel.MatchString(raw.AI.Model) {
-			out.AI.Model = raw.AI.Model
-		} else {
-			warnings = append(warnings, fmt.Sprintf("AI model name %q doesn't look like a Claude model ID; using the default", raw.AI.Model))
-		}
-	}
-	out.AI.Enabled = raw.AI.Enabled
+	out.AI, warnings = validateAI(raw.AI, warnings)
 
 	switch raw.Logging.Level {
 	case "":
@@ -255,6 +301,51 @@ func merge(base, raw Config, data []byte) (Config, []string) {
 
 // reModel accepts Claude model IDs such as claude-opus-5-5.
 var reModel = regexp.MustCompile(`^claude-[a-z0-9.-]+$`)
+
+// reOllamaModel accepts Ollama model names such as llama3.2:3b or
+// library/qwen2.5:7b-instruct.
+var reOllamaModel = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$`)
+
+func validateAI(raw AIConfig, warnings []string) (AIConfig, []string) {
+	out := AIConfig{Enabled: raw.Enabled}
+	switch raw.Provider {
+	case "", AIProviderAnthropic, AIProviderOllama:
+		out.Provider = raw.Provider
+	default:
+		warnings = append(warnings, fmt.Sprintf("Unknown AI provider %q ignored; using %s", raw.Provider, AIProviderAnthropic))
+	}
+	if raw.Model != "" {
+		switch {
+		case out.AIProviderName() == AIProviderOllama && reOllamaModel.MatchString(raw.Model):
+			out.Model = raw.Model
+		case out.AIProviderName() == AIProviderAnthropic && reModel.MatchString(raw.Model):
+			out.Model = raw.Model
+		case out.AIProviderName() == AIProviderOllama:
+			warnings = append(warnings, fmt.Sprintf("AI model name %q doesn't look like an Ollama model name; ignored", raw.Model))
+		default:
+			warnings = append(warnings, fmt.Sprintf("AI model name %q doesn't look like a Claude model ID; using the default", raw.Model))
+		}
+	}
+	switch n := raw.MaxOutputTokens; {
+	case n == 0:
+	case n < MinAIMaxOutputTokens:
+		out.MaxOutputTokens = MinAIMaxOutputTokens
+		warnings = append(warnings, fmt.Sprintf("AI answer limit %d is too small (the model's reasoning counts towards it); using %d", n, MinAIMaxOutputTokens))
+	case n > MaxAIMaxOutputTokens:
+		out.MaxOutputTokens = MaxAIMaxOutputTokens
+		warnings = append(warnings, fmt.Sprintf("AI answer limit %d is more than %d; using %d", n, MaxAIMaxOutputTokens, MaxAIMaxOutputTokens))
+	default:
+		out.MaxOutputTokens = n
+	}
+	if raw.OllamaURL != "" {
+		if u, err := url.Parse(raw.OllamaURL); err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != "" && u.User == nil {
+			out.OllamaURL = strings.TrimRight(raw.OllamaURL, "/")
+		} else {
+			warnings = append(warnings, fmt.Sprintf("Ollama address %q isn't a web address like %s; using that", raw.OllamaURL, DefaultOllamaURL))
+		}
+	}
+	return out, warnings
+}
 
 // presentKeys reports which dotted keys exist in the YAML document.
 func presentKeys(data []byte) map[string]bool {

@@ -1,6 +1,8 @@
-// Package ai explains software in plain language using Claude, Anthropic's
-// AI model, through the official Anthropic Go SDK. It is optional and off by
-// default; the TUI previews exactly what will be sent before anything is.
+// Package ai explains software in plain language, using Claude (Anthropic's
+// AI, through the official Anthropic Go SDK) or a model running locally in
+// Ollama. It is optional and off by default; the TUI previews exactly what
+// will be sent before anything is. Answers are advice only: nothing here
+// runs commands or changes the computer.
 package ai
 
 import (
@@ -31,10 +33,21 @@ Answer in plain language, in at most 150 words:
 
 Rules: no headings or tables; short paragraphs or a few bullets. Don't invent version numbers, dates or facts you aren't sure of; say when you're unsure. Never suggest commands that delete data, disable security features or change system settings. If removing or updating something could break other software, say so.`
 
+// DefaultMaxOutputTokens caps an answer unless settings say otherwise.
+const DefaultMaxOutputTokens = 4096
+
+// Anthropic's published price for DefaultModel, per million tokens, as of
+// November 2026. Used only to tell the user the most a question can cost.
+const (
+	defaultModelInputPerMTok  = 4.0
+	defaultModelOutputPerMTok = 20.0
+)
+
 // Claude implements core.Explainer.
 type Claude struct {
-	client anthropic.Client
-	model  string
+	client    anthropic.Client
+	model     string
+	maxTokens int
 }
 
 // New returns an explainer that asks model (DefaultModel if empty). The SDK
@@ -44,7 +57,39 @@ func New(model string, opts ...option.RequestOption) *Claude {
 	if model == "" {
 		model = DefaultModel
 	}
-	return &Claude{client: anthropic.NewClient(opts...), model: model}
+	return &Claude{client: anthropic.NewClient(opts...), model: model, maxTokens: DefaultMaxOutputTokens}
+}
+
+// WithMaxOutputTokens caps each answer at n tokens (n <= 0 keeps the
+// default). Claude's reasoning counts towards the cap.
+func (c *Claude) WithMaxOutputTokens(n int) *Claude {
+	if n > 0 {
+		c.maxTokens = n
+	}
+	return c
+}
+
+// Provider says where questions go and that they are billed.
+func (c *Claude) Provider() core.AIProvider {
+	billing := fmt.Sprintf("Each question is billed to your Anthropic API account by the token. That is separate from any Claude.ai subscription, which doesn't cover it. Answers are capped at %d output tokens", c.maxTokens)
+	if c.model == DefaultModel {
+		// Upper bound: the longest question Prepare allows plus the
+		// instructions, at a pessimistic 3 characters per token.
+		in := float64(len(instructions)+MaxQuestionChars) / 3
+		most := (in*defaultModelInputPerMTok + float64(c.maxTokens)*defaultModelOutputPerMTok) / 1e6
+		billing += fmt.Sprintf("; at %s's published price (US$%g per million input tokens and US$%g per million output tokens, November 2026), one question costs at most about US$%.2f, usually much less", DefaultModel, defaultModelInputPerMTok, defaultModelOutputPerMTok, most)
+	} else {
+		billing += "; see Anthropic's pricing for " + c.model
+	}
+	return core.AIProvider{Name: "Claude", Service: "Anthropic", Host: "api.anthropic.com", Billing: billing + ".", MaxOutputTokens: c.maxTokens}
+}
+
+// Ready reports whether the SDK is likely to find credentials.
+func (c *Claude) Ready() (bool, string) {
+	if CredentialsAvailable() {
+		return true, ""
+	}
+	return false, "No Anthropic API key found. Set ANTHROPIC_API_KEY (or sign in with \"ant auth login\") and restart ATLAS"
 }
 
 // Model is the model asked.
@@ -57,7 +102,7 @@ func (c *Claude) Instructions() string { return instructions }
 func (c *Claude) Explain(ctx context.Context, question string) (core.Explanation, error) {
 	resp, err := c.client.Beta.Messages.New(ctx, anthropic.BetaMessageNewParams{
 		Model:     c.model,
-		MaxTokens: 16000,
+		MaxTokens: int64(c.maxTokens),
 		System:    []anthropic.BetaTextBlockParam{{Text: instructions}},
 		Messages:  []anthropic.BetaMessageParam{anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock(question))},
 		// Short, everyday explanations: low effort is enough and quicker.
@@ -79,7 +124,13 @@ func (c *Claude) Explain(ctx context.Context, question string) (core.Explanation
 			parts = append(parts, strings.TrimSpace(t.Text))
 		}
 	}
+	cut := resp.StopReason == anthropic.BetaStopReasonMaxTokens
 	if len(parts) == 0 {
+		if cut {
+			return core.Explanation{}, &core.SourceError{
+				Message: fmt.Sprintf("Claude reached the answer limit (%d tokens) before answering. You can raise ai.max_output_tokens in the settings file", c.maxTokens),
+				Details: "stop reason: max_tokens"}
+		}
 		return core.Explanation{}, &core.SourceError{Message: "Claude didn't return an answer", Details: "stop reason: " + string(resp.StopReason)}
 	}
 	return core.Explanation{
@@ -87,6 +138,7 @@ func (c *Claude) Explain(ctx context.Context, question string) (core.Explanation
 		Model:        string(resp.Model),
 		InputTokens:  resp.Usage.InputTokens,
 		OutputTokens: resp.Usage.OutputTokens,
+		Truncated:    cut,
 	}, nil
 }
 

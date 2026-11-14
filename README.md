@@ -37,8 +37,24 @@ computer without changing anything.
   explains why, and installs them through your package manager after a preview. No
   internet lookups are made to build suggestions.
 - **AI explanations** (optional, off by default): press `e` on a finding or an app to
-  ask Claude, Anthropic's AI, what it is and whether it matters. You see exactly what
-  will be sent first; it needs your own Anthropic API key in `ANTHROPIC_API_KEY`.
+  ask an AI what it is and whether it matters. You see exactly what will be sent first
+  (your user name, home folder and computer name are removed), and answers are advice
+  only: ATLAS never runs what they suggest. Two choices, set in the settings file:
+  - **Claude**, Anthropic's AI (the default). Needs your own API key in
+    `ANTHROPIC_API_KEY` (or `ant auth login`), and each question is billed to that
+    Anthropic API account by the token (a Claude.ai subscription doesn't cover it).
+    The preview shows the most one question can cost.
+  - **Ollama**, a model running on your own computer: free, and nothing goes over the
+    internet. Install [Ollama](https://ollama.com), pull a model (`ollama pull llama3.2`), then:
+
+    ```yaml
+    ai:
+      enabled: true
+      provider: ollama
+      model: llama3.2
+      # ollama_url: http://localhost:11434   (the default)
+      # max_output_tokens: 4096              (answer length limit, 1024-16000)
+    ```
 - **Activity History** records every scan and change, so nothing happens silently.
 - Simple and Advanced modes, dark and light themes, and help on every screen.
 

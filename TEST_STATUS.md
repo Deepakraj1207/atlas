@@ -168,6 +168,37 @@ versions, `< 3.10.3`) pass unchanged.
 Verification: gofmt clean; `go vet ./...` (Linux and `GOOS=windows`); `go test ./...` all
 pass; `go test -race` on inventory, cleanup, updates pass; Windows amd64 and Linux amd64
 builds pass.
+CI on 927a99e: `windows` (run 43570907369) and `linux` (run 43570907907) passed.
+
+**P1 — AI privacy and local inference.** Gaps confirmed in the old code: the answer limit
+was hard-coded at 16,000 tokens; an answer cut off at that limit was shown as complete;
+a user or computer name inside a software name was sent as is; billing was one clause
+("may be charged a small amount"); only Anthropic was possible.
+
+| Test | Proves |
+|------|--------|
+| TestPrepareRemovesIdentifyingDetails (ai) | home folder (either slash, any case) becomes `~`, user name `[user]`, computer name `[computer]`, as whole words only ("Priya.Ramanathan Ltd" kept); generic names (root, short names) untouched; idempotent; long lines and questions shortened visibly to 300 / 2,000 characters |
+| TestExplainSendsWhatThePreviewShows (ai, extended) | default `max_tokens` is 4096, not 16000 |
+| TestAnswerLimitIsConfigurable (ai) | `WithMaxOutputTokens(2048)` is sent; a `max_tokens` stop keeps the text and marks it cut short; with no text, the error names `ai.max_output_tokens` |
+| TestClaudeBillingIsExplicit (ai) | billed to the Anthropic API account by the token, not covered by a Claude.ai subscription, the cap, and at most about US$0.09 at claude-opus-5-5's price; no price invented for other models |
+| TestOllamaSendsWhatThePreviewShows (ai) | `POST /api/chat` with the model, the same instructions and the question, `stream: false`, `num_predict` = the limit, and nothing else; `<think>` blocks removed from the answer |
+| TestOllamaProblemsArePlainLanguage (ai) | model not pulled → "Run "ollama pull llama3.2" first"; server error; not Ollama; limit reached with and without text; not running → "Is Ollama running?" |
+| TestOllamaDoesNotFollowRedirects (ai) | the question never goes to a host other than the one shown |
+| TestOllamaProviderAndReady (ai) | localhost, 127.0.0.1 and ::1 are local and free; a LAN host is named and never called local or free; no model → not ready, says to set `ai.model`; only http(s) addresses |
+| TestServiceNamesTheProviderAndCutAnswers, TestServiceRecordsEveryQuestion (ai) | Activity History names the provider and host and the answer limit, and notes a cut-short answer; a local model gets 5 minutes |
+| TestAIProviderAndLimits (config) | defaults; Ollama settings load and survive saving; unknown provider, wrong model format per provider, limits below 1024 or above 16000, non-http and credential-bearing Ollama addresses → warning and safe value |
+| TestNewExplainerFollowsSettings (app) | settings pick the provider and limit; an unusable Ollama address is never ready and never falls back to Anthropic |
+| TestAIExplanationPreviewsExactlyWhatIsSent (tui, extended) | the preview shows the prepared text, the destination, "Cost: … billed …", "user name and computer name are replaced", "ATLAS never runs anything it suggests"; the prepared text is what's sent |
+| TestLocalAIPreviewSaysNothingLeavesTheComputer (tui) | with Ollama: "It doesn't leave your computer", "Cost: Free", no mention of Anthropic, answer labelled "Ollama's explanation" |
+| TestAIExplanationIsOffByDefault, …NeedsAKey, …ErrorIsExplained, TestSettingsTurnsAIOnAndOff (tui) | unchanged and passing: off by default, nothing sent without the preview and Enter |
+
+Not verified here: a real Ollama server and model (none can be installed or downloaded in
+this environment). The Ollama adapter is tested over real HTTP against a server that
+answers in the documented `/api/chat` format.
+
+Verification: gofmt clean; `go vet ./...` (Linux and `GOOS=windows`); `go test ./...` all
+pass; `go test -race` on ai, tui, config pass; Windows amd64, Linux amd64 and arm64 builds
+pass.
 
 ## Real Windows 11 PC (DESKTOP-41IVS1K, Windows 11 Home build 26300, not administrator)
 
