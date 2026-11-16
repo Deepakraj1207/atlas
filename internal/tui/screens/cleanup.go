@@ -308,5 +308,5 @@ func tidyInvite(empty bool) string {
 	if empty {
 		key = "Enter"
 	}
-	return "Press " + key + " to look for package caches, old versions kept after updates, and packages nothing needs. Looking changes nothing."
+	return "Press " + key + " to look for caches and leftovers. Looking changes nothing."
 }

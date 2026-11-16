@@ -213,9 +213,9 @@ func (s *Settings) fileStatus(ctx Context) string {
 			ShowDetails: ctx.Advanced(),
 		}.Render(t, w))
 	case !res.Found:
-		b.WriteString(t.Muted.Render(components.Wrap("No settings file yet. Defaults are in use; one is created the first time you change a setting.", w)))
+		b.WriteString(t.Muted.Render(components.Wrap("Using the defaults until you change something.", w)))
 	default:
-		b.WriteString(t.Muted.Render(components.Wrap("Settings loaded from your settings file.", w)))
+		b.WriteString(t.Muted.Render(components.Wrap("Loaded from your settings file.", w)))
 	}
 
 	if len(res.Warnings) > 0 {

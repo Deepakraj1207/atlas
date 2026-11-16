@@ -23,22 +23,22 @@ var (
 	}
 
 	navigationHelp = []components.KeyHint{
-		{Key: "esc", Desc: "Back: leave the screen's list and move through the sections with ↑ ↓ (Esc or Enter returns)"},
-		{Key: "↑ ↓", Desc: "Move through the screen's list, or through the sections after Esc"},
-		{Key: "enter", Desc: "Choose the highlighted item or section"},
-		{Key: "1 … 9", Desc: "Jump straight to a section (shown next to each name)"},
+		{Key: "esc", Desc: "Back to the section list (Enter returns)"},
+		{Key: "↑ ↓", Desc: "Move through the list"},
+		{Key: "enter", Desc: "Choose the highlighted item"},
+		{Key: "1 … 9", Desc: "Jump to a section"},
 		{Key: "tab / shift+tab", Desc: "Next / previous section"},
-		{Key: "/", Desc: "Search your software from anywhere"},
-		{Key: "pgup / pgdn", Desc: "Scroll the screen when it does not fit"},
+		{Key: "/", Desc: "Search your software"},
+		{Key: "pgup / pgdn", Desc: "Scroll a long screen"},
 	}
 
 	generalHelp = []components.KeyHint{
-		{Key: "m", Desc: "Switch between Simple and Advanced mode (remembered)"},
-		{Key: "t", Desc: "Switch between dark and light theme (remembered)"},
+		{Key: "m", Desc: "Simple or Advanced mode"},
+		{Key: "t", Desc: "Dark or light theme"},
 		{Key: "?", Desc: "Open or close this help"},
-		{Key: "esc", Desc: "Close an overlay, or cancel a preview without doing anything"},
-		{Key: "x", Desc: "Stop a running scan, update check, analysis or search (nothing is changed either way)"},
-		{Key: "r", Desc: "In a removal or clean-up preview: go ahead (Enter alone never confirms a deletion)"},
+		{Key: "esc", Desc: "Close, or cancel a preview"},
+		{Key: "x", Desc: "Stop a running scan, check or search"},
+		{Key: "r", Desc: "Confirm a removal (Enter never does)"},
 		{Key: "q / ctrl+c", Desc: "Quit ATLAS"},
 	}
 )

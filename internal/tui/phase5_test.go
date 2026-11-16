@@ -204,7 +204,7 @@ func TestBlockedRemovalExplainsAndCannotBeForced(t *testing.T) {
 func TestCleanupScreenSuggestionsAndTidyUps(t *testing.T) {
 	e := bootCleanup(t)
 	m := press(t, e.m, "6")
-	if !strings.Contains(m.View(), "Analyze your software (press a)") || !strings.Contains(m.View(), "Press Enter to look for package caches") {
+	if !strings.Contains(m.View(), "Analyze your software (press a)") || !strings.Contains(m.View(), "Press Enter to look for caches and leftovers") {
 		t.Errorf("empty Cleanup should explain both sections:\n%s", m.View())
 	}
 
