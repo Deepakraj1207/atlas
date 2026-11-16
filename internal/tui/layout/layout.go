@@ -43,6 +43,17 @@ const (
 	FooterHeight = 2 // message line + hints line
 	// TabBarHeight is used instead of the sidebar on Narrow/Medium.
 	TabBarHeight = 2
+
+	// ShortTabsWidth is the width one row of short section names needs
+	// ("1 Dashboard  2 Software …  9 Settings"); TwoRowTabsWidth is what
+	// the same names need on two rows. Below that, or on short terminals,
+	// only the current section is named. A components test keeps these in
+	// step with the section names.
+	ShortTabsWidth  = 105
+	TwoRowTabsWidth = 59
+	// TwoRowTabsMinHeight is the shortest terminal that spends a second
+	// row on section names.
+	TwoRowTabsMinHeight = 20
 )
 
 // Layout is the set of decisions derived from a terminal size.
@@ -62,6 +73,9 @@ type Layout struct {
 	TwoColumn bool
 	// UseShortTitles tells tab bars to use abbreviated section names.
 	UseShortTitles bool
+	// TabRows is how many rows of section names the tab bar has: 2 when
+	// one row can't name every section but two can, otherwise 1.
+	TabRows int
 
 	// ContentWidth and ContentHeight are the space left for the active screen.
 	ContentWidth, ContentHeight int
@@ -108,7 +122,11 @@ func Compute(width, height int) Layout {
 		used += HeaderHeight
 	}
 	if l.ShowTabBar {
-		used += TabBarHeight
+		l.TabRows = 1
+		if width < ShortTabsWidth && width >= TwoRowTabsWidth && height >= TwoRowTabsMinHeight {
+			l.TabRows = 2
+		}
+		used += TabBarHeight + l.TabRows - 1
 	}
 	l.ContentHeight = max(height-used, 1)
 

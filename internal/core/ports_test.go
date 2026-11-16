@@ -77,3 +77,27 @@ func TestExitCodeHelpers(t *testing.T) {
 // negHRESULT is 0x8A15010C as Windows returns it to Go on 64-bit: a negative
 // 32-bit value.
 var negHRESULT = int(int32(-1978334964))
+
+func TestFindingsSummaryLeavesOutZeros(t *testing.T) {
+	for _, c := range []struct {
+		att, info int
+		want      string
+	}{
+		{1, 0, "1 needs attention"}, {3, 0, "3 need attention"}, {1, 2, "1 needs attention, 2 worth knowing"},
+		{0, 2, "nothing urgent, 2 worth knowing"}, {0, 0, "nothing needs your attention"},
+	} {
+		if got := FindingsSummary(c.att, c.info); got != c.want {
+			t.Errorf("FindingsSummary(%d, %d) = %q, want %q", c.att, c.info, got, c.want)
+		}
+	}
+}
+
+func TestSentence(t *testing.T) {
+	for in, want := range map[string]string{
+		"Is Ollama running?": "Is Ollama running?", "No key found": "No key found.", "Done.": "Done.", " Stop! ": "Stop!", "": "",
+	} {
+		if got := Sentence(in); got != want {
+			t.Errorf("Sentence(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

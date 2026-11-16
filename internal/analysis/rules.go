@@ -68,7 +68,7 @@ func Analyze(in Inputs) ([]core.Finding, []core.Runtime, []core.CheckSummary) {
 	if unused != nil {
 		findings = append(findings, *unused)
 	}
-	uc := core.CheckSummary{Name: "Apps not opened in over a year", Available: in.UsageAvailable}
+	uc := core.CheckSummary{Name: core.CheckUnusedApps, Available: in.UsageAvailable}
 	if in.UsageAvailable {
 		if unused != nil {
 			uc.Found = len(unused.Items)
@@ -367,7 +367,7 @@ func unusedFinding(in Inputs) (*core.Finding, int) {
 		return nil, matched
 	}
 	return &core.Finding{
-		Key: "unused", Kind: "unused", Severity: core.SeverityInfo,
+		Key: "unused", Kind: core.FindingUnused, Severity: core.SeverityInfo,
 		Title:      fmt.Sprintf("%d apps haven't been opened in over a year", len(refs)),
 		Summary:    "Windows recorded when you last opened these, and it was more than a year ago.",
 		Why:        "Unused software still takes space and may still need updates.",

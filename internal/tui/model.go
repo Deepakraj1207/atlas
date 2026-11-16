@@ -196,11 +196,14 @@ func (m Model) startupStatus() components.Status {
 	case m.logErr != "":
 		return components.Status{Text: "Logging could not start; ATLAS still works. See Settings for details.", Kind: components.StatusWarning}
 	case !m.cfgRes.Found:
-		return components.Status{Text: "Welcome! Using default settings. Press ? for help."}
+		return components.Status{Text: welcomeText}
 	default:
 		return components.Status{Text: "Settings loaded. Press ? for help."}
 	}
 }
+
+// welcomeText greets a first run (no settings file yet).
+const welcomeText = "Welcome! Using default settings. Press ? for help."
 
 // statusClearAfter is how long a status message stays before clearing.
 // Tests shorten it.
@@ -228,6 +231,10 @@ func (m Model) readSystem() tea.Cmd {
 type configSavedMsg struct {
 	err  error
 	what string
+	// note, if set, follows "(saved)" and sets the message's kind: a
+	// setting can be saved and still need something from the user.
+	note string
+	kind components.StatusKind
 }
 
 // Init starts the status-clear timer and loads saved data.
@@ -414,6 +421,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.cfgRes.Err = nil
 		m.cfgRes.Warnings = nil
 		m.cfgRes.Found = true
+		if msg.note != "" {
+			return m, m.setStatus(components.Status{Text: msg.what + " (saved). " + msg.note, Kind: msg.kind})
+		}
 		return m, m.setStatus(components.Status{Text: msg.what + " (saved)", Kind: components.StatusSuccess})
 
 	case screens.ShowActionPreviewMsg:
@@ -662,6 +672,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.log.Error("load saved data", "error", msg.err)
 		}
 		m.data.Summary, m.data.Items, m.data.Activity = msg.summary, msg.items, msg.activity
+		// "Welcome!" is for a first run. Someone with a saved scan who
+		// simply never changed a setting isn't new.
+		if msg.summary != nil && m.status.Text == welcomeText {
+			m.status = components.Status{}
+		}
 		return m, loadDiscovery(m.dsc)
 
 	case spinner.TickMsg:
@@ -699,6 +714,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		what := "AI explanations off: nothing will be sent"
 		if msg.Enabled {
 			what = "AI explanations on: press e on a finding or an app. You'll see what is sent first"
+			// Say at once what is still missing, instead of leaving it
+			// to be discovered on the first question.
+			if m.explain != nil {
+				if ok, reason := m.explain.Ready(); !ok {
+					return m, m.saveNote("AI explanations on", "Not ready yet: "+core.Sentence(reason), components.StatusWarning)
+				}
+			}
 		}
 		return m, m.save(what)
 
@@ -718,6 +740,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.nav.Go(msg.Section)
 		m.navFocus = false
 		m.scroll[msg.Section] = 0
+		if msg.Finding != "" {
+			return m.updateScreen(screens.FocusFindingMsg{Kind: msg.Finding})
+		}
 		return m, nil
 
 	case screens.SearchMsg:
@@ -962,6 +987,16 @@ func (m Model) save(what string) tea.Cmd {
 	}
 }
 
+// saveNote is save with a note shown after "(saved)".
+func (m Model) saveNote(what, note string, kind components.StatusKind) tea.Cmd {
+	save := m.save(what)
+	return func() tea.Msg {
+		msg := save().(configSavedMsg)
+		msg.note, msg.kind = note, kind
+		return msg
+	}
+}
+
 func (m *Model) setStatus(st components.Status) tea.Cmd {
 	m.status = st
 	return m.scheduleStatusClear()
@@ -1002,7 +1037,7 @@ func (m Model) View() string {
 		b.WriteString("\n\n") // and a blank gutter above the content
 	}
 	if l.ShowTabBar {
-		b.WriteString(components.NavTabs(t, m.nav.Current(), l.Width, l.UseShortTitles, m.navFocus))
+		b.WriteString(components.NavTabs(t, m.nav.Current(), l.Width, l.TabRows, l.UseShortTitles, m.navFocus))
 		b.WriteString("\n")
 	}
 

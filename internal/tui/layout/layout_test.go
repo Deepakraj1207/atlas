@@ -56,8 +56,27 @@ func TestMediumAndNarrowUseTabBar(t *testing.T) {
 	if n.TwoColumn {
 		t.Error("narrow must be single column")
 	}
-	if n.ContentHeight != 24-HeaderHeight-FooterHeight-TabBarHeight {
-		t.Errorf("narrow content height = %d", n.ContentHeight)
+	// 60 columns can't name every section on one row but can on two, so
+	// the tab bar takes one more row.
+	if n.TabRows != 2 || n.ContentHeight != 24-HeaderHeight-FooterHeight-TabBarHeight-1 {
+		t.Errorf("narrow: %d tab rows, content height %d", n.TabRows, n.ContentHeight)
+	}
+}
+
+func TestTabRowsFollowTheWidthAndHeight(t *testing.T) {
+	for _, c := range []struct{ w, h, rows int }{
+		{108, 30, 1}, // one row of short names fits
+		{ShortTabsWidth, 30, 1},
+		{ShortTabsWidth - 1, 30, 2},
+		{80, 24, 2},
+		{TwoRowTabsWidth, 24, 2},
+		{TwoRowTabsWidth - 1, 24, 1},     // too narrow even for two rows
+		{80, TwoRowTabsMinHeight - 1, 1}, // too short to spend a row on names
+		{120, 30, 0},                     // sidebar instead
+	} {
+		if got := Compute(c.w, c.h).TabRows; got != c.rows {
+			t.Errorf("Compute(%d, %d).TabRows = %d, want %d", c.w, c.h, got, c.rows)
+		}
 	}
 }
 

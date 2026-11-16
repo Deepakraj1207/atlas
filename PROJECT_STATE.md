@@ -9,8 +9,11 @@ Windows 11. Linux stays compatible.
 **ATLAS 0.2.0 is published** (tag v0.2.0 on `main`, 705166f). It adds the engineering
 audit fixes and the new interface (D77–D82). Users install it with one command (D83):
 `irm …/install.ps1 | iex` on Windows, `curl -fsSL …/install.sh | sh` on Linux; running it
-again updates. winget packaging was dropped. The installers reach users once they are on
-`main`.
+again updates. winget packaging was dropped.
+
+**0.2.1 is prepared on the working branch** (not yet on `main` or released): Enter on
+empty screens, a record of interrupted runs (D84), and the fixes from testing as six
+kinds of user (D85). Release notes are in `packaging/release-notes.md`.
 
 - MIT licence; `atlas -version` shows version, commit and build date.
 - Release workflow: Windows zips (x64, ARM64), Linux tarballs, `.deb` and `.rpm`

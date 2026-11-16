@@ -29,6 +29,8 @@ type Service struct {
 	// Hooks for the terminal job; replaced in tests.
 	start  handover.ProcessStarter
 	notify func() (<-chan os.Signal, func())
+	// journal notes a run in Activity History before it starts.
+	journal *handover.Journal
 }
 
 var _ core.UpdateService = (*Service)(nil)
@@ -38,7 +40,8 @@ func NewService(managers []core.PackageManager, store core.Store, log *slog.Logg
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	return &Service{managers: managers, store: store, log: log, timeouts: timeouts, now: time.Now, start: handover.ExecStarter, notify: handover.NotifyInterrupt}
+	return &Service{managers: managers, store: store, log: log, timeouts: timeouts, now: time.Now, start: handover.ExecStarter, notify: handover.NotifyInterrupt,
+		journal: handover.NewJournal(store, log)}
 }
 
 // WithVerifier sets what re-reads installed versions after updates.
@@ -165,7 +168,7 @@ func (s *Service) Plan(ups []core.Update) []core.UpdateStep {
 
 // NewJob prepares a terminal job. Nothing runs until the TUI calls Run.
 func (s *Service) NewJob(steps []core.UpdateStep) core.TerminalJob {
-	return handover.New(steps, s.start, s.notify)
+	return handover.New(steps, s.start, s.notify).OnStart(func() { s.journal.Started("updates.apply", "updating", steps) })
 }
 
 // RecordResults writes the activity entry and removes applied updates.
@@ -203,6 +206,7 @@ func (s *Service) RecordResults(ctx context.Context, results []core.StepResult) 
 	}
 	a := ApplyActivity(results, s.now())
 	inventory.AddVerification(&a, out)
+	s.journal.Finished(ctx) // the real outcome replaces the "started" note
 	if _, err := s.store.AddActivity(ctx, a); err != nil {
 		s.log.Error("record update activity", "error", err)
 		return out, err

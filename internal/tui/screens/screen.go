@@ -4,7 +4,6 @@
 package screens
 
 import (
-	"fmt"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -137,7 +136,7 @@ func (d DataView) Health() (string, theme.Tone) {
 	}
 	if d.Analysis != nil && !d.AnalysisStale() {
 		if att, _ := d.Analysis.Counts(); att > 0 {
-			return fmt.Sprintf("%d need attention", att), theme.ToneWarn
+			return core.NeedsAttention(att), theme.ToneWarn
 		}
 	}
 	return "System ready", theme.ToneOK

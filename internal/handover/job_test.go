@@ -2,6 +2,7 @@ package handover
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"os"
@@ -142,3 +143,88 @@ func TestDecliningPermissionIsCancelledNotFailed(t *testing.T) {
 // negHRESULT is 0x8A15010C as Windows returns it to Go on 64-bit: a negative
 // 32-bit value.
 var negHRESULT = int(int32(-1978334964))
+
+// memJournal is an in-memory journalStore.
+type memJournal struct {
+	next int64
+	acts map[int64]core.Activity
+}
+
+func (m *memJournal) AddActivity(_ context.Context, a core.Activity) (int64, error) {
+	if m.acts == nil {
+		m.acts = map[int64]core.Activity{}
+	}
+	m.next++
+	m.acts[m.next] = a
+	return m.next, nil
+}
+
+func (m *memJournal) RemoveActivity(_ context.Context, id int64) error {
+	delete(m.acts, id)
+	return nil
+}
+
+// Found by closing the terminal during a real apt run: Activity History had
+// no trace of it. A note is written before the first command and removed
+// when the real outcome is recorded.
+func TestJournalLeavesANoteUntilTheOutcomeIsRecorded(t *testing.T) {
+	store := &memJournal{}
+	jr := NewJournal(store, nil)
+	steps := []core.UpdateStep{
+		{Label: "Blocked", Updates: []core.Update{{Name: "skipped"}}, Blocked: "needs admin"},
+		{Label: "APT", Updates: []core.Update{{Name: "ca-certificates"}}, Commands: []core.Command{{Program: "apt-get", Args: []string{"install", "--only-upgrade", "ca-certificates"}}}},
+	}
+	notedBeforeCommand := false
+	start := func(c core.Command, in io.Reader, out, errw io.Writer) (int, error) {
+		notedBeforeCommand = len(store.acts) == 1
+		return 0, nil
+	}
+	j := New(steps, start, func() (<-chan os.Signal, func()) { return make(chan os.Signal), func() {} }).
+		OnStart(func() { jr.Started("updates.apply", "updating", steps) })
+	j.SetStdin(strings.NewReader("\n"))
+	j.SetStdout(io.Discard)
+	j.SetStderr(io.Discard)
+	if len(store.acts) != 0 {
+		t.Fatal("nothing is noted before the job runs")
+	}
+	if err := j.Run(); err != nil {
+		t.Fatal(err)
+	}
+	if !notedBeforeCommand || len(store.acts) != 1 {
+		t.Fatalf("the note must exist before the first command starts: %v, %d notes", notedBeforeCommand, len(store.acts))
+	}
+	var a core.Activity
+	for _, v := range store.acts {
+		a = v
+	}
+	if a.Outcome != core.OutcomeStarted || a.Title != "Started updating ca-certificates" || a.Kind != "updates.apply" ||
+		!strings.Contains(a.Summary, "doesn't know whether this finished") || !strings.Contains(a.Details, "apt-get install --only-upgrade ca-certificates") ||
+		strings.Contains(a.Title, "skipped") {
+		t.Errorf("note = %+v", a)
+	}
+
+	jr.Finished(context.Background())
+	if len(store.acts) != 0 {
+		t.Error("recording the real outcome removes the note")
+	}
+	jr.Finished(context.Background()) // harmless twice
+}
+
+func TestJournalWritesNothingWhenEveryStepIsBlocked(t *testing.T) {
+	store := &memJournal{}
+	jr := NewJournal(store, nil)
+	steps := []core.UpdateStep{{Label: "Blocked", Updates: []core.Update{{Name: "x"}}, Blocked: "needs admin"}}
+	called := false
+	j := New(steps, nil, func() (<-chan os.Signal, func()) { return make(chan os.Signal), func() {} }).
+		OnStart(func() { called = true; jr.Started("cleanup.run", "removing", steps) })
+	j.SetStdin(strings.NewReader("\n"))
+	j.SetStdout(io.Discard)
+	j.SetStderr(io.Discard)
+	j.Run()
+	if called || len(store.acts) != 0 {
+		t.Errorf("nothing ran, so nothing is noted (called=%v, %d notes)", called, len(store.acts))
+	}
+	if got := list([]string{"a", "b", "c", "d"}); got != "a, b and 2 more" {
+		t.Errorf("list = %q", got)
+	}
+}

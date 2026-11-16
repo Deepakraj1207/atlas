@@ -103,29 +103,58 @@ func ChooseTabMode(width int, current nav.Section, preferShort bool) TabMode {
 // TabBar renders the section strip used instead of the sidebar on narrow
 // and medium terminals: the tabs, then a thin rule.
 func TabBar(t theme.Theme, current nav.Section, width int, preferShort bool) string {
-	return NavTabs(t, current, width, preferShort, false)
+	return NavTabs(t, current, width, 1, preferShort, false)
 }
 
+// tabsFirstRow is how many sections go on the first of two rows.
+const tabsFirstRow = 5
+
 // NavTabs is TabBar with focus: the current tab is highlighted while the
-// user is moving between sections.
-func NavTabs(t theme.Theme, current nav.Section, width int, preferShort, focused bool) string {
+// user is moving between sections. With rows == 2 every section is named,
+// on two rows; otherwise the densest single row that fits is used, which on
+// narrow terminals names only the current section.
+func NavTabs(t theme.Theme, current nav.Section, width, rows int, preferShort, focused bool) string {
 	mode := ChooseTabMode(width, current, preferShort)
-	var parts []string
-	for _, s := range nav.All() {
-		label := " " + tabLabel(s, current, mode) + " "
-		switch {
-		case s == current && focused:
-			parts = append(parts, t.Selected.Foreground(t.Accent.GetForeground()).Render(label))
-		case s == current:
-			parts = append(parts, t.NavCur.Render(label))
-		case s.Info().Availability == nav.ComingSoon:
-			parts = append(parts, t.NavSoon.Render(label))
-		default:
-			parts = append(parts, t.NavItem.Render(label))
+	if rows == 2 {
+		mode = TabShort
+	}
+	render := func(sections []nav.Section) string {
+		var parts []string
+		for _, s := range sections {
+			label := " " + tabLabel(s, current, mode) + " "
+			switch {
+			case s == current && focused:
+				parts = append(parts, t.Selected.Foreground(t.Accent.GetForeground()).Render(label))
+			case s == current:
+				parts = append(parts, t.NavCur.Render(label))
+			case s.Info().Availability == nav.ComingSoon:
+				parts = append(parts, t.NavSoon.Render(label))
+			default:
+				parts = append(parts, t.NavItem.Render(label))
+			}
+		}
+		return lipgloss.NewStyle().MaxWidth(width).Render(strings.Join(parts, ""))
+	}
+	all := nav.All()
+	if rows == 2 && len(all) > tabsFirstRow {
+		return render(all[:tabsFirstRow]) + "\n" + render(all[tabsFirstRow:]) + "\n" + Divider(t, width)
+	}
+	return render(all) + "\n" + Divider(t, width)
+}
+
+// TabRowWidths reports the columns needed to name every section with short
+// names on one row and on two. The layout package's thresholds must match.
+func TabRowWidths() (oneRow, twoRows int) {
+	first, second := 0, 0
+	for i, s := range nav.All() {
+		w := lipgloss.Width(tabLabel(s, s, TabShort)) + 2
+		if i < tabsFirstRow {
+			first += w
+		} else {
+			second += w
 		}
 	}
-	row := lipgloss.NewStyle().MaxWidth(width).Render(strings.Join(parts, ""))
-	return row + "\n" + Divider(t, width)
+	return first + second, max(first, second)
 }
 
 // HeaderInfo is what the top line shows.

@@ -8,6 +8,7 @@ import (
 
 	"github.com/deepakraj1207/atlas/internal/core"
 	"github.com/deepakraj1207/atlas/internal/tui/components"
+	"github.com/deepakraj1207/atlas/internal/tui/nav"
 )
 
 // SmartAnalysis lists findings, most important first, with a final entry
@@ -32,6 +33,9 @@ func (a *SmartAnalysis) entries(ctx Context) int {
 
 // Update moves the selection and starts actions.
 func (a *SmartAnalysis) Update(msg tea.Msg, ctx Context) (Screen, tea.Cmd) {
+	if f, ok := msg.(FocusFindingMsg); ok {
+		return a, a.focusFinding(ctx, f.Kind)
+	}
 	key, ok := msg.(tea.KeyMsg)
 	if !ok {
 		return a, nil
@@ -42,6 +46,12 @@ func (a *SmartAnalysis) Update(msg tea.Msg, ctx Context) (Screen, tea.Cmd) {
 		// With nothing to show yet, Enter does what the screen suggests.
 		if cmd := emptyAction(ctx); cmd != nil {
 			return a, cmd
+		}
+		// On a finding, Enter opens the section where you act on it.
+		if f, ok := a.selected(ctx); ok {
+			if to, ok := findingSection(f.Kind); ok {
+				return a, send(NavigateMsg{Section: to})
+			}
 		}
 	case "a":
 		return a, requestAnalysis(ctx)
@@ -76,7 +86,71 @@ func (a *SmartAnalysis) Hints(ctx Context) []components.KeyHint {
 	if h := emptyHints(ctx); h != nil {
 		return h
 	}
-	return append([]components.KeyHint{{Key: "↑/↓", Desc: "choose"}}, append(explainHint(ctx), components.KeyHint{Key: "a", Desc: "analyze again"})...)
+	hints := []components.KeyHint{{Key: "↑/↓", Desc: "choose"}}
+	if f, ok := a.selected(ctx); ok {
+		if to, ok := findingSection(f.Kind); ok {
+			hints = append(hints, components.KeyHint{Key: "enter", Desc: "open " + to.Title()})
+		}
+	}
+	return append(hints, append(explainHint(ctx), components.KeyHint{Key: "a", Desc: "analyze again"})...)
+}
+
+// selected is the finding under the cursor, if the cursor is on one.
+func (a *SmartAnalysis) selected(ctx Context) (core.Finding, bool) {
+	r := ctx.Data.Analysis
+	if r == nil || a.cursor < 0 || a.cursor >= len(r.Findings) {
+		return core.Finding{}, false
+	}
+	return r.Findings[a.cursor], true
+}
+
+// findingSection is where the user acts on a kind of finding.
+func findingSection(kind string) (nav.Section, bool) {
+	switch kind {
+	case "updates":
+		return nav.Updates, true
+	case "support":
+		return nav.Dependencies, true
+	case "duplicate", "versions", core.FindingUnused, "unneeded":
+		return nav.Cleanup, true
+	case "freshness":
+		return nav.Home, true
+	}
+	return 0, false
+}
+
+// focusFinding selects the first finding of a kind. When there is none it
+// says why, from the list of checks, instead of leaving the user on an
+// unrelated finding: "none found" and "couldn't check" are different.
+func (a *SmartAnalysis) focusFinding(ctx Context, kind string) tea.Cmd {
+	r := ctx.Data.Analysis
+	if r == nil {
+		return nil // the screen already says to scan or analyze first
+	}
+	for i, f := range r.Findings {
+		if f.Kind == kind {
+			a.cursor = i
+			return nil
+		}
+	}
+	a.cursor = len(r.Findings) // "What ATLAS checked"
+	if kind != core.FindingUnused {
+		return nil
+	}
+	for _, c := range r.Checks {
+		if c.Name != core.CheckUnusedApps {
+			continue
+		}
+		if !c.Available {
+			why := strings.TrimSuffix(c.Note, ".")
+			if why == "" {
+				why = "the record of opened programs couldn't be read"
+			}
+			return send(StatusMsg{Status: components.Status{Text: "ATLAS can't tell which apps are unused here: " + why + ".", Kind: components.StatusWarning}})
+		}
+		return send(StatusMsg{Status: components.Status{Text: "No apps unused for over a year were found.", Kind: components.StatusSuccess}})
+	}
+	return nil
 }
 
 // View renders the findings or the appropriate state.
@@ -118,16 +192,8 @@ func (a *SmartAnalysis) View(ctx Context) string {
 
 	r := d.Analysis
 	att, info := r.Counts()
-	var parts []string
-	switch {
-	case att+info == 0:
-		parts = append(parts, "Nothing needs your attention")
-	case att == 0:
-		parts = append(parts, "Nothing urgent", fmt.Sprintf("%d worth knowing", info))
-	default:
-		parts = append(parts, fmt.Sprintf("%d worth your attention", att), fmt.Sprintf("%d worth knowing", info))
-	}
-	parts = append(parts, "analyzed "+components.HumanTime(r.FinishedAt, ctx.Now))
+	sum := core.FindingsSummary(att, info)
+	parts := []string{strings.ToUpper(sum[:1]) + sum[1:], "analyzed " + components.HumanTime(r.FinishedAt, ctx.Now)}
 	line := t.Muted.Render(strings.Join(parts, " · "))
 	if d.Analyze != nil {
 		line += t.Accent.Render(" · analyzing " + d.Analyze.Spinner)
@@ -445,7 +511,7 @@ func staleNotes(ctx Context, r *core.AnalysisResult) string {
 func emptyAction(ctx Context) tea.Cmd {
 	d := ctx.Data
 	switch {
-	case d.Busy() || d.Analysis != nil:
+	case d.Busy() || d.Analysis != nil || !d.Available || !d.AnalysisAvailable:
 		return nil
 	case d.Summary == nil:
 		return requestScan(ctx)
@@ -458,7 +524,7 @@ func emptyAction(ctx Context) tea.Cmd {
 func emptyHints(ctx Context) []components.KeyHint {
 	d := ctx.Data
 	switch {
-	case d.Analysis != nil:
+	case d.Analysis != nil || !d.Available || !d.AnalysisAvailable:
 		return nil
 	case d.Summary == nil:
 		return []components.KeyHint{{Key: "enter", Desc: "scan first"}}

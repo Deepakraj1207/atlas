@@ -50,7 +50,7 @@ func (m Model) requestExplain(msg screens.RequestExplainMsg) (tea.Model, tea.Cmd
 		return warn("Already asking " + m.explain.Provider().Name + ". Wait for the answer, or press x to stop.")
 	}
 	if ok, reason := m.explain.Ready(); !ok {
-		return warn(reason + ". Nothing was sent.")
+		return warn("Nothing was sent. " + core.Sentence(reason))
 	}
 	// Minimise first, so the preview shows exactly what will be sent.
 	question := m.explain.Prepare(msg.Question)
@@ -89,7 +89,7 @@ func (m Model) explainDone(msg explainDoneMsg) (tea.Model, tea.Cmd) {
 		if errors.Is(msg.err, context.Canceled) || strings.HasPrefix(text, "Stopped") {
 			text, kind = "Stopped. Nothing more was sent", components.StatusWarning
 		}
-		return m, tea.Batch(m.setStatus(components.Status{Text: text + ". See Activity History (8).", Kind: kind}), reload)
+		return m, tea.Batch(m.setStatus(components.Status{Text: core.Sentence(text) + " See Activity History (8).", Kind: kind}), reload)
 	}
 	name := m.explain.Provider().Name
 	m.answer = &answerView{subject: msg.subject, name: name, ex: msg.ex, sent: len([]rune(msg.question))}

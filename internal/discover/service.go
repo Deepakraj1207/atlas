@@ -41,6 +41,8 @@ type Service struct {
 	now     func() time.Time
 	start   handover.ProcessStarter
 	notify  func() (<-chan os.Signal, func())
+	// journal notes a run in Activity History before it starts.
+	journal *handover.Journal
 }
 
 var _ core.DiscoverService = (*Service)(nil)
@@ -59,7 +61,8 @@ func NewServiceWithCatalog(c Catalog, cfg Config, store core.Store, log *slog.Lo
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	return &Service{catalog: c, cfg: cfg, store: store, log: log, now: time.Now, start: handover.ExecStarter, notify: handover.NotifyInterrupt}
+	return &Service{catalog: c, cfg: cfg, store: store, log: log, now: time.Now, start: handover.ExecStarter, notify: handover.NotifyInterrupt,
+		journal: handover.NewJournal(store, log)}
 }
 
 // WithProcessStarter replaces how commands are started (tests).
@@ -219,7 +222,7 @@ func (s *Service) hasFlathub(ctx context.Context) bool {
 
 // NewJob prepares a terminal job. Nothing runs until the TUI calls Run.
 func (s *Service) NewJob(steps []core.UpdateStep) core.TerminalJob {
-	return handover.New(steps, s.start, s.notify)
+	return handover.New(steps, s.start, s.notify).OnStart(func() { s.journal.Started("discover.install", "installing", steps) })
 }
 
 // RecordResults records the outcome in Activity History.
@@ -288,6 +291,7 @@ func (s *Service) RecordResults(ctx context.Context, results []core.StepResult) 
 		parts = append(parts, "Restart your computer to finish.")
 	}
 	a.Summary = strings.Join(parts, " ")
+	s.journal.Finished(ctx) // the real outcome replaces the "started" note
 	_, err := s.store.AddActivity(ctx, a)
 	return err
 }

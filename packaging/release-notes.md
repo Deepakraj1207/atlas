@@ -10,6 +10,31 @@ has nothing to show yet, Enter does what it suggests: Smart Analysis and Depende
 analyze (or scan first), My Software scans, Updates checks, Cleanup looks for things to
 tidy. Each still shows its preview first, and the letter keys work as before.
 
+**Nothing goes unrecorded, even if the window is closed.** If ATLAS (or the terminal
+window) is closed while a package manager is updating, removing or installing, Activity
+History now shows that run as **Unfinished**, with what was started, and the Dashboard
+tells you to scan again. Before, a run cut short this way left no trace.
+
+**Updates you can read.** Long version numbers are shown in full instead of being cut
+off where "Installed" and "New" looked identical. On narrow terminals the selected
+update is spelled out above the list.
+
+**Easier to find your way.**
+- The Dashboard's next steps start with what needs doing (updates waiting, findings),
+  not general tips.
+- In Smart Analysis, Enter on a finding opens the place where you act on it (Updates,
+  Cleanup or Dependencies).
+- "Find unused applications" shows the unused apps, or says plainly that none were
+  found, or that it can't check on this system and why.
+- On terminals narrower than 105 columns the tabs now name every section instead of
+  showing only numbers.
+- Long messages continue on the next line instead of ending in "…".
+
+**Clearer wording.** When ATLAS refuses to remove something, the preview says so and
+nothing else. Turning on AI explanations without a key says at once what is missing.
+Plus smaller fixes: "1 needs attention", no "0 worth knowing", and "Welcome!" only on a
+first run.
+
 ## What's new in 0.2.0
 
 **A new look.** ATLAS opens on a Dashboard: a "What would you like to do?" list of

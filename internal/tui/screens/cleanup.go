@@ -253,7 +253,7 @@ func (c *Cleanup) View(ctx Context) string {
 			lines = append(lines, "  "+l)
 		}
 	case d.Tidy == nil:
-		note("Press c to look for package caches, old versions kept after updates, and packages nothing needs. Looking changes nothing.", t.Muted.Render)
+		note(tidyInvite(len(c.all(ctx)) == 0), t.Muted.Render)
 	case len(tidies) == 0:
 		note("Nothing to tidy (checked "+components.HumanTime(d.Tidy.FinishedAt, ctx.Now)+").", t.Muted.Render)
 	default:
@@ -300,3 +300,14 @@ var (
 	_ Screen        = (*Cleanup)(nil)
 	_ SelfScrolling = (*Cleanup)(nil)
 )
+
+// tidyInvite says how to look for things to tidy. Enter does it while the
+// screen has nothing listed; with suggestions listed, Enter reviews those,
+// so the key is c.
+func tidyInvite(empty bool) string {
+	key := "c"
+	if empty {
+		key = "Enter"
+	}
+	return "Press " + key + " to look for package caches, old versions kept after updates, and packages nothing needs. Looking changes nothing."
+}

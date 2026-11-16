@@ -259,7 +259,7 @@ version and your Windows apps.</sub>
 |---|---|
 | 📋 My Software | `/` search · `Enter` details · `f` show system components · `r` remove (with a preview) · `s` scan again |
 | ⬆️ Updates | `c` check · `u` update all · `Space` select · `Enter` update selected · `a` select all/none · `f` system components |
-| 🧠 Smart Analysis · 🔗 Dependencies | `Enter` or `a` analyze · `↑` `↓` choose · `e` explain (AI, when on) |
+| 🧠 Smart Analysis · 🔗 Dependencies | `Enter` or `a` analyze · `↑` `↓` choose · `Enter` on a finding opens where you act on it · `e` explain (AI, when on) |
 | 🧹 Cleanup | `c` look for things to tidy · `Space` select · `Enter` review · `a` analyze |
 | 🎁 Discover Apps | `←` `→` category · `Space` select · `Enter` install (with a preview) |
 | 👀 A preview | `Enter` go ahead · `r` go ahead with a removal · `Esc` cancel · `m` show technical details |

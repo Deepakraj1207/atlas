@@ -339,3 +339,20 @@ func TestDeleteSoftware(t *testing.T) {
 		t.Errorf("only the exact match should go: %+v", items)
 	}
 }
+
+func TestRemoveActivity(t *testing.T) {
+	db, _ := openTemp(t)
+	ctx := context.Background()
+	keep, _ := db.AddActivity(ctx, core.Activity{Kind: "scan", Title: "Kept", Outcome: core.OutcomeSuccess})
+	gone, _ := db.AddActivity(ctx, core.Activity{Kind: "updates.apply", Title: "Started updating a", Outcome: core.OutcomeStarted})
+	if err := db.RemoveActivity(ctx, gone); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.RemoveActivity(ctx, gone); err != nil {
+		t.Errorf("removing a missing entry is not an error: %v", err)
+	}
+	acts, _ := db.RecentActivity(ctx, 10)
+	if len(acts) != 1 || acts[0].ID != keep || acts[0].Title != "Kept" {
+		t.Errorf("activity after removal = %+v", acts)
+	}
+}

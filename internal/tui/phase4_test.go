@@ -108,12 +108,13 @@ func TestAnalysisFlowAcrossScreens(t *testing.T) {
 	if m.Analyzing() {
 		t.Fatal("analysis should have finished")
 	}
-	if st := m.Status(); st.Kind != components.StatusWarning || !strings.Contains(st.Text, "1 worth your attention") {
+	if st := m.Status(); st.Kind != components.StatusWarning || !strings.Contains(st.Text, "Analysis complete: 1 needs attention, 2 worth knowing. See Smart Analysis (4).") {
 		t.Errorf("status = %+v", st)
 	}
 	home := m.View()
-	if !strings.Contains(home, "1 worth your attention") || !strings.Contains(home, "Smart Analysis found 1 things") {
-		t.Errorf("Home should summarise the analysis:\n%s", home)
+	steps := screens.NextSteps(m.ctx())
+	if !strings.Contains(home, "1 needs attention") || !strings.HasPrefix(steps[0], "Smart Analysis found 1 thing worth your attention") {
+		t.Errorf("Home should summarise the analysis, and say so first:\n%v\n%s", steps, home)
 	}
 
 	m = press(t, m, "4")

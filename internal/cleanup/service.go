@@ -32,6 +32,8 @@ type Service struct {
 	now          func() time.Time
 	start        handover.ProcessStarter
 	notify       func() (<-chan os.Signal, func())
+	// journal notes a run in Activity History before it starts.
+	journal *handover.Journal
 }
 
 var _ core.CleanupService = (*Service)(nil)
@@ -58,7 +60,8 @@ func NewService(cfg Config, store core.Store, log *slog.Logger) *Service {
 		log = slog.New(slog.DiscardHandler)
 	}
 	s := &Service{removers: map[string]Remover{}, tidiers: cfg.Tidiers, deps: cfg.Deps, depTimeout: DefaultTimeout, dnfProtected: cfg.DnfProtectedDir, rpm: cfg.RPM, verify: cfg.Verifier,
-		store: store, log: log, now: time.Now, start: handover.ExecStarter, notify: handover.NotifyInterrupt}
+		store: store, log: log, now: time.Now, start: handover.ExecStarter, notify: handover.NotifyInterrupt,
+		journal: handover.NewJournal(store, log)}
 	for _, r := range cfg.Removers {
 		s.removers[r.ID()] = r
 	}
@@ -191,7 +194,13 @@ func (s *Service) PlanRemoval(ctx context.Context, items []core.SoftwareItem) ([
 
 // NewJob prepares a terminal job. Nothing runs until the TUI calls Run.
 func (s *Service) NewJob(steps []core.UpdateStep) core.TerminalJob {
-	return handover.New(steps, s.start, s.notify)
+	doing := "cleaning up"
+	for _, st := range steps {
+		if st.Blocked == "" && st.Action == core.ActionRemove {
+			doing = "removing"
+		}
+	}
+	return handover.New(steps, s.start, s.notify).OnStart(func() { s.journal.Started("cleanup.run", doing, steps) })
 }
 
 // RecordResults checks the computer again and drops software from the
@@ -239,6 +248,7 @@ func (s *Service) RecordResults(ctx context.Context, results []core.StepResult) 
 	}
 	a := Activity(results, s.now())
 	inventory.AddVerification(&a, out)
+	s.journal.Finished(ctx) // the real outcome replaces the "started" note
 	if _, err := s.store.AddActivity(ctx, a); err != nil {
 		return out, err
 	}

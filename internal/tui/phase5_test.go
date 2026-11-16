@@ -181,6 +181,19 @@ func TestBlockedRemovalExplainsAndCannotBeForced(t *testing.T) {
 	if strings.Contains(v, "Press r to go ahead") {
 		t.Error("an unavailable plan must not offer to go ahead")
 	}
+	// Seen as a cautious user: the refused preview still described a
+	// terminal handover, Ctrl+C and reinstalling. It says what is true.
+	flat := paneText(v)
+	for _, want := range []string{"ATLAS won't remove python3", "Nothing. ATLAS won't remove anything you selected", "Nothing has been changed, and nothing will be.", "There is nothing to undo."} {
+		if !strings.Contains(flat, want) {
+			t.Errorf("refused preview missing %q:\n%s", want, v)
+		}
+	}
+	for _, wrong := range []string{"hand this terminal", "Ctrl+C", "can be reinstalled"} {
+		if strings.Contains(flat, wrong) {
+			t.Errorf("refused preview shouldn't mention %q:\n%s", wrong, v)
+		}
+	}
 	m = press(t, m, "r")
 	m = press(t, m, "enter")
 	if len(*e.calls) != 0 {
@@ -191,7 +204,7 @@ func TestBlockedRemovalExplainsAndCannotBeForced(t *testing.T) {
 func TestCleanupScreenSuggestionsAndTidyUps(t *testing.T) {
 	e := bootCleanup(t)
 	m := press(t, e.m, "6")
-	if !strings.Contains(m.View(), "Analyze your software (press a)") || !strings.Contains(m.View(), "Press c to look for package caches") {
+	if !strings.Contains(m.View(), "Analyze your software (press a)") || !strings.Contains(m.View(), "Press Enter to look for package caches") {
 		t.Errorf("empty Cleanup should explain both sections:\n%s", m.View())
 	}
 

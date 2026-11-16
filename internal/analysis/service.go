@@ -175,12 +175,8 @@ func Activity(r core.AnalysisResult, saveErr error) core.Activity {
 		if r.Status == core.ScanPartial {
 			a.Title, a.Outcome = "Analysis finished with gaps", core.OutcomePartial
 		}
-		switch {
-		case att+info == 0:
-			a.Summary = "Nothing needs your attention."
-		default:
-			a.Summary = fmt.Sprintf("Found %s worth your attention and %s worth knowing.", inventory.Plural(att, "thing"), inventory.Plural(info, "thing"))
-		}
+		sum := core.FindingsSummary(att, info)
+		a.Summary = strings.ToUpper(sum[:1]) + sum[1:] + "."
 	}
 	if saveErr != nil {
 		a.Title, a.Outcome = "Analysis couldn't be saved", core.OutcomeFailed

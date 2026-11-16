@@ -347,6 +347,15 @@ func (d *DB) AddActivity(ctx context.Context, a core.Activity) (int64, error) {
 	return res.LastInsertId()
 }
 
+// RemoveActivity deletes one activity entry. Removing an entry that isn't
+// there is not an error.
+func (d *DB) RemoveActivity(ctx context.Context, id int64) error {
+	if _, err := d.sql.ExecContext(ctx, `DELETE FROM activity WHERE id = ?`, id); err != nil {
+		return fmt.Errorf("remove activity: %w", err)
+	}
+	return nil
+}
+
 // RecentActivity returns up to limit entries, newest first.
 func (d *DB) RecentActivity(ctx context.Context, limit int) ([]core.Activity, error) {
 	if limit <= 0 {

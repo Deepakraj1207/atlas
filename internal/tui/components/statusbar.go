@@ -60,6 +60,13 @@ func StatusBar(t theme.Theme, width int, st Status, right string, hints []KeyHin
 		style = t.Info
 	}
 	dot := t.Dot(st.Tone()) + " "
+	// A message too long for one line takes the hint line as well for as
+	// long as it shows: reading it in full matters more than the hints, and
+	// "Nothing was sent" must never be the part that gets cut off.
+	if showHints && lipgloss.Width(dot)+lipgloss.Width(st.Text) > width {
+		lines := wrapTo(st.Text, max(width-2, 1), 2)
+		return dot + style.Render(lines[0]) + "\n  " + style.Render(lines[1])
+	}
 	rightW := lipgloss.Width(right)
 	// The message matters more than the facts: they give way whenever the
 	// message wouldn't fit in full beside them.
@@ -75,6 +82,23 @@ func StatusBar(t theme.Theme, width int, st Status, right string, hints []KeyHin
 		return row
 	}
 	return row + "\n" + HintRow(t, width, hints)
+}
+
+// wrapTo wraps s to width and returns exactly n lines: missing lines are
+// empty, and text beyond the last line is cut with an ellipsis.
+func wrapTo(s string, width, n int) []string {
+	var lines []string
+	for _, l := range strings.Split(Wrap(s, width), "\n") {
+		lines = append(lines, strings.TrimRight(l, " "))
+	}
+	for len(lines) < n {
+		lines = append(lines, "")
+	}
+	if len(lines) > n {
+		lines[n-1] = truncate(strings.Join(lines[n-1:], " "), width)
+		lines = lines[:n]
+	}
+	return lines
 }
 
 func truncate(s string, w int) string {
