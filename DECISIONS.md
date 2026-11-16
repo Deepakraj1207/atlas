@@ -382,7 +382,9 @@ Short, dated records of choices that shape the code.
     updates, memory in use), then key hints.
   - **Focus.** Esc is "back": it closes what a screen has open (a search, the details
     view), then moves focus to the section list, where ↑ ↓ move and Enter, → or Esc
-    return. Digits, Tab and `/` work everywhere, as before. Focus starts on the screen,
+    return. Digits, Tab and `/` work everywhere, as before. A screen with nothing to show
+    yet does its suggested action on Enter (scan, analyze, check, look for things to tidy),
+    always through its preview (0.2.1, after "Smart analysis not working" on Windows). Focus starts on the screen,
     so every existing key keeps its meaning. A screen keeps Esc for itself only while
     `HandlesBack` says it has something open.
   - **Dashboard** (Home, renamed in the interface only). A "What would you like to do?"
@@ -431,4 +433,37 @@ Short, dated records of choices that shape the code.
   winget support for the user's *other* software (scanning, updates, removal, Discover)
   is unchanged. `tools/release` (winget manifests) and the `winget-check` workflow are
   removed; `install-check` replaces it.
+
+## 2026-11-16 — Testing as different users
+
+- **D84. A run is written to Activity History before it starts.** Found by closing the
+  terminal during a real `apt-get` run: ATLAS recorded a run only after the package
+  manager returned, so a run cut short left no trace, against "nothing happens
+  silently". Now, just before the first command of an update, removal or install,
+  ATLAS writes a "Started updating/removing/installing …" entry with the commands
+  (`handover.Journal`, called from the job's `OnStart`). When the real outcome is
+  recorded, that entry is removed, so a normal run still leaves one entry. If ATLAS is
+  closed in between, the entry stays, shown as "Unfinished", and it is the first next
+  step on the Dashboard ("scan again to see what is really installed"). Nothing is
+  written when every step was refused. The store gained `RemoveActivity`, used only for
+  this.
+
+- **D85. The interface follows what a first-time user tries.** From driving the real
+  program as six kinds of user (first-time, power user, cautious, small terminal,
+  returning with a broken setup, AI-curious):
+  - Dashboard next steps are ordered by importance (`screens.NextSteps`): what needs
+    attention, then what hasn't been done, then tips. Only the first few are visible
+    without scrolling.
+  - Enter on a Smart Analysis finding opens the section where you act on it. "Find unused
+    applications" selects the unused-apps finding or says honestly "none found" or
+    "can't check here, because …", read from the list of checks.
+  - Updates sizes its columns so versions are shown in full where there is room, and
+    spells out the selected update above the table when it isn't.
+  - Between 59 and 104 columns the tab bar uses two rows so every section is named; the
+    layout thresholds are checked against the section names by a test.
+  - A status message too long for one line takes the hint line as well while it shows.
+  - A plan in which every step was refused says "Nothing. ATLAS won't …" instead of
+    describing a terminal handover.
+  - Counts of zero are left out ("1 needs attention", not "1 worth your attention, 0
+    worth knowing"); AI failures say "Tried to send"; "Welcome!" is only for a first run.
 

@@ -19,6 +19,8 @@ type QuickAction struct {
 	// Navigate opens Section instead of previewing a plan.
 	Navigate bool
 	Section  nav.Section
+	// Finding is the kind of Smart Analysis finding to show there.
+	Finding string
 	// Search opens My Software with the search box active.
 	Search bool
 }
@@ -184,6 +186,7 @@ func ApplyPlan(ctx Context, steps []core.UpdateStep) core.ActionPlan {
 	switch {
 	case len(runnable) == 0 && len(blocked) > 0:
 		p.Unavailability = "none of these updates can be installed from here (see below)."
+		nothingWillHappen(&p, "install")
 	case len(runnable) == 0:
 		p.Unavailability = "there is nothing to update."
 	case ctx.Data.Busy():
@@ -238,7 +241,7 @@ func quickActions(ctx Context) []QuickAction {
 		{Label: "Scan my system", Desc: "Find what's installed. Only reads", Plan: ScanPlan(ctx), Confirm: StartScanMsg{}},
 		{Label: "Check for updates", Desc: "Newer versions from your package managers", Plan: CheckPlan(ctx), Confirm: StartCheckMsg{}},
 		{Label: "Analyze installed software", Desc: "Support status, duplicates, dependencies", Plan: AnalyzePlan(ctx), Confirm: StartAnalysisMsg{}},
-		{Label: "Find unused applications", Desc: "Not opened in a year · Smart Analysis", Navigate: true, Section: nav.SmartAnalysis},
+		{Label: "Find unused applications", Desc: "Not opened in a year · Smart Analysis", Navigate: true, Section: nav.SmartAnalysis, Finding: core.FindingUnused},
 		{Label: "Clean unnecessary files", Desc: "Caches, old versions, leftovers · Cleanup", Navigate: true, Section: nav.Cleanup},
 		{Label: "Discover useful applications", Desc: "Free tools that fit what you use", Navigate: true, Section: nav.DiscoverApps},
 		{Label: "Search software", Desc: "Find anything installed · /", Search: true},
@@ -272,7 +275,7 @@ func TidyFindPlan(ctx Context) core.ActionPlan {
 // CleanupPlan describes removing software and tidying up. It is
 // destructive, so it needs r (not Enter) to confirm.
 func CleanupPlan(ctx Context, steps []core.UpdateStep) core.ActionPlan {
-	var changes, blocked, technical, rollbacks []string
+	var changes, blocked, refused, technical, rollbacks []string
 	seen := map[string]bool{}
 	elevations := map[core.Elevation]bool{}
 	removed, cleaned := 0, 0
@@ -283,6 +286,7 @@ func CleanupPlan(ctx Context, steps []core.UpdateStep) core.ActionPlan {
 		if st.Blocked != "" {
 			for _, u := range st.Updates {
 				blocked = append(blocked, "Not removed: "+u.Name+". "+st.Blocked)
+				refused = append(refused, u.Name)
 			}
 			continue
 		}
@@ -369,6 +373,13 @@ func CleanupPlan(ctx Context, steps []core.UpdateStep) core.ActionPlan {
 	switch {
 	case removed+cleaned == 0 && len(blocked) > 0:
 		p.Unavailability = "nothing selected can be removed safely (see below)."
+		nothingWillHappen(&p, "remove")
+		p.Why = "ATLAS refuses a removal when other software or your system needs the item, or when it can't be sure that nothing does."
+		if len(refused) == 1 {
+			p.Title = "ATLAS won't remove " + refused[0]
+		} else {
+			p.Title = fmt.Sprintf("ATLAS won't remove these %d items", len(refused))
+		}
 	case removed+cleaned == 0:
 		p.Unavailability = "there is nothing to remove."
 	case ctx.Data.Busy():
@@ -376,6 +387,16 @@ func CleanupPlan(ctx Context, steps []core.UpdateStep) core.ActionPlan {
 		p.Unavailability = "another task is running. Wait for it to finish, or stop it with x."
 	}
 	return p
+}
+
+// nothingWillHappen rewrites a plan in which every step was refused, so the
+// preview doesn't describe a terminal handover, Ctrl+C or a rollback that
+// will never take place.
+func nothingWillHappen(p *core.ActionPlan, verb string) {
+	p.WhatHappens = "Nothing. ATLAS won't " + verb + " anything you selected; the reasons are listed below."
+	p.Safety = "Nothing has been changed, and nothing will be."
+	p.Reversible = "There is nothing to undo."
+	p.Technical = nil
 }
 
 func humanBytes(n int64) string {
@@ -450,6 +471,7 @@ func InstallPlan(ctx Context, steps []core.UpdateStep) core.ActionPlan {
 	switch {
 	case n == 0 && len(blocked) > 0:
 		p.Unavailability = "none of these can be installed from here (see below)."
+		nothingWillHappen(&p, "install")
 	case n == 0:
 		p.Unavailability = "there is nothing to install."
 	case ctx.Data.Busy():

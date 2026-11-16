@@ -6,6 +6,7 @@ package updates
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -461,5 +462,54 @@ func TestUpdatesAreVerifiedBeforeLeavingTheList(t *testing.T) {
 	out, left, act = run(t, snapVerifier{dpkgAt(map[string]string{"a": "2"})})
 	if out.Count(core.VerifyConfirmed) != 1 || len(left) != 0 || act.Outcome != core.OutcomeSuccess || !strings.Contains(act.Details, "Verified a: confirmed") {
 		t.Errorf("confirmed: %+v / %d / %+v", out, len(left), act)
+	}
+}
+
+// A run that is cut short (the terminal window is closed while the package
+// manager works) must still be in Activity History; a run that ends normally
+// leaves only its real outcome.
+func TestInterruptedRunIsStillInActivityHistory(t *testing.T) {
+	svc, db := newService(t, fakeManager{id: "apt", ups: []core.Update{{Manager: "apt", PackageID: "a", Name: "a", CurrentVersion: "1", AvailableVersion: "2"}}})
+	svc.WithVerifier(snapVerifier{dpkgAt(map[string]string{"a": "2"})})
+	svc.WithProcessStarter(func(c core.Command, in io.Reader, out, errw io.Writer) (int, error) { return 0, nil })
+	svc.notify = func() (<-chan os.Signal, func()) { return make(chan os.Signal), func() {} }
+	ctx := context.Background()
+	svc.Check(ctx, nil)
+	_, ups, _, _ := svc.LatestCheck(ctx)
+	steps := []core.UpdateStep{{Label: "APT", Manager: "apt", Updates: ups, Commands: []core.Command{{Program: "apt-get", Args: []string{"install", "--only-upgrade", "a"}}}}}
+
+	run := func() []core.StepResult {
+		job := svc.NewJob(steps)
+		job.SetStdin(strings.NewReader("\n"))
+		job.SetStdout(io.Discard)
+		job.SetStderr(io.Discard)
+		if err := job.Run(); err != nil {
+			t.Fatal(err)
+		}
+		return job.Results()
+	}
+
+	// ATLAS is closed after the job ran but before the result was recorded.
+	run()
+	acts, _ := db.RecentActivity(ctx, 5)
+	if len(acts) == 0 || acts[0].Outcome != core.OutcomeStarted || acts[0].Title != "Started updating a" {
+		t.Fatalf("an unfinished run must leave a note: %+v", acts)
+	}
+
+	// Next time the run completes and is recorded: only the outcome remains
+	// for it (the earlier unfinished note stays, as it should).
+	results := run()
+	if _, err := svc.RecordResults(ctx, results); err != nil {
+		t.Fatal(err)
+	}
+	acts, _ = db.RecentActivity(ctx, 5)
+	started := 0
+	for _, a := range acts {
+		if a.Outcome == core.OutcomeStarted {
+			started++
+		}
+	}
+	if acts[0].Kind != "updates.apply" || acts[0].Outcome != core.OutcomeSuccess || started != 1 {
+		t.Errorf("a recorded run replaces its own note only: newest %+v, %d started notes", acts[0], started)
 	}
 }

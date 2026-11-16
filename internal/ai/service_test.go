@@ -54,7 +54,9 @@ func TestServiceRecordsEveryQuestion(t *testing.T) {
 
 	exp.err = &core.SourceError{Message: "Anthropic didn't accept your API key", Details: "HTTP 401"}
 	s.Explain(context.Background(), "Git", "Git 2.56.0")
-	if a := rec.acts[1]; a.Outcome != core.OutcomeFailed || !strings.Contains(a.Summary, "No answer: Anthropic didn't accept your API key.") {
+	// A failure may mean nothing arrived, so the record says "Tried to send".
+	if a := rec.acts[1]; a.Outcome != core.OutcomeFailed || !strings.Contains(a.Summary, "No answer: Anthropic didn't accept your API key.") ||
+		!strings.HasPrefix(a.Summary, "Tried to send 10 characters to Anthropic (api.anthropic.com).") || strings.Contains(a.Summary, "Sent 10") {
 		t.Errorf("failed activity = %+v", a)
 	}
 
@@ -64,6 +66,15 @@ func TestServiceRecordsEveryQuestion(t *testing.T) {
 	s.Explain(ctx, "Git", "Git 2.56.0")
 	if a := rec.acts[2]; a.Outcome != core.OutcomeCancelled {
 		t.Errorf("cancelled activity = %+v", a)
+	}
+}
+
+func TestFailureSummaryDoesNotDoublePunctuation(t *testing.T) {
+	rec := &recorder{}
+	exp := &fakeExplainer{local: true, err: &core.SourceError{Message: "Couldn't reach Ollama on this computer (localhost:11434). Is Ollama running?"}}
+	NewService(exp, rec, nil).Explain(context.Background(), "Git", "Git 2.56.0")
+	if s := rec.acts[0].Summary; !strings.HasSuffix(s, "Is Ollama running?") || strings.Contains(s, "?.") {
+		t.Errorf("summary = %q", s)
 	}
 }
 

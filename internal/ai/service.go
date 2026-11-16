@@ -74,7 +74,10 @@ func (s *Service) Explain(ctx context.Context, subject, question string) (core.E
 		a.Summary = sent + " You stopped it before the answer arrived."
 	default:
 		a.Outcome = core.OutcomeFailed
-		a.Summary = sent + " No answer: " + plainMessage(err) + "."
+		// A failure may mean the text never arrived (no connection), so
+		// don't claim it was sent.
+		tried := fmt.Sprintf("Tried to send %d characters to %s (%s).", utf8.RuneCountInString(question), p.Service, p.Host)
+		a.Summary = tried + " No answer: " + core.Sentence(plainMessage(err))
 		details = append(details, "Error: "+err.Error())
 	}
 	a.Details = strings.Join(details, "\n")

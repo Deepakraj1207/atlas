@@ -225,6 +225,50 @@ Real binary in a pseudo-terminal (120×30, true colour): Dashboard and header sh
 Esc then ↓ moves to My Software with the section hints, Enter and `/` open the search,
 q exits with 0.
 
+## Testing as different users (2026-11-16)
+
+The real program was driven in a pseudo-terminal as six kinds of user. Each problem below
+was seen on the previous build, fixed, covered by a test, and seen fixed on the new build.
+
+| Who | What they hit | Test |
+|-----|---------------|------|
+| First-time user | "33 updates are waiting" was the third next step, below the fold | TestNextStepsPutWhatMattersFirst |
+| First-time user | Enter on a Smart Analysis finding did nothing | TestEnterOnAFindingOpensWhereYouActOnIt |
+| First-time user (Linux) | "Find unused applications" opened Smart Analysis on an unrelated finding | TestFindUnusedApplicationsIsHonest |
+| First-time user | "1 need attention", "1 worth your attention, 0 worth knowing", "found 1 things" | TestFindingsSummaryLeavesOutZeros, TestAnalysisFlowAcrossScreens |
+| Anyone closing the window mid-run | an interrupted `apt-get` run left nothing in Activity History | TestJournalLeavesANoteUntilTheOutcomeIsRecorded, TestJournalWritesNothingWhenEveryStepIsBlocked, TestInterruptedRunIsStillInActivityHistory (real database), TestRemoveActivity, TestUnfinishedRunIsShownAndComesFirst |
+| Power user | Installed and New versions were cut to the same text (`20260816ubuntu0.24.04…`) | TestUpdatesShowHowVersionsDiffer |
+| Cautious user | a refused removal's preview described a terminal handover, Ctrl+C and reinstalling | TestBlockedRemovalExplainsAndCannotBeForced (extended) |
+| 80-column terminal | tabs showed only numbers | TestTwoRowTabsNameEverySection, TestTabRowsFollowTheWidthAndHeight, TestTabsNameEverySectionAt80Columns |
+| Small terminal | a long message ended in "…" before "Nothing was sent"; at 12 rows the tagline left room for one action | TestLongStatusMessagesUseTheHintLine, TestShortTerminalShowsActionsNotTheTagline |
+| Returning user | "Welcome! Using default settings" on every launch | TestWelcomeIsOnlyForAFirstRun |
+| Broken setup | with saved data unavailable, My Software offered a scan and said "Everything else still works" | TestNoScanOfferWhenSavedDataIsUnavailable |
+| AI-curious user | turning AI on without a key didn't say what was missing; "Is Ollama running?." ; "Sent 194 characters" when nothing could be sent | TestTurningAIOnSaysWhatIsMissing, TestSentence, TestFailureSummaryDoesNotDoublePunctuation, TestServiceRecordsEveryQuestion (extended) |
+
+Also checked and found fine: a malformed settings file, a data folder that can't be
+created, every screen at 80×24, 60×20 and 40×12, the light theme, and both AI providers
+with no key and no Ollama. During this testing a real `apt-get install --only-upgrade`
+was started by mistake by the test driver and stopped with Ctrl+C before it changed
+anything (the package stayed at its old version, `dpkg --audit` clean). The driver now
+refuses to confirm previews that change the computer.
+
+Not checked here: Windows (covered by the Windows CI's console scripts), and the journal
+during a real interrupted run after the fix (covered with a real database and a stand-in
+package manager, not with a real one).
+
+## Enter on empty screens (2026-11-14)
+
+Reported on Windows: "Smart analysis not working". Reproduced: after "Find unused
+applications" on the Dashboard, Smart Analysis said "Press a to analyze" and Enter did
+nothing.
+
+| Test | Proves |
+|------|--------|
+| TestFindUnusedAppsThenEnterAnalyzes (tui) | the reported path: Dashboard → Find unused applications → Enter previews the analysis → Enter runs it → results ("What ATLAS checked") |
+| TestEnterDoesWhatAnEmptyScreenSuggests (tui) | before a scan, Enter on My Software, Smart Analysis and Dependencies offers the scan; after it, Smart Analysis and Dependencies say "Press Enter to analyze" and Enter offers it; Updates and Cleanup with nothing listed offer the check and the search for things to tidy. Every case opens a preview first |
+
+Both fail on 0.2.0 and pass now.
+
 ## One-line installers (2026-11-14)
 
 `install.sh` run with `dash` (what `| sh` uses on Ubuntu) against the published v0.2.0

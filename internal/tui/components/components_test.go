@@ -7,6 +7,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/deepakraj1207/atlas/internal/tui/layout"
 	"github.com/deepakraj1207/atlas/internal/tui/nav"
 	"github.com/deepakraj1207/atlas/internal/tui/theme"
 )
@@ -170,5 +171,66 @@ func TestBigLogoShape(t *testing.T) {
 	}
 	if mix([3]float64{0, 0, 0}, [3]float64{255, 255, 255}, 0.5) != "#808080" {
 		t.Error("gradient midpoint")
+	}
+}
+
+// On an 80-column terminal the tabs used to show only numbers
+// ("1 Dashboard  2  3  4 …"), so a new user couldn't tell what 2-9 were.
+func TestTwoRowTabsNameEverySection(t *testing.T) {
+	th := theme.New(theme.Dark)
+	one, two := TabRowWidths()
+	if one != layout.ShortTabsWidth || two != layout.TwoRowTabsWidth {
+		t.Fatalf("layout thresholds are out of step with the section names: one row needs %d (layout says %d), two rows need %d (layout says %d)",
+			one, layout.ShortTabsWidth, two, layout.TwoRowTabsWidth)
+	}
+	for _, w := range []int{layout.TwoRowTabsWidth, 60, 80, 104} {
+		bar := NavTabs(th, nav.Updates, w, 2, w < 80, false)
+		lines := strings.Split(bar, "\n")
+		if len(lines) != 3 {
+			t.Fatalf("width %d: want two rows of tabs and a rule, got %d lines", w, len(lines))
+		}
+		for _, s := range nav.All() {
+			if !strings.Contains(bar, s.Shortcut()+" "+s.Info().Short) {
+				t.Errorf("width %d: %q isn't named:\n%s", w, s.Info().Short, bar)
+			}
+		}
+		for _, l := range lines {
+			if lipgloss.Width(l) > w {
+				t.Errorf("width %d: line is %d wide: %q", w, lipgloss.Width(l), l)
+			}
+		}
+	}
+}
+
+// Seen at 120 columns: "…and restart ATLAS. Nothing was …" The end of a long
+// message was cut off. It now continues on the hint line.
+func TestLongStatusMessagesUseTheHintLine(t *testing.T) {
+	th := theme.New(theme.Dark)
+	hints := []KeyHint{{Key: "q", Desc: "quit"}}
+	long := Status{Text: `Nothing was sent. No Anthropic API key found. Set ANTHROPIC_API_KEY (or sign in with "ant auth login") and restart ATLAS.`, Kind: StatusWarning}
+	bar := StatusBar(th, 80, long, "191 apps", hints, true)
+	lines := strings.Split(bar, "\n")
+	if len(lines) != 2 {
+		t.Fatalf("the footer is always two lines, got %d", len(lines))
+	}
+	flat := strings.Join(strings.Fields(bar), " ")
+	if !strings.Contains(flat, "and restart ATLAS.") || strings.Contains(bar, "…") || strings.Contains(bar, "quit") {
+		t.Errorf("the whole message should show, in place of the hints:\n%s", bar)
+	}
+	for _, l := range lines {
+		if lipgloss.Width(l) > 80 {
+			t.Errorf("line is %d wide: %q", lipgloss.Width(l), l)
+		}
+	}
+	short := StatusBar(th, 80, Status{Text: "System ready", Kind: StatusReady}, "191 apps", hints, true)
+	if !strings.Contains(short, "quit") || !strings.Contains(short, "191 apps") {
+		t.Errorf("a short message keeps the figures and the hints:\n%s", short)
+	}
+	// Without a hint line there is only one line to use.
+	if one := StatusBar(th, 40, long, "", hints, false); strings.Contains(one, "\n") || lipgloss.Width(one) > 40 {
+		t.Errorf("one-line footer must stay one line within the width: %q", one)
+	}
+	if got := wrapTo("a b c d e f g h", 3, 2); len(got) != 2 || lipgloss.Width(got[1]) > 3 {
+		t.Errorf("wrapTo = %q", got)
 	}
 }

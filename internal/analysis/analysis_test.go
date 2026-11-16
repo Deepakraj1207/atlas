@@ -465,7 +465,7 @@ func TestServiceAnalyzeSavesAndRecords(t *testing.T) {
 		t.Error("analysis should be saved")
 	}
 	acts, _ := db.RecentActivity(ctx, 1)
-	if acts[0].Kind != "analysis" || !strings.Contains(acts[0].Summary, "1 thing worth your attention") {
+	if acts[0].Kind != "analysis" || acts[0].Summary != "1 needs attention, 1 worth knowing." {
 		t.Errorf("activity = %+v", acts[0])
 	}
 

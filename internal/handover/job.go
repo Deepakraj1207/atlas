@@ -50,6 +50,14 @@ func NotifyInterrupt() (<-chan os.Signal, func()) {
 	return ch, func() { signal.Stop(ch) }
 }
 
+// OnStart sets a function that runs once, just before the first command
+// starts. Services use it to note in Activity History that the run began,
+// so there is a record even if ATLAS is closed before it ends.
+func (j *Job) OnStart(fn func()) *Job {
+	j.onStart = fn
+	return j
+}
+
 // New prepares a job. start and notify may be nil for the defaults.
 func New(steps []core.UpdateStep, start ProcessStarter, notify func() (<-chan os.Signal, func())) *Job {
 	if start == nil {
@@ -67,6 +75,8 @@ type Job struct {
 	steps  []core.UpdateStep
 	start  ProcessStarter
 	notify func() (<-chan os.Signal, func())
+
+	onStart func()
 
 	stdin          io.Reader
 	stdout, stderr io.Writer
@@ -143,6 +153,9 @@ func (j *Job) Run() error {
 			continue
 		}
 		n++
+		if n == 1 && j.onStart != nil {
+			j.onStart()
+		}
 		j.printf("\n[%d/%d] %s: %s %s\n", n, runnable, st.Label, verb(st.Action), describe(st))
 		switch st.Elevation {
 		case core.ElevationSudo:

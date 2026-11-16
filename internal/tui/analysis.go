@@ -3,7 +3,6 @@ package tui
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -83,14 +82,12 @@ func analysisResultStatus(r core.AnalysisResult, err error) components.Status {
 		return components.Status{Text: "Analysis stopped. Your previous results are unchanged."}
 	}
 	att, info := r.Counts()
-	var st components.Status
-	switch {
-	case att > 0:
-		st = components.Status{Text: fmt.Sprintf("Analysis complete: %d worth your attention, %d worth knowing. See Smart Analysis (4).", att, info), Kind: components.StatusWarning}
-	case info > 0:
-		st = components.Status{Text: fmt.Sprintf("Analysis complete: nothing urgent, %d worth knowing. See Smart Analysis (4).", info), Kind: components.StatusSuccess}
-	default:
-		st = components.Status{Text: "Analysis complete: nothing needs your attention.", Kind: components.StatusSuccess}
+	st := components.Status{Text: "Analysis complete: " + core.FindingsSummary(att, info) + ".", Kind: components.StatusSuccess}
+	if att > 0 {
+		st.Kind = components.StatusWarning
+	}
+	if att+info > 0 {
+		st.Text += " See Smart Analysis (4)."
 	}
 	if r.Status == core.ScanPartial {
 		st.Text += " Some data couldn't be read; details are in Smart Analysis."

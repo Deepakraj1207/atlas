@@ -183,6 +183,10 @@ const (
 	OutcomeFailed    Outcome = "failed"
 	OutcomeCancelled Outcome = "cancelled"
 	OutcomeInfo      Outcome = "info"
+	// OutcomeStarted marks a run that was started and whose result was
+	// never recorded: ATLAS was closed (or the terminal window was) while
+	// a package manager was working.
+	OutcomeStarted Outcome = "started"
 )
 
 // Activity is one entry in the Activity History.
@@ -216,6 +220,9 @@ type Store interface {
 	RemoveUpdates(ctx context.Context, ids []int64) error
 
 	AddActivity(ctx context.Context, a Activity) (int64, error)
+	// RemoveActivity deletes one entry. Used only to replace a "started"
+	// note with the real outcome of the same run.
+	RemoveActivity(ctx context.Context, id int64) error
 	RecentActivity(ctx context.Context, limit int) ([]Activity, error)
 }
 
@@ -669,6 +676,48 @@ type DiscoverService interface {
 	PlanInstall(ctx context.Context, ids []string) ([]UpdateStep, error)
 	NewJob(steps []UpdateStep) TerminalJob
 	RecordResults(ctx context.Context, results []StepResult) error
+}
+
+// Finding kinds the interface treats specially.
+const (
+	FindingUnused = "unused"
+	// CheckUnusedApps is the name of the check behind FindingUnused, as
+	// listed under "What ATLAS checked".
+	CheckUnusedApps = "Apps not opened in over a year"
+)
+
+// Sentence ends s with a full stop unless it already ends a sentence, so
+// "Is Ollama running?" doesn't become "Is Ollama running?.".
+func Sentence(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" || strings.HasSuffix(s, ".") || strings.HasSuffix(s, "?") || strings.HasSuffix(s, "!") {
+		return s
+	}
+	return s + "."
+}
+
+// NeedsAttention is "1 needs attention" or "3 need attention".
+func NeedsAttention(n int) string {
+	if n == 1 {
+		return "1 needs attention"
+	}
+	return fmt.Sprintf("%d need attention", n)
+}
+
+// FindingsSummary describes an analysis in a few words, leaving out counts
+// of zero: "2 need attention, 3 worth knowing", "1 needs attention",
+// "nothing urgent, 3 worth knowing", "nothing needs your attention".
+func FindingsSummary(attention, info int) string {
+	switch {
+	case attention > 0 && info > 0:
+		return fmt.Sprintf("%s, %d worth knowing", NeedsAttention(attention), info)
+	case attention > 0:
+		return NeedsAttention(attention)
+	case info > 0:
+		return fmt.Sprintf("nothing urgent, %d worth knowing", info)
+	default:
+		return "nothing needs your attention"
+	}
 }
 
 // NameAndVersion joins a display name and a version for reading, leaving

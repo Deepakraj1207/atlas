@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/deepakraj1207/atlas/internal/core"
 	"github.com/deepakraj1207/atlas/internal/tui/components"
@@ -145,6 +146,9 @@ func (u *Updates) Update(msg tea.Msg, ctx Context) (Screen, tea.Cmd) {
 		if u.cursor < len(vis) {
 			return u, send(StatusMsg{Status: components.Status{Text: vis[u.cursor].Name + " is held back: " + vis[u.cursor].Note + ".", Kind: components.StatusWarning}})
 		}
+		if len(vis) == 0 {
+			return u, requestCheck(ctx) // nothing listed: Enter checks (with a preview first)
+		}
 	}
 	u.clamp(len(u.visible(all)), h)
 	return u, nil
@@ -153,7 +157,7 @@ func (u *Updates) Update(msg tea.Msg, ctx Context) (Screen, tea.Cmd) {
 // Hints lists the Updates keys for the current state.
 func (u *Updates) Hints(ctx Context) []components.KeyHint {
 	if ctx.Data.UpdateSummary == nil || len(ctx.Data.Updates) == 0 {
-		return []components.KeyHint{{Key: "c", Desc: "check for updates"}}
+		return []components.KeyHint{{Key: "enter", Desc: "check for updates"}}
 	}
 	enter := "update this"
 	if len(u.selected) > 0 {
@@ -180,7 +184,7 @@ func (u *Updates) View(ctx Context) string {
 	case !d.UpdatesAvailable:
 		return title + "\n\n" + components.ErrorState{
 			Title:       "Updates can't be checked right now",
-			Summary:     "ATLAS couldn't open its saved data, so it can't check for or keep track of updates. Everything else still works.",
+			Summary:     "ATLAS couldn't open its saved data, so it can't check for or keep track of updates. Settings (9) shows where the data file lives.",
 			Details:     d.StoreErr,
 			ShowDetails: ctx.Advanced(),
 		}.Render(t, w)
@@ -199,7 +203,7 @@ func (u *Updates) View(ctx Context) string {
 				"Update everything at once, or pick what to update",
 				"See exactly what will run, and how to go back, before anything changes",
 			},
-			Hint: "Press c to check for updates.",
+			Hint: "Press Enter to check for updates.",
 		}.Render(t, w)
 	}
 
@@ -213,17 +217,15 @@ func (u *Updates) View(ctx Context) string {
 	b.WriteString(title + "\n")
 	b.WriteString(components.Truncate(u.summaryLine(ctx, apps, comps), w) + "\n")
 	if apps+comps > 0 {
-		b.WriteString(components.Truncate(t.Accent.Render(updateAllHint(apps, comps)), w) + "\n\n")
-	} else {
-		b.WriteString("\n")
+		b.WriteString(components.Truncate(t.Accent.Render(updateAllHint(apps, comps)), w) + "\n")
 	}
 
 	if len(d.Updates) == 0 {
-		b.WriteString(u.upToDate(ctx))
+		b.WriteString("\n" + u.upToDate(ctx))
 		return components.Fit(b.String(), w, ctx.Height())
 	}
 	if len(vis) == 0 {
-		b.WriteString(components.EmptyState{
+		b.WriteString("\n" + components.EmptyState{
 			Title:   "No app updates",
 			Message: "Only system components have updates. Press f to show them; u updates them too.",
 		}.Render(t, w))
@@ -236,6 +238,10 @@ func (u *Updates) View(ctx Context) string {
 		rows = append(rows, u.cells(ctx, vis[i]))
 	}
 	cols := u.columns(ctx, rows)
+	// The line above the table spells out the selected update in full
+	// whenever the table had to cut it short, so "Installed" and "New" can
+	// always be told apart.
+	b.WriteString(components.Truncate(u.selectedDetail(ctx, vis, cols), w) + "\n")
 	b.WriteString("      " + t.Subtle.Render(joinCells(rows[0], cols)) + "\n")
 	for i := u.offset; i < end; i++ {
 		up := vis[i]
@@ -260,6 +266,40 @@ func (u *Updates) View(ctx Context) string {
 		}
 	}
 	return components.Fit(b.String(), w, ctx.Height())
+}
+
+// selectedDetail is "name: installed → new" for the update under the
+// cursor when the table couldn't show all of it; otherwise it is empty.
+func (u *Updates) selectedDetail(ctx Context, vis []core.Update, cols []int) string {
+	if u.cursor < 0 || u.cursor >= len(vis) {
+		return ""
+	}
+	up := vis[u.cursor]
+	cells := u.cells(ctx, up)
+	cut := false
+	for i := 0; i < 3; i++ {
+		if i >= len(cols) || cols[i] == 0 || lipgloss.Width(cells[i]) > cols[i] {
+			cut = true
+		}
+	}
+	if !cut {
+		return ""
+	}
+	t := ctx.Theme
+	cur := up.CurrentVersion
+	if cur == "" {
+		cur = "version unknown"
+	}
+	// Say as much as fits: the name and both versions, both versions, or
+	// at least the new one.
+	arrow := t.Subtle.Render(" → ")
+	versions := t.Muted.Render(cur) + arrow + t.Accent.Render(up.AvailableVersion)
+	for _, line := range []string{"  " + t.Body.Render(up.Name+": ") + versions, "  " + versions} {
+		if lipgloss.Width(line) <= ctx.Width() {
+			return line
+		}
+	}
+	return " " + arrow + t.Accent.Render(up.AvailableVersion)
 }
 
 func (u *Updates) summaryLine(ctx Context, apps, comps int) string {
@@ -353,23 +393,34 @@ func (u *Updates) cells(ctx Context, up core.Update) []string {
 // gives the rest to the name, dropping columns on narrow terminals.
 func (u *Updates) columns(ctx Context, rows [][]string) []int {
 	w := ctx.Width() - 2 - 4 // selection marker and checkbox
-	cur, nw := widest(rows, 1, 9, 22), widest(rows, 2, 3, 22)
+	// Versions get the room they need before the name gets what is left:
+	// "20260816ubuntu0.24.04.1" and "…04.2" cut to the same 22 characters
+	// look identical, which hides the one thing this screen is for.
+	name := widest(rows, 0, 12, 44)
+	cur, nw := widest(rows, 1, 9, 40), widest(rows, 2, 3, 40)
+	enough := func(rest int) bool { return rest >= min(name, max(w/4, 12)) }
 	if ctx.Advanced() {
 		id, mgr := widest(rows, 3, 10, 30), widest(rows, 4, 7, 12)
-		if rest := w - cur - nw - id - mgr - 4; rest >= w/4 {
+		if rest := w - cur - nw - id - mgr - 4; enough(rest) {
 			return []int{rest, cur, nw, id, mgr}
 		}
 	} else {
 		from := widest(rows, 3, 4, 28)
-		if rest := w - cur - nw - from - 3; rest >= w/4 {
+		if rest := w - cur - nw - from - 3; enough(rest) {
 			return []int{rest, cur, nw, from}
 		}
 	}
-	if rest := w - cur - nw - 2; rest >= w/4 {
+	if rest := w - cur - nw - 2; enough(rest) {
 		return []int{rest, cur, nw}
 	}
-	if rest := w - nw - 1; rest >= w/3 {
-		return []int{rest, 0, nw}
+	// Too narrow for both versions in full: share what is left after the
+	// name, as long as each version keeps a readable width.
+	n := min(name, max(w/3, 12))
+	if left := w - n - 2; left >= 28 {
+		c := min(cur, left/2)
+		v := min(nw, left-c)
+		c = min(cur, left-v)
+		return []int{w - c - v - 2, c, v}
 	}
 	return []int{w}
 }

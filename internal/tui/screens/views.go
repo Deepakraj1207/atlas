@@ -134,6 +134,8 @@ func outcomeLabel(t theme.Theme, o core.Outcome) string {
 		return t.Danger.Render("Failed")
 	case core.OutcomeCancelled:
 		return t.Muted.Render("Cancelled")
+	case core.OutcomeStarted:
+		return t.Warning.Render("Unfinished")
 	default:
 		return t.Accent.Render("Note")
 	}
@@ -150,6 +152,8 @@ func outcomeMark(t theme.Theme, o core.Outcome) string {
 		return t.Danger.Render("!")
 	case core.OutcomeCancelled:
 		return t.Subtle.Render("–")
+	case core.OutcomeStarted:
+		return t.Warning.Render("?")
 	default:
 		return t.Accent.Render("·")
 	}

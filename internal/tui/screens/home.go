@@ -52,7 +52,7 @@ func (h *Home) Update(msg tea.Msg, ctx Context) (Screen, tea.Cmd) {
 		case a.Search:
 			return h, send(SearchMsg{})
 		case a.Navigate:
-			return h, send(NavigateMsg{Section: a.Section})
+			return h, send(NavigateMsg{Section: a.Section, Finding: a.Finding})
 		}
 		return h, send(ShowActionPreviewMsg{Plan: a.Plan, Confirm: a.Confirm})
 	}
@@ -136,6 +136,10 @@ func (h *Home) intro(ctx Context, w int) string {
 	const about = "Keep your software tidy, up to date and understood, in plain language. Nothing happens without your say-so."
 	text := func(width int) string {
 		return t.Title.Render(greeting) + "\n" + t.Muted.Render(components.Wrap(about, width))
+	}
+	if ctx.Layout.Height < 16 {
+		// Very short terminal: the actions matter more than the tagline.
+		return t.Title.Render(greeting)
 	}
 	logoW := components.BigLogoWidth
 	switch {
@@ -263,7 +267,7 @@ func (h *Home) overview(ctx Context) string {
 	var rows [][2]string
 	switch {
 	case !d.Available:
-		rows = [][2]string{{"Installed apps", muted("unavailable (see Settings)")}}
+		rows = [][2]string{{"Installed apps", muted("unavailable")}}
 	case !d.Loaded:
 		rows = [][2]string{{"Installed apps", muted("loading…")}}
 	case d.LoadErr != "":
@@ -326,7 +330,7 @@ func (h *Home) overview(ctx Context) string {
 			att, info := a.Counts()
 			val := t.Success.Render("nothing to look at")
 			if att > 0 {
-				val = t.Warning.Render(fmt.Sprintf("%d worth your attention", att))
+				val = t.Warning.Render(core.NeedsAttention(att))
 			} else if info > 0 {
 				val = t.Body.Render(fmt.Sprintf("%d worth knowing", info))
 			}
@@ -361,61 +365,97 @@ func (h *Home) recentActivity(ctx Context, width int) string {
 
 func (h *Home) recommended(ctx Context, width int) string {
 	t := ctx.Theme
+	return components.SectionLabel(t, "Next steps") + "\n" + components.Bullets(t, width, NextSteps(ctx))
+}
+
+// NextSteps lists what the user could do next, most important first: things
+// that need attention, then things not done yet, then general tips. Only the
+// first few fit on the Dashboard without scrolling, so the order matters.
+func NextSteps(ctx Context) []string {
 	d := ctx.Data
 	var items []string
+	add := func(s string) { items = append(items, s) }
+
+	if !d.Available {
+		add("ATLAS can't open its saved data, so scanning is turned off. Settings (9) explains what went wrong.")
+	}
 	switch {
-	case !d.Available:
-		items = append(items, "ATLAS can't open its saved data, so scanning is turned off. Settings (9) explains what went wrong.")
 	case d.Scan != nil:
-		items = append(items, "A scan is running. You can keep using ATLAS; results appear when it finishes.")
+		add("A scan is running. You can keep using ATLAS; results appear when it finishes.")
 	case d.Check != nil:
-		items = append(items, "An update check is running. You can keep using ATLAS; results appear in Updates (3).")
+		add("An update check is running. You can keep using ATLAS; results appear in Updates (3).")
 	case d.Analyze != nil:
-		items = append(items, "Analysis is running. Results appear in Smart Analysis (4) and Dependencies (5).")
-	case d.Loaded && d.Summary == nil:
-		items = append(items, "Scan your system to see what is installed. It only reads information and takes a few seconds.")
-	case d.Summary != nil:
-		if ctx.Now.Sub(d.Summary.FinishedAt) > staleAfter {
-			items = append(items, "Your last scan was "+components.HumanTime(d.Summary.FinishedAt, ctx.Now)+". Scan again to refresh the list.")
-		}
-		if d.Summary.Status == core.ScanPartial {
-			items = append(items, "Some sources couldn't be read in the last scan. Activity History (8) shows which, and why.")
+		add("Analysis is running. Results appear in Smart Analysis (4) and Dependencies (5).")
+	}
+	// A run that never reported back: say so before anything else.
+	if len(d.Activity) > 0 && d.Activity[0].Outcome == core.OutcomeStarted {
+		add("ATLAS was closed while a package manager was working (see Activity History (8)). Scan again to see what is really installed.")
+	}
+	if d.Available && d.Loaded && d.Summary == nil && d.Scan == nil {
+		add("Scan your system to see what is installed. It only reads information and takes a few seconds.")
+	}
+
+	if s := d.Summary; s != nil {
+		// Needs attention.
+		if s.Status == core.ScanPartial {
+			add("Some sources couldn't be read in the last scan. Activity History (8) shows which, and why.")
 		}
 		if d.UpdatesSinceScan {
-			items = append(items, "You installed updates after your last scan. Scan again so My Software shows the new versions.")
-		}
-		items = append(items, "Browse and search everything that was found in My Software (2).")
-	}
-	if d.Loaded && d.AnalysisAvailable && d.Summary != nil && !d.Busy() {
-		switch a := d.Analysis; {
-		case a == nil:
-			items = append(items, "Analyze your software to spot runtimes that no longer get security fixes, duplicates, and what depends on what.")
-		case d.AnalysisStale():
-			items = append(items, "Your software list changed since the last analysis. Analyze again to bring Smart Analysis up to date.")
-		default:
-			if att, _ := a.Counts(); att > 0 {
-				items = append(items, fmt.Sprintf("Smart Analysis found %d things worth your attention. See Smart Analysis (4).", att))
-			}
+			add("You installed updates after your last scan. Scan again so My Software shows the new versions.")
 		}
 	}
+	apps, comps := d.PendingUpdates()
+	checked := d.Loaded && d.UpdatesAvailable && d.UpdateSummary != nil
+	if checked && apps+comps > 0 && d.Check == nil {
+		add(fmt.Sprintf("%s waiting. Review them in Updates (3); nothing installs until you confirm.", waiting(apps+comps)))
+	}
+	analyzed := d.Loaded && d.AnalysisAvailable && d.Summary != nil && d.Analysis != nil
+	if analyzed && !d.AnalysisStale() && d.Analyze == nil {
+		if att, _ := d.Analysis.Counts(); att > 0 {
+			add(fmt.Sprintf("Smart Analysis found %s worth your attention. See Smart Analysis (4).", components.Plural(att, "thing")))
+		}
+	}
+
+	// Not done yet, or out of date.
 	if d.Loaded && d.UpdatesAvailable && !d.Busy() {
-		apps, comps := d.PendingUpdates()
 		switch {
 		case d.UpdateSummary == nil:
-			items = append(items, "Check for updates to see which of your software has newer versions. Checking only reads information.")
-		case apps+comps > 0:
-			items = append(items, fmt.Sprintf("%d updates are waiting. Review them in Updates (3); nothing installs until you confirm.", apps+comps))
-		case ctx.Now.Sub(d.UpdateSummary.FinishedAt) > staleAfter:
-			items = append(items, "Your last update check was "+components.HumanTime(d.UpdateSummary.FinishedAt, ctx.Now)+". Check again for newer versions.")
+			add("Check for updates to see which of your software has newer versions. Checking only reads information.")
+		case apps+comps == 0 && ctx.Now.Sub(d.UpdateSummary.FinishedAt) > staleAfter:
+			add("Your last update check was " + components.HumanTime(d.UpdateSummary.FinishedAt, ctx.Now) + ". Check again for newer versions.")
 		}
 	}
-	items = append(items, "Press ? at any time to see the keys for the screen you are on.")
-	if ctx.Advanced() {
-		items = append(items, "You are in Advanced mode: package IDs, paths and command details are shown. Press m to switch back.")
-	} else {
-		items = append(items, "Developer? Press m for Advanced mode to see package IDs, paths and command details.")
+	if d.Loaded && d.AnalysisAvailable && d.Summary != nil && !d.Busy() {
+		switch {
+		case d.Analysis == nil:
+			add("Analyze your software to spot runtimes that no longer get security fixes, duplicates, and what depends on what.")
+		case d.AnalysisStale():
+			add("Your software list changed since the last analysis. Analyze again to bring Smart Analysis up to date.")
+		}
 	}
-	return components.SectionLabel(t, "Next steps") + "\n" + components.Bullets(t, width, items)
+	if s := d.Summary; s != nil {
+		if ctx.Now.Sub(s.FinishedAt) > staleAfter {
+			add("Your last scan was " + components.HumanTime(s.FinishedAt, ctx.Now) + ". Scan again to refresh the list.")
+		}
+		add("Browse and search everything that was found in My Software (2).")
+	}
+
+	// General tips, always last.
+	add("Press ? at any time to see the keys for the screen you are on.")
+	if ctx.Advanced() {
+		add("You are in Advanced mode: package IDs, paths and command details are shown. Press m to switch back.")
+	} else {
+		add("Developer? Press m for Advanced mode to see package IDs, paths and command details.")
+	}
+	return items
+}
+
+// waiting is "1 update is" or "33 updates are".
+func waiting(n int) string {
+	if n == 1 {
+		return "1 update is"
+	}
+	return fmt.Sprintf("%d updates are", n)
 }
 
 func (h *Home) diagnostics(ctx Context) string {

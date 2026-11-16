@@ -77,8 +77,16 @@ type SetConfirmActionsMsg struct{ Confirm bool }
 // StatusMsg asks the root to show a status-bar message.
 type StatusMsg struct{ Status components.Status }
 
-// NavigateMsg asks the root to open a section.
-type NavigateMsg struct{ Section nav.Section }
+// NavigateMsg asks the root to open a section. Finding, if set, is the kind
+// of Smart Analysis finding to show there (see FocusFindingMsg).
+type NavigateMsg struct {
+	Section nav.Section
+	Finding string
+}
+
+// FocusFindingMsg asks Smart Analysis to select the first finding of a kind,
+// or to say honestly why there isn't one.
+type FocusFindingMsg struct{ Kind string }
 
 func send(msg tea.Msg) tea.Cmd {
 	return func() tea.Msg { return msg }
