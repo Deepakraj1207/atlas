@@ -485,3 +485,12 @@ Short, dated records of choices that shape the code.
   - Footer keys read `[key] description`, with the key in the accent colour.
   - `components.Box` draws a titled panel, and `Layout.VisibleHeight` keeps the on-screen
     height while the root renders a screen taller so it can scroll.
+- **Every screen follows the same pattern.**
+  - The title has a short subtitle beside it and a thin rule under it, replacing the
+    intro paragraph that ran two or three lines.
+  - Empty and error states are framed panels with the title in the border; errors use
+    the danger colour.
+  - Section headings inside lists, the help overlay and action previews have a line
+    running to the edge.
+  - Bullets and the action list style each wrapped line on its own, so a long item no
+    longer pads the first line out past its frame.

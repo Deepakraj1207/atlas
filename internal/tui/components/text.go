@@ -28,10 +28,15 @@ func Bullets(t theme.Theme, width int, items []string) string {
 	inner := max(width-2, 1)
 	lines := make([]string, 0, len(items))
 	for _, it := range items {
-		body := Wrap(it, inner)
-		// Indent continuation lines so the text column lines up.
-		body = strings.ReplaceAll(body, "\n", "\n  ")
-		lines = append(lines, marker+t.Body.Render(body))
+		// Style each line on its own (a multi-line Render pads every line
+		// to the longest) and indent continuations so the text lines up.
+		for i, l := range strings.Split(Wrap(it, inner), "\n") {
+			if i == 0 {
+				lines = append(lines, marker+t.Body.Render(l))
+			} else {
+				lines = append(lines, "  "+t.Body.Render(l))
+			}
+		}
 	}
 	return strings.Join(lines, "\n")
 }

@@ -158,8 +158,7 @@ func (a *SmartAnalysis) View(ctx Context) string {
 	t := ctx.Theme
 	w := ctx.Width()
 	d := ctx.Data
-	head := t.Title.Render("Smart Analysis") + "\n" +
-		t.Muted.Render(components.Wrap("Plain-language observations about your software. Looking at them changes nothing.", w)) + "\n\n"
+	head := components.PageHead(t, "Smart Analysis", "Things worth knowing. Looking changes nothing", w) + "\n\n"
 
 	switch {
 	case !d.AnalysisAvailable:
@@ -365,8 +364,7 @@ func (dp *Dependencies) View(ctx Context) string {
 	t := ctx.Theme
 	w := ctx.Width()
 	d := ctx.Data
-	head := t.Title.Render("Dependencies") + "\n" +
-		t.Muted.Render(components.Wrap("Runtimes are shared building blocks such as Python, Node.js, Java, .NET and Visual C++. Other software can stop working if one it needs is removed.", w)) + "\n\n"
+	head := components.PageHead(t, "Dependencies", "Runtimes are shared building blocks other software needs", w) + "\n\n"
 
 	switch {
 	case !d.AnalysisAvailable:
@@ -413,7 +411,7 @@ func (dp *Dependencies) View(ctx Context) string {
 			}
 			group = g
 			groupStart = len(lines)
-			lines = append(lines, components.Truncate(t.Heading.Render(g)+t.Subtle.Render(" · ")+supportLabel(t, rt.Support), w))
+			lines = append(lines, components.Section(t, t.Heading.Render(g)+t.Subtle.Render(" · ")+supportLabel(t, rt.Support), w))
 		}
 		needed := t.Muted.Render("not recorded")
 		switch {

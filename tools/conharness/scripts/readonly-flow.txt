@@ -48,7 +48,7 @@ keys 4
 until 10 What ATLAS checked
 snap smart analysis
 keys 5
-until 10 Runtimes are shared building blocks
+until 10 Runtimes are shared building blocks other software needs
 snap dependencies
 keys 6
 wait 600

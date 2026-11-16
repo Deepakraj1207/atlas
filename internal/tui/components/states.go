@@ -3,6 +3,8 @@ package components
 import (
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
+
 	"github.com/deepakraj1207/atlas/internal/tui/theme"
 )
 
@@ -16,29 +18,32 @@ type EmptyState struct {
 	Hint string
 }
 
-// Render draws the empty state within width.
+// Render draws the empty state as a framed panel with the title in its
+// border, at most a comfortable reading width.
 func (e EmptyState) Render(t theme.Theme, width int) string {
-	var b strings.Builder
-	if e.Title != "" {
-		b.WriteString(t.Heading.Render(e.Title))
-		b.WriteString("\n")
-	}
+	pw := panelWidth(width)
+	inner := max(pw-4, 8)
+	var parts []string
 	if e.Message != "" {
-		b.WriteString(t.Muted.Render(Wrap(e.Message, width)))
-		b.WriteString("\n")
+		parts = append(parts, wrapLines(t.Muted, e.Message, inner))
 	}
 	if len(e.Plan) > 0 {
-		b.WriteString("\n")
-		b.WriteString(t.Heading.Render("What this will do"))
-		b.WriteString("\n")
-		b.WriteString(Bullets(t, width, e.Plan))
-		b.WriteString("\n")
+		parts = append(parts, Bullets(t, inner, e.Plan))
 	}
 	if e.Hint != "" {
-		b.WriteString("\n")
-		b.WriteString(t.Accent.Render(Wrap(e.Hint, width)))
+		parts = append(parts, wrapLines(t.Accent, e.Hint, inner))
 	}
-	return strings.TrimRight(b.String(), "\n")
+	return Box(t, e.Title, strings.Join(parts, "\n\n"), pw, 0)
+}
+
+// wrapLines wraps text and styles each line on its own, so no line is
+// padded to the width of the longest.
+func wrapLines(style lipgloss.Style, text string, width int) string {
+	lines := strings.Split(Wrap(text, width), "\n")
+	for i, l := range lines {
+		lines[i] = style.Render(l)
+	}
+	return strings.Join(lines, "\n")
 }
 
 // ErrorState describes a problem in plain language with optional detail.
@@ -53,30 +58,26 @@ type ErrorState struct {
 	Hint string
 }
 
-// Render draws the error state within width.
+// Render draws the error state as a framed panel with the title, in the
+// danger colour, in its border.
 func (e ErrorState) Render(t theme.Theme, width int) string {
-	var b strings.Builder
+	pw := panelWidth(width)
+	inner := max(pw-4, 8)
 	title := e.Title
 	if title == "" {
 		title = "Something needs attention"
 	}
-	b.WriteString(t.Danger.Bold(true).Render("! " + title))
-	b.WriteString("\n")
+	var parts []string
 	if e.Summary != "" {
-		b.WriteString(t.Body.Render(Wrap(e.Summary, width)))
-		b.WriteString("\n")
+		parts = append(parts, wrapLines(t.Body, e.Summary, inner))
 	}
 	if e.ShowDetails && e.Details != "" {
-		b.WriteString(t.Subtle.Render("Details"))
-		b.WriteString("\n")
-		b.WriteString(t.Muted.Render(Wrap(e.Details, width)))
-		b.WriteString("\n")
+		parts = append(parts, t.Subtle.Render("Details")+"\n"+wrapLines(t.Muted, e.Details, inner))
 	} else if e.Details != "" {
-		b.WriteString(t.Subtle.Render("Switch to Advanced mode (m) to see technical details."))
-		b.WriteString("\n")
+		parts = append(parts, wrapLines(t.Subtle, "Switch to Advanced mode (m) to see technical details.", inner))
 	}
 	if e.Hint != "" {
-		b.WriteString(t.Accent.Render(Wrap(e.Hint, width)))
+		parts = append(parts, wrapLines(t.Accent, e.Hint, inner))
 	}
-	return strings.TrimRight(b.String(), "\n")
+	return frame(t, "! "+title, t.Danger.Bold(true), strings.Join(parts, "\n\n"), pw, 0)
 }

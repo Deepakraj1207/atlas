@@ -156,9 +156,7 @@ func (s *Settings) View(ctx Context) string {
 	w := ctx.Width()
 	var b strings.Builder
 
-	b.WriteString(t.Title.Render("Settings"))
-	b.WriteString("\n")
-	b.WriteString(t.Muted.Render(components.Wrap("Preferences are saved immediately and remembered next time.", w)))
+	b.WriteString(components.PageHead(t, "Settings", "Saved as soon as you change them", w))
 	b.WriteString("\n\n")
 
 	rows := s.rows(ctx)
@@ -188,7 +186,7 @@ func (s *Settings) View(ctx Context) string {
 
 	if ctx.Advanced() {
 		b.WriteString("\n\n")
-		b.WriteString(t.Heading.Render("Where things live"))
+		b.WriteString(components.Section(t, t.Heading.Render("Where things live"), w))
 		b.WriteString("\n")
 		b.WriteString(components.LabelValue(t, [][2]string{
 			{"Settings file", ctx.ConfigPath},

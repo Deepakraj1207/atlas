@@ -19,6 +19,10 @@ import (
 // are cut. height, when larger than the content, pads the box with empty
 // rows so boxes side by side line up.
 func Box(t theme.Theme, title, body string, width, height int) string {
+	return frame(t, title, t.Heading, body, width, height)
+}
+
+func frame(t theme.Theme, title string, titleStyle lipgloss.Style, body string, width, height int) string {
 	width = max(width, 6)
 	inner := width - 4
 	edge := t.Divider
@@ -32,7 +36,7 @@ func Box(t theme.Theme, title, body string, width, height int) string {
 	fill = max(fill, 0)
 	b.WriteString(edge.Render("╭─"))
 	if title != "" {
-		b.WriteString(" " + t.Heading.Render(title) + " ")
+		b.WriteString(" " + titleStyle.Render(title) + " ")
 	}
 	b.WriteString(edge.Render(strings.Repeat("─", fill) + "╮"))
 
@@ -53,4 +57,36 @@ func Box(t theme.Theme, title, body string, width, height int) string {
 // Rule is a thin horizontal line for use inside a Box.
 func Rule(t theme.Theme, width int) string {
 	return t.Divider.Render(strings.Repeat("─", max(width, 0)))
+}
+
+// PageHead is a screen's title with a short subtitle beside it, over a thin
+// rule the width of the screen:
+//
+//	Updates  Newer versions of your software
+//	────────────────────────────────────────
+func PageHead(t theme.Theme, title, subtitle string, width int) string {
+	head := t.Title.Render(title)
+	if subtitle != "" {
+		if !strings.Contains(subtitle, "\x1b") {
+			subtitle = t.Subtle.Render(subtitle)
+		}
+		head += "  " + Truncate(subtitle, max(width-lipgloss.Width(title)-2, 0))
+	}
+	return head + "\n" + Rule(t, width)
+}
+
+// panelWidth is the width of a framed message: the whole screen, like the
+// rule under the page head, so panels line up.
+func panelWidth(width int) int { return width }
+
+// Section is a heading inside a screen with a thin line running to the
+// edge:  Things to tidy ─────────────────────
+// heading is already styled; it is shown in full and the line fills the rest.
+func Section(t theme.Theme, heading string, width int) string {
+	heading = Truncate(heading, width)
+	rest := width - lipgloss.Width(heading) - 1
+	if rest < 2 {
+		return heading
+	}
+	return heading + " " + Rule(t, rest)
 }

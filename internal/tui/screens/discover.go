@@ -151,12 +151,11 @@ func (s *Discover) View(ctx Context) string {
 	t := ctx.Theme
 	w := ctx.Width()
 	d := ctx.Data
-	asOf := ""
+	sub := "Free, safe tools, picked without going online"
 	if d.Discovery != nil {
-		asOf = " Catalogue as of " + d.Discovery.CatalogAsOf + "."
+		sub += " · catalogue " + d.Discovery.CatalogAsOf
 	}
-	head := t.Title.Render("Discover Apps") + "\n" +
-		t.Muted.Render(components.Wrap("Free, well-known tools picked for being useful and safe. Suggestions come from what you already have; ATLAS doesn't contact the internet to make them. Installing always shows a preview first."+asOf, w)) + "\n\n"
+	head := components.PageHead(t, "Discover Apps", sub, w) + "\n\n"
 	switch {
 	case !d.DiscoverAvailable:
 		return head + components.ErrorState{Title: "Discover Apps is unavailable", Summary: "ATLAS couldn't open its saved data or its catalogue.", Details: d.StoreErr, ShowDetails: ctx.Advanced()}.Render(t, w)
@@ -199,7 +198,7 @@ func (s *Discover) View(ctx Context) string {
 				lines = append(lines, "")
 			}
 			section = heading
-			lines = append(lines, t.Heading.Render(heading))
+			lines = append(lines, components.Section(t, t.Heading.Render(heading), w))
 		}
 		it := r.item
 		mark := "[ ] "

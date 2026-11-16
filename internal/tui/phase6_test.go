@@ -64,7 +64,7 @@ func bootDiscover(t *testing.T, scan bool) (Model, *[]string) {
 func TestDiscoverSuggestsAndInstalls(t *testing.T) {
 	m, calls := bootDiscover(t, true)
 	v := m.View()
-	for _, want := range []string{"Suggested for you", "GitHub CLI", "Why it's suggested: useful for almost everyone", "doesn't contact the internet", "Catalogue as of 2026-11"} {
+	for _, want := range []string{"Suggested for you", "GitHub CLI", "Why it's suggested: useful for almost everyone", "picked without going online", "catalogue 2026-11"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("Discover missing %q:\n%s", want, v)
 		}

@@ -60,8 +60,7 @@ func (a *ActivityHistory) View(ctx Context) string {
 	t := ctx.Theme
 	w := ctx.Width()
 	d := ctx.Data
-	head := t.Title.Render("Activity History") + "\n" +
-		t.Muted.Render(components.Wrap("Everything ATLAS has done on this computer, newest first. Nothing happens silently.", w)) + "\n\n"
+	head := components.PageHead(t, "Activity History", "Everything ATLAS has done, newest first", w) + "\n\n"
 
 	switch {
 	case !d.Available:

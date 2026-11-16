@@ -14,7 +14,7 @@ func ActionPreview(t theme.Theme, width int, p core.ActionPlan, advanced bool) s
 	var b strings.Builder
 	w := max(width-2, 10)
 	section := func(title, body string) {
-		b.WriteString(t.Heading.Render(title))
+		b.WriteString(Section(t, t.Heading.Render(title), w))
 		b.WriteString("\n  ")
 		b.WriteString(strings.ReplaceAll(t.Body.Render(Wrap(body, w-2)), "\n", "\n  "))
 		b.WriteString("\n\n")
@@ -35,7 +35,7 @@ func ActionPreview(t theme.Theme, width int, p core.ActionPlan, advanced bool) s
 	section("What will happen", p.WhatHappens)
 	section("Why", p.Why)
 	if p.ChangesSystem() {
-		b.WriteString(t.Heading.Render("What will change"))
+		b.WriteString(Section(t, t.Heading.Render("What will change"), w))
 		b.WriteString("\n  ")
 		b.WriteString(strings.ReplaceAll(Bullets(t, w-2, p.WhatChanges), "\n", "\n  "))
 		b.WriteString("\n\n")
@@ -46,7 +46,7 @@ func ActionPreview(t theme.Theme, width int, p core.ActionPlan, advanced bool) s
 	section("Can it be undone?", p.Reversible)
 
 	if advanced && len(p.Technical) > 0 {
-		b.WriteString(t.Heading.Render("Technical details"))
+		b.WriteString(Section(t, t.Heading.Render("Technical details"), w))
 		b.WriteString("\n  ")
 		b.WriteString(strings.ReplaceAll(Bullets(t, w-2, p.Technical), "\n", "\n  "))
 		b.WriteString("\n\n")

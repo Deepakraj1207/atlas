@@ -175,8 +175,7 @@ func (c *Cleanup) View(ctx Context) string {
 	t := ctx.Theme
 	w := ctx.Width()
 	d := ctx.Data
-	head := t.Title.Render("Cleanup") + "\n" +
-		t.Muted.Render(components.Wrap("Remove software you don't need and clear out caches. Nothing is removed until you confirm, and ATLAS checks what depends on what first.", w)) + "\n\n"
+	head := components.PageHead(t, "Cleanup", "Nothing is removed until you confirm", w) + "\n\n"
 
 	switch {
 	case !d.CleanupAvailable:
@@ -215,7 +214,7 @@ func (c *Cleanup) View(ctx Context) string {
 		lines = append(lines, components.Truncate(prefix+style(mark+text), w))
 	}
 
-	lines = append(lines, t.Heading.Render("Suggested by Smart Analysis"))
+	lines = append(lines, components.Section(t, t.Heading.Render("Suggested by Smart Analysis"), w))
 	switch {
 	case d.Analysis == nil && d.Summary == nil:
 		note("Scan your system and analyze it to get suggestions.", t.Muted.Render)
@@ -246,7 +245,7 @@ func (c *Cleanup) View(ctx Context) string {
 		}
 	}
 
-	lines = append(lines, "", t.Heading.Render("Things to tidy"))
+	lines = append(lines, "", components.Section(t, t.Heading.Render("Things to tidy"), w))
 	switch {
 	case d.Tidying != nil:
 		for _, l := range strings.Split(tidyProgressView(ctx, *d.Tidying), "\n") {

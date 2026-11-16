@@ -65,7 +65,7 @@ func Help(t theme.Theme, width int, context string, groups []HelpGroup) string {
 		if i > 0 {
 			b.WriteString("\n")
 		}
-		b.WriteString(t.Heading.Render(g.Title))
+		b.WriteString(Section(t, t.Heading.Render(g.Title), width))
 		b.WriteString("\n")
 		for _, h := range g.Hints {
 			b.WriteString("  ")
