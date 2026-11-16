@@ -79,6 +79,9 @@ type Layout struct {
 
 	// ContentWidth and ContentHeight are the space left for the active screen.
 	ContentWidth, ContentHeight int
+	// VisibleHeight is the content height that fits on screen. It stays
+	// the same when a screen is rendered taller so the root can scroll it.
+	VisibleHeight int
 	// SidebarWidth is 0 when the sidebar is hidden.
 	SidebarWidth int
 	// ContentPad is the blank margin on each side of the content area:
@@ -129,6 +132,7 @@ func Compute(width, height int) Layout {
 		used += TabBarHeight + l.TabRows - 1
 	}
 	l.ContentHeight = max(height-used, 1)
+	l.VisibleHeight = l.ContentHeight
 
 	if l.ShowSidebar {
 		l.SidebarWidth = SidebarWidth

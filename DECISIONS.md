@@ -467,3 +467,21 @@ Short, dated records of choices that shape the code.
   - Counts of zero are left out ("1 needs attention", not "1 worth your attention, 0
     worth knowing"); AI failures say "Tried to send"; "Welcome!" is only for a first run.
 
+
+## D86. A calmer Dashboard: framed panels, less text
+
+- **Context:** Feedback said the Dashboard had too much text and detail and asked for
+  more lines and space, pointing at TUIs with a large shadowed logo and rounded panels
+  whose titles sit in the top border.
+- **Decision:** The Dashboard is a centred logo and three framed panels: "What would you
+  like to do?", "Your computer" and "Next step".
+  - The large logo (block letters with a box-drawing shadow) shows when 24 or more
+    content rows are visible. The three-row logo shows from 20 rows, and below that
+    only the greeting.
+  - Removed from the Dashboard: the tagline, the Software overview list and Recent
+    activity. Their facts are now in "Your computer" (figures, the computer, when it was
+    scanned and whether sources were missing), in Next step, and in Activity History.
+  - Next step shows the one most important step, or up to three when there is room.
+  - Footer keys read `[key] description`, with the key in the accent colour.
+  - `components.Box` draws a titled panel, and `Layout.VisibleHeight` keeps the on-screen
+    height while the root renders a screen taller so it can scroll.

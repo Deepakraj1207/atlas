@@ -14,13 +14,13 @@ type KeyHint struct {
 	Desc string
 }
 
-// HintRow renders hints on one line ("↑↓ navigate  enter select"),
+// HintRow renders hints on one line ("[↑↓] navigate   [enter] select"),
 // dropping trailing hints that do not fit.
 func HintRow(t theme.Theme, width int, hints []KeyHint) string {
 	var parts []string
 	used := 0
 	for _, h := range hints {
-		s := t.Key.Render(h.Key) + " " + t.KeyDesc.Render(h.Desc)
+		s := t.Subtle.Render("[") + t.Key.Render(h.Key) + t.Subtle.Render("]") + " " + t.KeyDesc.Render(h.Desc)
 		w := lipgloss.Width(s)
 		sep := 0
 		if len(parts) > 0 {

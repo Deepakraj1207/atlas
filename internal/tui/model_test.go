@@ -178,7 +178,7 @@ func TestStartsOnHomeWithDefaults(t *testing.T) {
 	if !d.Available || !d.Loaded || d.Summary != nil || len(d.Items) != 0 {
 		t.Errorf("fresh database should load as empty: %+v", d)
 	}
-	if !strings.Contains(m.View(), "not yet scanned") {
+	if !strings.Contains(dashboardText(m), "— apps") {
 		t.Error("Home should say not yet scanned before the first scan")
 	}
 }

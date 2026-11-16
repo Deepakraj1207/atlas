@@ -69,3 +69,49 @@ func mix(a, b [3]float64, f float64) string {
 	ch := func(i int) int { return int(a[i] + (b[i]-a[i])*f + 0.5) }
 	return fmt.Sprintf("#%02X%02X%02X", ch(0), ch(1), ch(2))
 }
+
+// heroLogo is ATLAS in large block letters with a box-drawing shadow, for
+// the Dashboard of a roomy terminal. The block (█) and box-drawing
+// characters are single width in every Windows console font.
+var heroLogo = []string{
+	" █████╗ ████████╗██╗      █████╗ ███████╗",
+	"██╔══██╗╚══██╔══╝██║     ██╔══██╗██╔════╝",
+	"███████║   ██║   ██║     ███████║███████╗",
+	"██╔══██║   ██║   ██║     ██╔══██║╚════██║",
+	"██║  ██║   ██║   ███████╗██║  ██║███████║",
+	"╚═╝  ╚═╝   ╚═╝   ╚══════╝╚═╝  ╚═╝╚══════╝",
+}
+
+// HeroLogoWidth and HeroLogoHeight are the large logo's size.
+var (
+	HeroLogoWidth  = lipgloss.Width(heroLogo[0])
+	HeroLogoHeight = len(heroLogo)
+)
+
+// HeroLogo renders the large logo: the letters in the accent-to-info
+// gradient and their shadow in the soft accent colour.
+func HeroLogo(t theme.Theme) string {
+	from, okF := hexRGB(string(t.Palette.Accent))
+	to, okT := hexRGB(string(t.Palette.Info))
+	shadow := lipgloss.NewStyle().Foreground(t.Palette.AccentSoft)
+	lines := make([]string, len(heroLogo))
+	for y, row := range heroLogo {
+		runes := []rune(row)
+		var b strings.Builder
+		for x, r := range runes {
+			switch {
+			case r == ' ':
+				b.WriteRune(r)
+			case r != '█':
+				b.WriteString(shadow.Render(string(r)))
+			case !okF || !okT:
+				b.WriteString(t.Logo.Render(string(r)))
+			default:
+				c := mix(from, to, float64(x)/float64(max(len(runes)-1, 1)))
+				b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(c)).Render(string(r)))
+			}
+		}
+		lines[y] = b.String()
+	}
+	return strings.Join(lines, "\n")
+}

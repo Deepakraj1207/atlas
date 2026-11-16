@@ -47,9 +47,9 @@ func TestScanFlowSavesAndShowsEverywhere(t *testing.T) {
 	if d.Summary == nil || d.Summary.AppCount != 2 || d.Summary.ComponentCount != 1 || len(d.Items) != 3 {
 		t.Fatalf("data after scan = %+v", d)
 	}
-	home := m.View()
-	if !strings.Contains(home, "Installed apps") || strings.Contains(home, "not yet scanned") || !strings.Contains(home, "Scanned your system · just now") {
-		t.Error("Home should show the real count and the activity entry")
+	home := dashboardText(m)
+	if !strings.Contains(home, "2 apps") || strings.Contains(home, "Not scanned yet") || !strings.Contains(home, "Scanned just now") {
+		t.Errorf("Home should show the real count and when it was scanned:\n%s", home)
 	}
 
 	m = press(t, m, "2")

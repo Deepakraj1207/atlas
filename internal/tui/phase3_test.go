@@ -140,7 +140,7 @@ func TestCheckForUpdatesFlow(t *testing.T) {
 	var out bytes.Buffer
 	e := newEnv(t, testManager{id: "a", ups: threeUpdates()}, testManager{id: "b", err: core.ErrSourceUnavailable})
 	m := bootEnv(t, e, &out)
-	if !strings.Contains(m.View(), "not checked yet") {
+	if !strings.Contains(dashboardText(m), "— updates") {
 		t.Error("Home should say updates were not checked yet")
 	}
 	m = checkFromHome(t, m)
@@ -150,7 +150,7 @@ func TestCheckForUpdatesFlow(t *testing.T) {
 	if st := m.Status(); st.Kind != components.StatusSuccess || !strings.Contains(st.Text, "2 updates available") {
 		t.Errorf("status = %+v (held updates must not be counted)", st)
 	}
-	if !strings.Contains(dashboardText(m), "2 updates are waiting") {
+	if !strings.Contains(strings.Join(screens.NextSteps(m.ctx()), "\n"), "2 updates are waiting") || !strings.Contains(dashboardText(m), "2 updates") {
 		t.Error("Home should recommend reviewing updates")
 	}
 	m = press(t, m, "3")
