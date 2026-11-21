@@ -125,3 +125,14 @@ type StartExplainMsg struct{ Subject, Question string }
 
 // SearchMsg opens My Software with its search box active.
 type SearchMsg struct{}
+
+// RefreshExtensionsMsg asks the root to read the AI apps' setup again.
+type RefreshExtensionsMsg struct{}
+
+// ChangeExtensionMsg asks the root to remove an extension, or turn a plugin
+// on or off. Only sent after a preview.
+type ChangeExtensionMsg struct {
+	Ext    core.Extension
+	Remove bool
+	On     bool
+}

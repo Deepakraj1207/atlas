@@ -191,8 +191,8 @@ func TestTabAndDigitsNavigate(t *testing.T) {
 	}
 	m = press(t, m, "shift+tab")
 	m = press(t, m, "shift+tab")
-	if m.Section() != nav.Settings {
-		t.Errorf("shift+tab twice from My Software = %v, want Settings", m.Section())
+	if m.Section() != nav.AITools {
+		t.Errorf("shift+tab twice from My Software = %v, want AI Tools", m.Section())
 	}
 	m = press(t, m, "7")
 	if m.Section() != nav.DiscoverApps {

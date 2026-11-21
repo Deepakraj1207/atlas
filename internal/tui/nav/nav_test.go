@@ -5,7 +5,7 @@ import "testing"
 func TestSectionOrderAndTitles(t *testing.T) {
 	want := []string{
 		"Dashboard", "My Software", "Updates", "Smart Analysis", "Dependencies",
-		"Cleanup", "Discover Apps", "Activity History", "Settings",
+		"Cleanup", "Discover Apps", "Activity History", "Settings", "AI Tools",
 	}
 	all := All()
 	if len(all) != len(want) {
@@ -15,7 +15,11 @@ func TestSectionOrderAndTitles(t *testing.T) {
 		if s.Title() != want[i] {
 			t.Errorf("section %d title = %q, want %q", i, s.Title(), want[i])
 		}
-		if s.Shortcut() != string(rune('1'+i)) {
+		want := string(rune('1' + i))
+		if s == AITools {
+			want = "0"
+		}
+		if s.Shortcut() != want {
 			t.Errorf("section %d shortcut = %q", i, s.Shortcut())
 		}
 		if s.Info().Summary == "" {
@@ -30,7 +34,7 @@ func TestComingSoonSectionsHavePlanAndPhase(t *testing.T) {
 		switch info.Availability {
 		case Available:
 			switch s {
-			case Home, MySoftware, Updates, SmartAnalysis, Dependencies, Cleanup, DiscoverApps, ActivityHistory, Settings:
+			case Home, MySoftware, Updates, SmartAnalysis, Dependencies, Cleanup, DiscoverApps, ActivityHistory, Settings, AITools:
 			default:
 				t.Errorf("%q marked Available but is not built yet", s.Title())
 			}
@@ -48,12 +52,12 @@ func TestNextPrevWrap(t *testing.T) {
 		t.Fatal("should start at Home")
 	}
 	st.Prev()
-	if st.Current() != Settings {
-		t.Errorf("Prev from Home = %v, want Settings", st.Current())
+	if st.Current() != AITools {
+		t.Errorf("Prev from Home = %v, want AI Tools", st.Current())
 	}
 	st.Next()
 	if st.Current() != Home {
-		t.Errorf("Next from Settings = %v, want Home", st.Current())
+		t.Errorf("Next from AI Tools = %v, want Home", st.Current())
 	}
 	for i := 0; i < Count(); i++ {
 		st.Next()
@@ -68,7 +72,11 @@ func TestGoAndShortcut(t *testing.T) {
 	if !st.GoShortcut("3") || st.Current() != Updates {
 		t.Errorf("shortcut 3 should open Updates, got %v", st.Current())
 	}
-	if st.GoShortcut("0") || st.GoShortcut("x") || st.GoShortcut("12") {
+	if !st.GoShortcut("0") || st.Current() != AITools {
+		t.Errorf("shortcut 0 should open AI Tools, got %v", st.Current())
+	}
+	st.GoShortcut("3")
+	if st.GoShortcut("x") || st.GoShortcut("12") {
 		t.Error("invalid shortcuts must be rejected")
 	}
 	if st.Current() != Updates {

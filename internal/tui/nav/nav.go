@@ -7,7 +7,8 @@ package nav
 type Section int
 
 // Sections in display order. The order is the navigation order and the
-// number shortcut (Home, shown as "Dashboard", = 1 ... Settings = 9).
+// number shortcut (Home, shown as "Dashboard", = 1 ... Settings = 9, then
+// AI Tools = 0).
 const (
 	Home Section = iota
 	MySoftware
@@ -18,6 +19,8 @@ const (
 	DiscoverApps
 	ActivityHistory
 	Settings
+	// AITools is the tenth section; its shortcut is 0.
+	AITools
 	sectionCount
 )
 
@@ -91,6 +94,11 @@ var infos = [sectionCount]Info{
 		Short:   "Settings",
 		Summary: "Choose Simple or Advanced mode, the theme, and other preferences.",
 	},
+	AITools: {
+		Title:   "AI Tools",
+		Short:   "AI Tools",
+		Summary: "The MCP servers, plugins and skills set up in your AI apps.",
+	},
 }
 
 // All returns every section in display order.
@@ -120,6 +128,9 @@ func (s Section) Title() string { return s.Info().Title }
 func (s Section) Shortcut() string {
 	if s < 0 || s >= sectionCount {
 		return ""
+	}
+	if s == AITools {
+		return "0"
 	}
 	return string(rune('1' + int(s)))
 }
@@ -157,8 +168,11 @@ func (s *State) Go(to Section) bool {
 	return true
 }
 
-// GoShortcut jumps to the section bound to a digit key ("1".."9").
+// GoShortcut jumps to the section bound to a digit key ("1".."9", "0").
 func (s *State) GoShortcut(key string) bool {
+	if key == "0" {
+		return s.Go(AITools)
+	}
 	if len(key) != 1 || key[0] < '1' || key[0] > '9' {
 		return false
 	}

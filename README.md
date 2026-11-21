@@ -195,6 +195,14 @@ Press **7** for **Discover Apps**: free, well-known tools that fit what you alre
 with the reason for each suggestion. Suggestions are built from your own software list,
 with no internet lookups.
 
+### 8️⃣ See your AI tools
+
+Press **0** for **AI Tools**: every MCP server, plugin and skill set up in Claude Code,
+Claude Desktop, Cursor, VS Code, Windsurf, Gemini CLI and Codex, in one list. Turn Claude
+Code plugins on or off, and remove MCP servers and skills you don't use, each after a
+preview. ATLAS keeps a backup of every file it changes and never shows an MCP server's
+keys or environment.
+
 > 💡 Press **?** on any screen to see its keys. Press **m** for **Advanced mode** (package
 > IDs, paths and the exact commands) and **t** for the light theme.
 
@@ -216,6 +224,7 @@ version and your Windows apps.</sub>
 | 🧹 | **Cleanup** | Removes software and clears caches, after re-checking dependencies; refuses when it can't be sure |
 | 🎁 | **Discover Apps** | Suggests free tools that fit what you use, and installs them after a preview |
 | 📜 | **Activity History** | A record of everything ATLAS has done |
+| 🧰 | **AI Tools** | Lists the MCP servers, plugins and skills in your AI apps; turns plugins on or off and removes servers and skills, with a backup |
 | 🤖 | **AI explanations** | Optional, off by default: ask an AI to explain an app or a finding ([details](#-ai-explanations-optional)) |
 | 🎨 | **Comfort** | Simple and Advanced modes, dark and light themes, help on every screen, works from 40×10 up |
 
@@ -244,7 +253,7 @@ version and your Windows apps.</sub>
 |---|---|
 | `↑` `↓` · `Enter` | Move through the list on screen · choose |
 | `Esc` | Back: close what's open, then move to the section list (`↑` `↓`, `Enter` to open) |
-| `1`–`9` · `Tab` | Jump to a section · next section |
+| `1`–`9`, `0` · `Tab` | Jump to a section (`0` is AI Tools) · next section |
 | `/` | Search your software, from anywhere |
 | `?` | Help for the current screen |
 | `m` · `t` | Simple / Advanced mode · dark / light theme (both remembered) |
@@ -262,6 +271,7 @@ version and your Windows apps.</sub>
 | 🧠 Smart Analysis · 🔗 Dependencies | `Enter` or `a` analyze · `↑` `↓` choose · `Enter` on a finding opens where you act on it · `e` explain (AI, when on) |
 | 🧹 Cleanup | `c` look for things to tidy · `Space` select · `Enter` review · `a` analyze |
 | 🎁 Discover Apps | `←` `→` category · `Space` select · `Enter` install (with a preview) |
+| 🧰 AI Tools | `←` `→` type · `Space` turn a plugin on or off · `r` remove (with a preview) · `s` read again |
 | 👀 A preview | `Enter` go ahead · `r` go ahead with a removal · `Esc` cancel · `m` show technical details |
 | ⏳ While updates run | `Ctrl+C` stop; nothing further starts |
 

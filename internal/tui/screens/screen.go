@@ -108,6 +108,13 @@ type DataView struct {
 	Discovery *core.Discovery
 	// InstalledNow lists catalogue IDs installed this session, before a rescan.
 	InstalledNow map[string]bool
+
+	// ExtensionsAvailable is false when AI Tools can't read anything.
+	ExtensionsAvailable bool
+	// Extensions is the latest read of MCP servers, plugins and skills.
+	Extensions *core.ExtensionReport
+	// ExtensionsErr explains a failed read.
+	ExtensionsErr string
 }
 
 // Health sums up the state of the saved data in a few words for the header

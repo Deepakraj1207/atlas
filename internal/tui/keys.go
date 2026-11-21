@@ -19,14 +19,14 @@ var (
 		{Key: "/", Desc: "search"},
 		{Key: "?", Desc: "help"},
 		{Key: "q", Desc: "quit"},
-		{Key: "1-9", Desc: "jump"},
+		{Key: "0-9", Desc: "jump"},
 	}
 
 	navigationHelp = []components.KeyHint{
 		{Key: "esc", Desc: "Back to the section list (Enter returns)"},
 		{Key: "↑ ↓", Desc: "Move through the list"},
 		{Key: "enter", Desc: "Choose the highlighted item"},
-		{Key: "1 … 9", Desc: "Jump to a section"},
+		{Key: "0 … 9", Desc: "Jump to a section"},
 		{Key: "tab / shift+tab", Desc: "Next / previous section"},
 		{Key: "/", Desc: "Search your software"},
 		{Key: "pgup / pgdn", Desc: "Scroll a long screen"},

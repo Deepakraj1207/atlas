@@ -494,3 +494,35 @@ Short, dated records of choices that shape the code.
     running to the edge.
   - Bullets and the action list style each wrapped line on its own, so a long item no
     longer pads the first line out past its frame.
+
+## D87. AI Tools: MCP servers, plugins and skills
+
+- **Context:** The request was to list the MCP servers, plugins and skills installed on
+  the computer and to manage them.
+- **Decision:** A tenth section, AI Tools, on key `0`, so every other section keeps its
+  number. `internal/aitools` reads each AI app's own settings and never runs the apps.
+  - Apps it reads, on Windows and Linux:
+    - Claude Code: `~/.claude.json` (user and project servers), installed plugins, and
+      skills (user skills, and skills and servers that come with a plugin).
+    - Claude Desktop (including the Microsoft Store version), Cursor, VS Code and VS Code
+      Insiders, Windsurf.
+    - Gemini CLI (servers and extensions) and Codex (servers in `config.toml`, and skills).
+  - An MCP server's environment and headers are never read into ATLAS, because they
+    often hold keys.
+  - Three changes, all previewed first and recorded in Activity History:
+    - **Remove an MCP server:** the file is copied to `<file>.atlas-backup-<time>` first.
+      Only that one entry changes; the rest of the file keeps its key order. The file is
+      read back afterwards to confirm the entry is gone. Removal needs the deliberate `r`
+      in the preview.
+    - **Turn a Claude Code plugin on or off:** sets `enabledPlugins` in
+      `~/.claude/settings.json`, with a backup. Enter confirms this, since it is
+      reversible.
+    - **Remove a skill:** its folder is moved into ATLAS's data folder under
+      `removed-skills`, never deleted.
+  - Left alone, each with a note saying how to make the change instead:
+    - JSON files with comments, since rewriting them would lose the comments.
+    - Codex's TOML.
+    - Gemini extensions.
+    - What comes with a plugin.
+  - With ten sections, a single row of short tab names needs 117 columns, so tab bars
+    always use two rows when there is room.

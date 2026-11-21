@@ -45,11 +45,12 @@ const (
 	TabBarHeight = 2
 
 	// ShortTabsWidth is the width one row of short section names needs
-	// ("1 Dashboard  2 Software …  9 Settings"); TwoRowTabsWidth is what
+	// ("1 Dashboard  2 Software …  0 AI Tools"); TwoRowTabsWidth is what
 	// the same names need on two rows. Below that, or on short terminals,
 	// only the current section is named. A components test keeps these in
-	// step with the section names.
-	ShortTabsWidth  = 105
+	// step with the section names. With ten sections ShortTabsWidth is
+	// wider than MediumMax, so a tab bar with room uses two rows.
+	ShortTabsWidth  = 117
 	TwoRowTabsWidth = 59
 	// TwoRowTabsMinHeight is the shortest terminal that spends a second
 	// row on section names.

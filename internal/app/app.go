@@ -12,6 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/deepakraj1207/atlas/internal/ai"
+	"github.com/deepakraj1207/atlas/internal/aitools"
 	"github.com/deepakraj1207/atlas/internal/analysis"
 	"github.com/deepakraj1207/atlas/internal/cleanup"
 	"github.com/deepakraj1207/atlas/internal/config"
@@ -121,6 +122,10 @@ func Run(opts Options) error {
 	// unless the setting is on and the user confirms a preview.
 	explain := ai.NewService(newExplainer(res.Config.AI, logger), rec, logger)
 
+	// AI Tools reads the AI apps' own settings; it works without the database.
+	dataDir, _ := platform.DataDir()
+	ext := aitools.NewService(aitools.DefaultEnv(dataDir), rec, logger)
+
 	model := tui.New(tui.Options{
 		ConfigResult: res,
 		LogPath:      logPath,
@@ -133,6 +138,7 @@ func Run(opts Options) error {
 		Cleanup:      cln,
 		Discover:     dsc,
 		Explain:      explain,
+		Extensions:   ext,
 		Elevated:     elevated,
 		StoreErr:     storeErr,
 		DBPath:       dbPath,
