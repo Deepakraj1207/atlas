@@ -2,6 +2,37 @@ ATLAS shows what is installed on your computer and helps you keep it tidy and up
 date, in plain language. Nothing happens without a preview you confirm, and every
 action is recorded in Activity History.
 
+## What's new in 0.2.2
+
+**AI Tools: your MCP servers, plugins and skills in one place.** Press **0** for a new
+section that lists everything set up in your AI apps, from each app's own settings:
+
+| App | What ATLAS lists |
+|---|---|
+| Claude Code | MCP servers (yours and per project), plugins, skills |
+| Claude Desktop | MCP servers, including the Microsoft Store version |
+| Cursor, VS Code, Windsurf | MCP servers |
+| Gemini CLI | MCP servers and extensions |
+| Codex | MCP servers and skills |
+
+You can manage them too. Each change is previewed first and recorded in Activity
+History:
+- **Remove an MCP server** you don't use. Only that entry changes, and a backup of the
+  settings file is kept next to it.
+- **Turn a Claude Code plugin on or off.**
+- **Remove a skill.** Its folder is moved into ATLAS's own folder, not deleted, so you
+  can put it back.
+
+Where ATLAS can't make a change safely, for example a settings file with comments, Codex
+or Gemini extensions, it tells you how to do it instead. An MCP server's keys and
+environment are never read or shown.
+
+**A calmer look.** The Dashboard opens with a large logo and three framed panels: what
+you can do, your computer, and the one next step that matters most. Every screen now has
+a one-line title instead of an intro paragraph, messages sit in framed panels, and lists
+are separated by thin lines. Keys at the bottom read `[enter] select`, and the help screen
+uses a few words per key.
+
 ## What's new in 0.2.1
 
 **Enter works on empty screens.** Smart Analysis looked broken before its first run:

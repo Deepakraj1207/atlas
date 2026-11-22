@@ -11,9 +11,11 @@ audit fixes and the new interface (D77–D82). Users install it with one command
 `irm …/install.ps1 | iex` on Windows, `curl -fsSL …/install.sh | sh` on Linux; running it
 again updates. winget packaging was dropped.
 
-**0.2.1 is prepared on the working branch** (not yet on `main` or released): Enter on
-empty screens, a record of interrupted runs (D84), and the fixes from testing as six
-kinds of user (D85). Release notes are in `packaging/release-notes.md`.
+**0.2.1** (tag v0.2.1, draft release) adds Enter on empty screens, a record of
+interrupted runs (D84), and the fixes from testing as six kinds of user (D85).
+
+**0.2.2** adds the calmer interface (D86) and AI Tools, which lists and manages MCP
+servers, plugins and skills (D87). Release notes are in `packaging/release-notes.md`.
 
 - MIT licence; `atlas -version` shows version, commit and build date.
 - Release workflow: Windows zips (x64, ARM64), Linux tarballs, `.deb` and `.rpm`
