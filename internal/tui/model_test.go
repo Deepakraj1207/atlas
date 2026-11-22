@@ -178,7 +178,7 @@ func TestStartsOnHomeWithDefaults(t *testing.T) {
 	if !d.Available || !d.Loaded || d.Summary != nil || len(d.Items) != 0 {
 		t.Errorf("fresh database should load as empty: %+v", d)
 	}
-	if !strings.Contains(m.View(), "not yet scanned") {
+	if !strings.Contains(dashboardText(m), "— apps") {
 		t.Error("Home should say not yet scanned before the first scan")
 	}
 }
@@ -191,8 +191,8 @@ func TestTabAndDigitsNavigate(t *testing.T) {
 	}
 	m = press(t, m, "shift+tab")
 	m = press(t, m, "shift+tab")
-	if m.Section() != nav.Settings {
-		t.Errorf("shift+tab twice from My Software = %v, want Settings", m.Section())
+	if m.Section() != nav.AITools {
+		t.Errorf("shift+tab twice from My Software = %v, want AI Tools", m.Section())
 	}
 	m = press(t, m, "7")
 	if m.Section() != nav.DiscoverApps {

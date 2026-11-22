@@ -156,9 +156,7 @@ func (s *Settings) View(ctx Context) string {
 	w := ctx.Width()
 	var b strings.Builder
 
-	b.WriteString(t.Title.Render("Settings"))
-	b.WriteString("\n")
-	b.WriteString(t.Muted.Render(components.Wrap("Preferences are saved immediately and remembered next time.", w)))
+	b.WriteString(components.PageHead(t, "Settings", "Saved as soon as you change them", w))
 	b.WriteString("\n\n")
 
 	rows := s.rows(ctx)
@@ -188,7 +186,7 @@ func (s *Settings) View(ctx Context) string {
 
 	if ctx.Advanced() {
 		b.WriteString("\n\n")
-		b.WriteString(t.Heading.Render("Where things live"))
+		b.WriteString(components.Section(t, t.Heading.Render("Where things live"), w))
 		b.WriteString("\n")
 		b.WriteString(components.LabelValue(t, [][2]string{
 			{"Settings file", ctx.ConfigPath},
@@ -215,9 +213,9 @@ func (s *Settings) fileStatus(ctx Context) string {
 			ShowDetails: ctx.Advanced(),
 		}.Render(t, w))
 	case !res.Found:
-		b.WriteString(t.Muted.Render(components.Wrap("No settings file yet. Defaults are in use; one is created the first time you change a setting.", w)))
+		b.WriteString(t.Muted.Render(components.Wrap("Using the defaults until you change something.", w)))
 	default:
-		b.WriteString(t.Muted.Render(components.Wrap("Settings loaded from your settings file.", w)))
+		b.WriteString(t.Muted.Render(components.Wrap("Loaded from your settings file.", w)))
 	}
 
 	if len(res.Warnings) > 0 {

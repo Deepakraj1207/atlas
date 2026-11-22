@@ -60,8 +60,10 @@ func ActionList(t theme.Theme, width int, items []ActionItem, cursor int, focuse
 	// Without room for a second column, describe just the highlighted
 	// action under the list.
 	if !showDesc && cursor >= 0 && cursor < len(items) && items[cursor].Desc != "" {
-		desc := Wrap(items[cursor].Desc, max(width-3, 8))
-		lines = append(lines, "", "   "+t.Subtle.Render(strings.ReplaceAll(desc, "\n", "\n   ")))
+		lines = append(lines, "")
+		for _, l := range strings.Split(Wrap(items[cursor].Desc, max(width-3, 8)), "\n") {
+			lines = append(lines, "   "+t.Subtle.Render(l))
+		}
 	}
 	return strings.Join(lines, "\n")
 }

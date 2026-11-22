@@ -101,7 +101,7 @@ func TestAnalysisNeedsAScanFirst(t *testing.T) {
 
 func TestAnalysisFlowAcrossScreens(t *testing.T) {
 	m := scanFromHome(t, bootAnalysis(t, runtimeItems()))
-	if !strings.Contains(m.View(), "not run yet") || !strings.Contains(m.View(), "Analyze your software to spot") {
+	if !strings.Contains(dashboardText(m), "— runtimes") || !strings.Contains(strings.Join(screens.NextSteps(m.ctx()), "\n"), "Analyze your software to spot") {
 		t.Error("Home should invite an analysis after a scan")
 	}
 	m = analyzeFromHome(t, m)
@@ -111,9 +111,9 @@ func TestAnalysisFlowAcrossScreens(t *testing.T) {
 	if st := m.Status(); st.Kind != components.StatusWarning || !strings.Contains(st.Text, "Analysis complete: 1 needs attention, 2 worth knowing. See Smart Analysis (4).") {
 		t.Errorf("status = %+v", st)
 	}
-	home := m.View()
+	home := dashboardText(m)
 	steps := screens.NextSteps(m.ctx())
-	if !strings.Contains(home, "1 needs attention") || !strings.HasPrefix(steps[0], "Smart Analysis found 1 thing worth your attention") {
+	if !strings.Contains(home, "Smart Analysis found 1 thing") || !strings.HasPrefix(steps[0], "Smart Analysis found 1 thing worth your attention") {
 		t.Errorf("Home should summarise the analysis, and say so first:\n%v\n%s", steps, home)
 	}
 

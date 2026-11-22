@@ -75,7 +75,7 @@ func TestScrollClampsAndMarksOverflow(t *testing.T) {
 func TestStatesRenderPlainLanguage(t *testing.T) {
 	th := theme.ByName("light")
 	e := EmptyState{Title: "Nothing here", Message: "Come back later.", Plan: []string{"Do a thing"}, Hint: "Arrives in Phase 2"}.Render(th, 40)
-	for _, want := range []string{"Nothing here", "Come back later.", "What this will do", "Do a thing", "Arrives in Phase 2"} {
+	for _, want := range []string{"Nothing here", "Come back later.", "Do a thing", "Arrives in Phase 2"} {
 		if !strings.Contains(e, want) {
 			t.Errorf("empty state missing %q", want)
 		}

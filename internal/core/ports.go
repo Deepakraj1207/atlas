@@ -890,3 +890,76 @@ func (o RecordOutcome) Count(state VerifyState) int {
 	}
 	return n
 }
+
+// ExtensionKind is what sort of AI-tool extension an Extension is.
+type ExtensionKind string
+
+const (
+	// ExtMCP is a Model Context Protocol server set up in an AI app.
+	ExtMCP ExtensionKind = "mcp"
+	// ExtPlugin is a plugin or extension of an AI app.
+	ExtPlugin ExtensionKind = "plugin"
+	// ExtSkill is a skill: a folder with a SKILL.md an AI agent can use.
+	ExtSkill ExtensionKind = "skill"
+)
+
+// Extension is one MCP server, plugin or skill found in an AI app's own
+// configuration. Secrets (environment variables, headers) are never read
+// into it.
+type Extension struct {
+	// ID is stable across reads: kind, app, scope and name.
+	ID   string
+	Kind ExtensionKind
+	Name string
+	// App is the AI app it belongs to, e.g. "Claude Code" or "Cursor".
+	App string
+	// Scope is "user", "project <folder>" or "plugin <name>".
+	Scope string
+	// Detail is the command or address of an MCP server, or the
+	// description of a plugin or skill.
+	Detail string
+	// Path is the configuration file or folder it was read from.
+	Path string
+	// Locator finds the entry inside Path (a JSON key path, or a plugin key).
+	Locator []string
+	Enabled bool
+	// CanToggle and CanRemove say which changes ATLAS can make safely.
+	CanToggle bool
+	CanRemove bool
+	// Note explains, when ATLAS can't change it, how to do it instead.
+	Note string
+}
+
+// ExtensionSource reports one configuration file or folder that was read.
+type ExtensionSource struct {
+	App     string
+	Path    string
+	Status  SourceStatus
+	Found   int
+	Details string
+}
+
+// ExtensionReport is everything found in one read.
+type ExtensionReport struct {
+	At         time.Time
+	Extensions []Extension
+	Sources    []ExtensionSource
+}
+
+// ExtensionResult describes a change ATLAS made to an AI app's setup.
+type ExtensionResult struct {
+	// Summary is plain language, e.g. "Removed the MCP server github from Cursor."
+	Summary string
+	// Backup is where the previous file or folder was kept, if anywhere.
+	Backup string
+}
+
+// ExtensionService lists and manages MCP servers, plugins and skills.
+type ExtensionService interface {
+	ListExtensions(ctx context.Context) (ExtensionReport, error)
+	// RemoveExtension removes an MCP server from its config file (keeping a
+	// backup) or moves a skill folder into ATLAS's own folder.
+	RemoveExtension(ctx context.Context, e Extension) (ExtensionResult, error)
+	// SetExtensionEnabled turns a plugin on or off.
+	SetExtensionEnabled(ctx context.Context, e Extension, on bool) (ExtensionResult, error)
+}

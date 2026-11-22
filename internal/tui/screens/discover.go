@@ -151,12 +151,11 @@ func (s *Discover) View(ctx Context) string {
 	t := ctx.Theme
 	w := ctx.Width()
 	d := ctx.Data
-	asOf := ""
+	sub := "Free, safe tools, picked without going online"
 	if d.Discovery != nil {
-		asOf = " Catalogue as of " + d.Discovery.CatalogAsOf + "."
+		sub += " · catalogue " + d.Discovery.CatalogAsOf
 	}
-	head := t.Title.Render("Discover Apps") + "\n" +
-		t.Muted.Render(components.Wrap("Free, well-known tools picked for being useful and safe. Suggestions come from what you already have; ATLAS doesn't contact the internet to make them. Installing always shows a preview first."+asOf, w)) + "\n\n"
+	head := components.PageHead(t, "Discover Apps", sub, w) + "\n\n"
 	switch {
 	case !d.DiscoverAvailable:
 		return head + components.ErrorState{Title: "Discover Apps is unavailable", Summary: "ATLAS couldn't open its saved data or its catalogue.", Details: d.StoreErr, ShowDetails: ctx.Advanced()}.Render(t, w)
@@ -199,7 +198,7 @@ func (s *Discover) View(ctx Context) string {
 				lines = append(lines, "")
 			}
 			section = heading
-			lines = append(lines, t.Heading.Render(heading))
+			lines = append(lines, components.Section(t, t.Heading.Render(heading), w))
 		}
 		it := r.item
 		mark := "[ ] "
@@ -225,7 +224,9 @@ func (s *Discover) View(ctx Context) string {
 		if len(it.Because) > 0 && !it.Installed {
 			body("Why it's suggested: "+strings.Join(it.Because, ", ")+".", t.Accent.Render)
 		}
-		body(it.Entry.Why, t.Muted.Render)
+		if ctx.Advanced() {
+			body(it.Entry.Why, t.Muted.Render)
+		}
 		switch {
 		case it.Installed:
 			body("Already installed as "+it.InstalledAs+".", t.Success.Render)
@@ -234,7 +235,7 @@ func (s *Discover) View(ctx Context) string {
 		case it.Via == "":
 			body(it.Unavailable, t.Subtle.Render)
 		default:
-			body("Installs with "+it.ViaLabel+". Press Enter to see exactly what will happen first.", t.Subtle.Render)
+			body("Installs with "+it.ViaLabel+" · Enter to preview", t.Subtle.Render)
 		}
 		if ctx.Advanced() {
 			if it.Via != "" {
@@ -251,7 +252,6 @@ func (s *Discover) View(ctx Context) string {
 	if len(rows) == 0 {
 		lines = append(lines, t.Muted.Render("Nothing in this category for this computer."))
 	}
-	lines = append(lines, "", t.Subtle.Render(components.Wrap("Suggestions never include things you already have.", w)))
 	avail := ctx.Height() - strings.Count(head, "\n")
 	return head + strings.Join(windowLines(lines, selStart, max(selEnd, selStart+1), avail), "\n")
 }

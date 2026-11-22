@@ -65,9 +65,8 @@ func TestMediumAndNarrowUseTabBar(t *testing.T) {
 
 func TestTabRowsFollowTheWidthAndHeight(t *testing.T) {
 	for _, c := range []struct{ w, h, rows int }{
-		{108, 30, 1}, // one row of short names fits
-		{ShortTabsWidth, 30, 1},
-		{ShortTabsWidth - 1, 30, 2},
+		{MediumMax, 30, 2}, // ten names don't fit on one row
+		{90, 30, 2},
 		{80, 24, 2},
 		{TwoRowTabsWidth, 24, 2},
 		{TwoRowTabsWidth - 1, 24, 1},     // too narrow even for two rows

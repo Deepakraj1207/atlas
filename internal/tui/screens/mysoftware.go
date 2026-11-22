@@ -221,7 +221,7 @@ func (s *MySoftware) View(ctx Context) string {
 	t := ctx.Theme
 	w := ctx.Width()
 	d := ctx.Data
-	title := t.Title.Render("My Software")
+	title := components.PageHead(t, "My Software", "", w)
 
 	switch {
 	case !d.Available:
@@ -265,8 +265,7 @@ func (s *MySoftware) View(ctx Context) string {
 	}
 
 	var b strings.Builder
-	b.WriteString(title + "\n")
-	b.WriteString(components.Truncate(s.summaryLine(ctx, len(visible)), w) + "\n")
+	b.WriteString(components.PageHead(t, "My Software", s.summaryLine(ctx, len(visible)), w) + "\n")
 	if s.searching || s.search.Value() != "" {
 		s.search.Width = max(w-10, 10)
 		label := t.Muted.Render("Search: ")

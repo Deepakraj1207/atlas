@@ -110,7 +110,7 @@ func New(p Palette) Theme {
 	t.Info = lipgloss.NewStyle().Foreground(p.Info)
 	t.Strong = lipgloss.NewStyle().Bold(true).Foreground(p.Text)
 	t.Logo = lipgloss.NewStyle().Bold(true).Foreground(p.Accent)
-	t.Key = lipgloss.NewStyle().Bold(true).Foreground(p.Muted)
+	t.Key = lipgloss.NewStyle().Bold(true).Foreground(p.Accent)
 	t.KeyDesc = lipgloss.NewStyle().Foreground(p.Subtle)
 	t.Badge = lipgloss.NewStyle().Foreground(p.Muted).Background(p.Surface).Padding(0, 1)
 	t.NavItem = lipgloss.NewStyle().Foreground(p.Muted)

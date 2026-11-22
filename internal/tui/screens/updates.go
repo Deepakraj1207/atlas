@@ -178,7 +178,7 @@ func (u *Updates) View(ctx Context) string {
 	t := ctx.Theme
 	w := ctx.Width()
 	d := ctx.Data
-	title := t.Title.Render("Updates")
+	title := components.PageHead(t, "Updates", "", w)
 
 	switch {
 	case !d.UpdatesAvailable:
@@ -214,8 +214,7 @@ func (u *Updates) View(ctx Context) string {
 	apps, comps := d.PendingUpdates()
 
 	var b strings.Builder
-	b.WriteString(title + "\n")
-	b.WriteString(components.Truncate(u.summaryLine(ctx, apps, comps), w) + "\n")
+	b.WriteString(components.PageHead(t, "Updates", u.summaryLine(ctx, apps, comps), w) + "\n")
 	if apps+comps > 0 {
 		b.WriteString(components.Truncate(t.Accent.Render(updateAllHint(apps, comps)), w) + "\n")
 	}

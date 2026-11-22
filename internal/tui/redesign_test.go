@@ -40,7 +40,7 @@ func TestEscMovesFocusToTheSectionsAndBack(t *testing.T) {
 	}
 
 	m = press(t, m, "esc")
-	if !m.NavFocused() || !strings.Contains(m.View(), "↑↓ navigate") {
+	if !m.NavFocused() || !strings.Contains(m.View(), "↑↓] navigate") {
 		t.Fatalf("esc should move focus to the sections:\n%s", m.View())
 	}
 	m = press(t, m, "down")
@@ -196,21 +196,22 @@ func TestViewNeverExceedsTerminalWidth(t *testing.T) {
 
 func TestBigLogoWhereThereIsRoom(t *testing.T) {
 	m := bootWithSystem(t, testSystem)
-	logoRow := "▄▀▀▄ ▀█▀ █    ▄▀▀▄ ▄▀▀▀"
-	if v := m.View(); !strings.Contains(v, logoRow) || !strings.Contains(v, "Welcome to ATLAS") {
-		t.Errorf("at 120×30 the big logo sits beside the welcome:\n%s", v)
+	hero := "███████║   ██║   ██║     ███████║███████╗"
+	small := "▄▀▀▄ ▀█▀ █    ▄▀▀▄ ▄▀▀▀"
+	if v := m.View(); !strings.Contains(v, hero) || !strings.Contains(v, "Welcome to ATLAS") {
+		t.Errorf("at 120×30 the large logo sits above the welcome:\n%s", v)
 	}
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
-	if text := dashboardText(next.(Model)); strings.Contains(text, logoRow) || !strings.Contains(text, "Welcome to ATLAS") {
+	if text := dashboardText(next.(Model)); strings.Contains(text, hero) || strings.Contains(text, small) || !strings.Contains(text, "Welcome to ATLAS") {
 		t.Errorf("a small terminal gets the plain welcome only:\n%s", text)
 	}
-	next, _ = m.Update(tea.WindowSizeMsg{Width: 60, Height: 40})
-	if text := dashboardText(next.(Model)); !strings.Contains(text, logoRow) {
-		t.Errorf("a narrow but tall terminal has room above the welcome:\n%s", text)
+	next, _ = m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	if text := dashboardText(next.(Model)); !strings.Contains(text, small) || strings.Contains(text, hero) {
+		t.Errorf("a medium terminal gets the three-row logo:\n%s", text)
 	}
-	next, _ = m.Update(tea.WindowSizeMsg{Width: 160, Height: 45})
-	if v := next.(Model).View(); !strings.Contains(v, logoRow) {
-		t.Errorf("large windows keep the three-row logo:\n%s", v)
+	next, _ = m.Update(tea.WindowSizeMsg{Width: 60, Height: 40})
+	if text := dashboardText(next.(Model)); !strings.Contains(text, hero) {
+		t.Errorf("a narrow but tall terminal has room for the large logo:\n%s", text)
 	}
 }
 
@@ -232,7 +233,7 @@ func TestEnterDoesWhatAnEmptyScreenSuggests(t *testing.T) {
 	m = scanFromHome(t, m)
 	for _, section := range []string{"4", "5"} {
 		m = press(t, m, section)
-		if v := m.View(); !strings.Contains(v, "Press Enter to analyze") || !strings.Contains(v, "enter analyze") {
+		if v := m.View(); !strings.Contains(v, "Press Enter to analyze") || !strings.Contains(v, "enter] analyze") {
 			t.Errorf("section %s should say Enter analyzes:\n%s", section, v)
 		}
 		m = press(t, m, "enter")
@@ -313,7 +314,7 @@ func TestNextStepsPutWhatMattersFirst(t *testing.T) {
 func TestEnterOnAFindingOpensWhereYouActOnIt(t *testing.T) {
 	m := analyzeFromHome(t, scanFromHome(t, bootAnalysis(t, runtimeItems())))
 	m = press(t, m, "4")
-	if v := m.View(); !strings.Contains(v, "no longer gets security fixes") || !strings.Contains(v, "enter open Dependencies") {
+	if v := m.View(); !strings.Contains(v, "no longer gets security fixes") || !strings.Contains(v, "enter] open Dependencies") {
 		t.Fatalf("the first finding is the unsupported runtime, with a hint:\n%s", v)
 	}
 	m = press(t, m, "enter")
@@ -335,7 +336,7 @@ func TestEnterOnAFindingOpensWhereYouActOnIt(t *testing.T) {
 	}
 	m = press(t, m, "4")
 	m = press(t, m, "down") // "What ATLAS checked": nothing to open
-	if strings.Contains(m.View(), "enter open") {
+	if strings.Contains(m.View(), "enter] open") {
 		t.Errorf("no Enter hint on the list of checks:\n%s", m.View())
 	}
 	m = press(t, m, "enter")
@@ -367,7 +368,7 @@ func TestFindUnusedApplicationsIsHonest(t *testing.T) {
 	}
 	found := open(&core.AnalysisResult{Findings: []core.Finding{{Kind: "updates", Title: "2 updates are waiting"},
 		{Kind: core.FindingUnused, Title: "3 apps haven't been opened in over a year"}}})
-	if v := found.View(); !strings.Contains(v, "3 apps haven't been opened in over a year") || !strings.Contains(v, "enter open Cleanup") {
+	if v := found.View(); !strings.Contains(v, "3 apps haven't been opened in over a year") || !strings.Contains(v, "enter] open Cleanup") {
 		t.Errorf("the unused-apps finding should be selected:\n%s", v)
 	}
 	none := open(&core.AnalysisResult{Findings: []core.Finding{{Kind: "updates", Title: "2 updates are waiting"}},
@@ -459,7 +460,7 @@ func TestNoScanOfferWhenSavedDataIsUnavailable(t *testing.T) {
 	m = drain(t, next.(Model), m.Init())
 	for _, section := range []string{"2", "4", "5"} {
 		m = press(t, m, section)
-		if v := m.View(); strings.Contains(v, "enter scan") || strings.Contains(v, "enter analyze") || strings.Contains(v, "Everything else still works") {
+		if v := m.View(); strings.Contains(v, "enter] scan") || strings.Contains(v, "enter] analyze") || strings.Contains(v, "Everything else still works") {
 			t.Errorf("section %s offers something that can't run:\n%s", section, v)
 		}
 		m = press(t, m, "enter")

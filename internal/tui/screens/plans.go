@@ -239,10 +239,10 @@ func ClearPlan(ctx Context) core.ActionPlan {
 func quickActions(ctx Context) []QuickAction {
 	return []QuickAction{
 		{Label: "Scan my system", Desc: "Find what's installed. Only reads", Plan: ScanPlan(ctx), Confirm: StartScanMsg{}},
-		{Label: "Check for updates", Desc: "Newer versions from your package managers", Plan: CheckPlan(ctx), Confirm: StartCheckMsg{}},
-		{Label: "Analyze installed software", Desc: "Support status, duplicates, dependencies", Plan: AnalyzePlan(ctx), Confirm: StartAnalysisMsg{}},
+		{Label: "Check for updates", Desc: "Newer versions of what you have", Plan: CheckPlan(ctx), Confirm: StartCheckMsg{}},
+		{Label: "Analyze installed software", Desc: "Support, duplicates and dependencies", Plan: AnalyzePlan(ctx), Confirm: StartAnalysisMsg{}},
 		{Label: "Find unused applications", Desc: "Not opened in a year · Smart Analysis", Navigate: true, Section: nav.SmartAnalysis, Finding: core.FindingUnused},
-		{Label: "Clean unnecessary files", Desc: "Caches, old versions, leftovers · Cleanup", Navigate: true, Section: nav.Cleanup},
+		{Label: "Clean unnecessary files", Desc: "Caches, old versions and leftovers", Navigate: true, Section: nav.Cleanup},
 		{Label: "Discover useful applications", Desc: "Free tools that fit what you use", Navigate: true, Section: nav.DiscoverApps},
 		{Label: "Search software", Desc: "Find anything installed · /", Search: true},
 	}

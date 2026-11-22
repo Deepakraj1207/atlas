@@ -41,9 +41,11 @@ type Options struct {
 	Cleanup   core.CleanupService
 	Discover  core.DiscoverService
 	// Explain is the optional AI explanation service; nil means none.
-	Explain  core.ExplainService
-	StoreErr string
-	DBPath   string
+	Explain core.ExplainService
+	// Extensions lists and manages MCP servers, plugins and skills.
+	Extensions core.ExtensionService
+	StoreErr   string
+	DBPath     string
 	// Elevated is true when ATLAS runs as administrator or root.
 	Elevated bool
 	// SystemInfo reads facts about the computer for the dashboard (OS,
@@ -74,6 +76,7 @@ type Model struct {
 	cln      core.CleanupService
 	tidy     *scanRun
 	dsc      core.DiscoverService
+	ext      core.ExtensionService
 	explain  core.ExplainService
 	// explaining cancels the question being asked; nil when none is.
 	explaining context.CancelFunc
@@ -133,6 +136,7 @@ func New(opts Options) Model {
 		ana:      opts.Analysis,
 		cln:      opts.Cleanup,
 		dsc:      opts.Discover,
+		ext:      opts.Extensions,
 		explain:  opts.Explain,
 		elevated: opts.Elevated,
 		exec:     func(j core.TerminalJob, cb tea.ExecCallback) tea.Cmd { return tea.Exec(j, cb) },
@@ -150,6 +154,7 @@ func New(opts Options) Model {
 	m.data.AnalysisAvailable = m.ana != nil
 	m.data.CleanupAvailable = m.cln != nil
 	m.data.DiscoverAvailable = m.dsc != nil
+	m.data.ExtensionsAvailable = m.ext != nil
 	m.data.InstalledNow = map[string]bool{}
 	m.data.StoreErr = m.storeErr
 	if m.inv == nil && m.storeErr == "" {
@@ -176,6 +181,8 @@ func New(opts Options) Model {
 			m.screens[s] = screens.NewActivityHistory()
 		case nav.Settings:
 			m.screens[s] = screens.NewSettings()
+		case nav.AITools:
+			m.screens[s] = screens.NewAITools()
 		default:
 			m.screens[s] = screens.NewComingSoon(s)
 		}
@@ -239,7 +246,7 @@ type configSavedMsg struct {
 
 // Init starts the status-clear timer and loads saved data.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(m.scheduleStatusClear(), loadData(m.inv), loadUpdates(m.upd), loadAnalysis(m.ana), loadDiscovery(m.dsc), m.readSystem())
+	return tea.Batch(m.scheduleStatusClear(), loadData(m.inv), loadUpdates(m.upd), loadAnalysis(m.ana), loadDiscovery(m.dsc), loadExtensions(m.ext), m.readSystem())
 }
 
 // Accessors used by tests.
@@ -616,6 +623,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.data.Analysis = msg.result
 		return m, nil
+
+	case screens.RefreshExtensionsMsg, extensionsLoadedMsg, screens.ChangeExtensionMsg, extensionChangedMsg:
+		next, cmd, _ := m.updateExtensions(msg)
+		return next, cmd
 
 	case discoveryLoadedMsg:
 		if msg.err != nil {

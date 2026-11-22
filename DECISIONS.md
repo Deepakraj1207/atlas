@@ -467,3 +467,62 @@ Short, dated records of choices that shape the code.
   - Counts of zero are left out ("1 needs attention", not "1 worth your attention, 0
     worth knowing"); AI failures say "Tried to send"; "Welcome!" is only for a first run.
 
+
+## D86. A calmer Dashboard: framed panels, less text
+
+- **Context:** Feedback said the Dashboard had too much text and detail and asked for
+  more lines and space, pointing at TUIs with a large shadowed logo and rounded panels
+  whose titles sit in the top border.
+- **Decision:** The Dashboard is a centred logo and three framed panels: "What would you
+  like to do?", "Your computer" and "Next step".
+  - The large logo (block letters with a box-drawing shadow) shows when 24 or more
+    content rows are visible. The three-row logo shows from 20 rows, and below that
+    only the greeting.
+  - Removed from the Dashboard: the tagline, the Software overview list and Recent
+    activity. Their facts are now in "Your computer" (figures, the computer, when it was
+    scanned and whether sources were missing), in Next step, and in Activity History.
+  - Next step shows the one most important step, or up to three when there is room.
+  - Footer keys read `[key] description`, with the key in the accent colour.
+  - `components.Box` draws a titled panel, and `Layout.VisibleHeight` keeps the on-screen
+    height while the root renders a screen taller so it can scroll.
+- **Every screen follows the same pattern.**
+  - The title has a short subtitle beside it and a thin rule under it, replacing the
+    intro paragraph that ran two or three lines.
+  - Empty and error states are framed panels with the title in the border; errors use
+    the danger colour.
+  - Section headings inside lists, the help overlay and action previews have a line
+    running to the edge.
+  - Bullets and the action list style each wrapped line on its own, so a long item no
+    longer pads the first line out past its frame.
+
+## D87. AI Tools: MCP servers, plugins and skills
+
+- **Context:** The request was to list the MCP servers, plugins and skills installed on
+  the computer and to manage them.
+- **Decision:** A tenth section, AI Tools, on key `0`, so every other section keeps its
+  number. `internal/aitools` reads each AI app's own settings and never runs the apps.
+  - Apps it reads, on Windows and Linux:
+    - Claude Code: `~/.claude.json` (user and project servers), installed plugins, and
+      skills (user skills, and skills and servers that come with a plugin).
+    - Claude Desktop (including the Microsoft Store version), Cursor, VS Code and VS Code
+      Insiders, Windsurf.
+    - Gemini CLI (servers and extensions) and Codex (servers in `config.toml`, and skills).
+  - An MCP server's environment and headers are never read into ATLAS, because they
+    often hold keys.
+  - Three changes, all previewed first and recorded in Activity History:
+    - **Remove an MCP server:** the file is copied to `<file>.atlas-backup-<time>` first.
+      Only that one entry changes; the rest of the file keeps its key order. The file is
+      read back afterwards to confirm the entry is gone. Removal needs the deliberate `r`
+      in the preview.
+    - **Turn a Claude Code plugin on or off:** sets `enabledPlugins` in
+      `~/.claude/settings.json`, with a backup. Enter confirms this, since it is
+      reversible.
+    - **Remove a skill:** its folder is moved into ATLAS's data folder under
+      `removed-skills`, never deleted.
+  - Left alone, each with a note saying how to make the change instead:
+    - JSON files with comments, since rewriting them would lose the comments.
+    - Codex's TOML.
+    - Gemini extensions.
+    - What comes with a plugin.
+  - With ten sections, a single row of short tab names needs 117 columns, so tab bars
+    always use two rows when there is room.
